@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- app_name is a proper noun, not translated (falls back to the English base). -->
+
+    <string name="nav_tracking">Поездка</string>
+    <string name="nav_map">Карта</string>
+    <string name="nav_history">История</string>
+    <string name="nav_settings">Настройки</string>
+    <string name="action_exit">Выход</string>
+
+    <string name="unit_km">км</string>
+    <string name="unit_kmh">км/ч</string>
+
+    <string name="notif_channel_name">Запись поездки</string>
+    <string name="notif_recording">Идёт запись поездки</string>
+    <string name="notif_paused">Поездка на паузе</string>
+
+    <string name="unit_m">м</string>
+
+    <string name="stat_speed">Скорость</string>
+    <string name="stat_distance">Расстояние</string>
+    <string name="stat_time">Время</string>
+    <string name="stat_avg_speed">Ср. скорость</string>
+    <string name="stat_max_speed">Макс. скорость</string>
+    <string name="stat_altitude">Высота</string>
+    <string name="stat_clock">Часы</string>
+
+    <string name="btn_start">Старт</string>
+    <string name="btn_pause">Пауза</string>
+    <string name="btn_resume">Едем</string>
+    <string name="btn_stop_save">Стоп и сохранить</string>
+
+    <string name="perm_denied">Включите доступ к геолокации в Настройках чтобы записывать поездки</string>
+    <string name="perm_bg_title">Запись в фоне</string>
+    <string name="perm_bg_text">Разрешите доступ к геолокации всё время чтобы запись продолжалась при выключенном экране или переходе в другое приложение</string>
+    <string name="perm_bg_allow">Разрешить</string>
+    <string name="perm_bg_skip">Не сейчас</string>
+
+    <string name="map_placeholder">Карта скоро появится</string>
+    <string name="history_placeholder">История скоро появится</string>
+    <string name="settings_placeholder">Настройки скоро появятся</string>
+</resources>
