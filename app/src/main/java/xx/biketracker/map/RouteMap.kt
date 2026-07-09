@@ -1,6 +1,5 @@
 package xx.biketracker.map
 
-import android.graphics.Paint
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,6 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,115 +29,118 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.views.overlay.TilesOverlay
+import org.maplibre.android.MapLibre
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
-import xx.biketracker.settings.AppSettings
-import xx.biketracker.ui.isDarkTheme
-import java.io.File
-import org.osmdroid.util.GeoPoint as OsmGeoPoint
+
+/** Keyless vector style (OpenFreeMap); offline downloads reference the same style. */
+const val MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 
 // Map-only tuning; the shared tracking/units constants live in Common.kt.
-private const val RIDE_ZOOM = 17.0
-private const val ROUTE_STROKE_WIDTH_PX = 10f
+private const val RIDE_ZOOM = 16.0
+private const val ROUTE_SOURCE_ID = "ride-route"
+private const val ROUTE_LAYER_ID = "ride-route-line"
+private const val ROUTE_LINE_WIDTH = 4f
 private const val ROUTE_BOUNDS_PADDING_PX = 64
 
 /**
- * Reusable osmdroid map with one route polyline — the Map tab shows the live ride or a ride
- * selected in History. Centers on the route once when it first appears (again whenever
- * [recenterKey] changes) and then stays put so it can be panned freely; the FAB re-centers.
- * Tiles invert in dark theme; the tile cache lives in the app's cache directory.
+ * Reusable MapLibre vector map with one route polyline — the Map tab shows the live ride or a
+ * ride selected in History. Labels render on the device, so their size is constant across zooms.
+ * Centers on the route once when it first appears (again whenever [recenterKey] changes) and
+ * then stays put so it can be panned freely; the FAB re-centers. Every camera stop is recorded
+ * in [MapViewport] as the download area for the offline map (Settings).
  */
 @Composable
 fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: Any? = null) {
     val context = LocalContext.current
-    val themeMode by AppSettings.themeMode.collectAsState()
-    val dark = isDarkTheme(themeMode)
     val routeColor = MaterialTheme.colorScheme.primary.toArgb()
 
-    // osmdroid global config: identify the app to the OSM tile servers (required by their
-    // usage policy) and keep the tile cache inside the app's own cache directory.
-    remember {
-        Configuration.getInstance().apply {
-            userAgentValue = context.packageName
-            osmdroidBasePath = File(context.cacheDir, "osmdroid")
-            osmdroidTileCache = File(context.cacheDir, "osmdroid/tiles")
-        }
-    }
+    // Must run once before the first MapView is constructed.
+    remember { MapLibre.getInstance(context) }
+    val mapView = remember { MapView(context) }
+    var styledMap by remember { mutableStateOf<MapLibreMap?>(null) }
 
-    val mapView = remember {
-        MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            // Scale tiles to the screen density: labels stay readable on high-dpi displays.
-            isTilesScaledToDpi = true
-            setMultiTouchControls(true)
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            controller.setZoom(RIDE_ZOOM)
-        }
-    }
-    val routeLine = remember {
-        Polyline(mapView).apply {
-            outlinePaint.strokeWidth = ROUTE_STROKE_WIDTH_PX
-            outlinePaint.strokeCap = Paint.Cap.ROUND
-        }.also { mapView.overlays.add(it) }
-    }
-
-    fun centerOnRoute() {
-        if (mapView.width == 0) {
-            // The dialog's map can receive its points before the view's first layout; a zoom
-            // computed against a zero-sized view lands wrong, so defer it to the first layout.
-            mapView.addOnFirstLayoutListener { _, _, _, _, _ -> centerOnRoute() }
-            return
-        }
-        val points = routeLine.actualPoints
-        when {
-            points.isEmpty() -> return
-            points.size == 1 -> {
-                mapView.controller.setZoom(RIDE_ZOOM)
-                mapView.controller.animateTo(points.first())
-            }
-            else -> mapView.zoomToBoundingBox(
-                BoundingBox.fromGeoPoints(points), true, ROUTE_BOUNDS_PADDING_PX,
-            )
-        }
-    }
-
-    // Pause/resume the tile engine with the screen and tear the view down on leave.
+    // Forward the lifecycle to the MapView (adding the observer replays CREATE..RESUME).
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
+                Lifecycle.Event.ON_CREATE -> mapView.onCreate(null)
+                Lifecycle.Event.ON_START -> mapView.onStart()
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                Lifecycle.Event.ON_STOP -> mapView.onStop()
+                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            mapView.onDetach()
+            mapView.onStop()
+            mapView.onDestroy()
         }
     }
 
-    LaunchedEffect(dark) {
-        mapView.overlayManager.tilesOverlay.setColorFilter(if (dark) TilesOverlay.INVERT_COLORS else null)
-        mapView.invalidate()
+    LaunchedEffect(Unit) {
+        mapView.getMapAsync { map ->
+            map.setStyle(Style.Builder().fromUri(MAP_STYLE_URL)) { style ->
+                style.addSource(GeoJsonSource(ROUTE_SOURCE_ID))
+                style.addLayer(
+                    LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
+                        PropertyFactory.lineColor(routeColor),
+                        PropertyFactory.lineWidth(ROUTE_LINE_WIDTH),
+                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    )
+                )
+                styledMap = map
+            }
+            // Remember the viewed area; Settings offers it as the offline download region.
+            map.addOnCameraIdleListener {
+                MapViewport.update(map.projection.visibleRegion.latLngBounds, map.cameraPosition.zoom)
+            }
+        }
+    }
+
+    fun centerOnRoute() {
+        val map = styledMap ?: return
+        when {
+            route.isEmpty() -> return
+            route.size == 1 -> map.animateCamera(
+                CameraUpdateFactory.newLatLngZoom(LatLng(route.first().lat, route.first().lon), RIDE_ZOOM)
+            )
+            else -> {
+                val bounds = LatLngBounds.Builder()
+                    .apply { route.forEach { include(LatLng(it.lat, it.lon)) } }
+                    .build()
+                map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, ROUTE_BOUNDS_PADDING_PX))
+            }
+        }
     }
 
     // Redraw the track on every route change; center only the first time a route shows up so
     // the user can pan and zoom without the map snapping back every update. A recenterKey
     // change (another ride selected) re-arms the one-time centering.
     var centeredOnce by remember(recenterKey) { mutableStateOf(false) }
-    LaunchedEffect(route, routeColor) {
-        routeLine.outlinePaint.color = routeColor
-        routeLine.setPoints(route.map { OsmGeoPoint(it.lat, it.lon) })
-        mapView.invalidate()
+    LaunchedEffect(route, styledMap, routeColor) {
+        val style = styledMap?.style ?: return@LaunchedEffect
+        style.getLayerAs<LineLayer>(ROUTE_LAYER_ID)?.setProperties(PropertyFactory.lineColor(routeColor))
+        style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(
+            LineString.fromLngLats(route.map { Point.fromLngLat(it.lon, it.lat) })
+        )
         if (!centeredOnce && route.isNotEmpty()) {
             centeredOnce = true
             centerOnRoute()
@@ -156,10 +157,10 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SmallFloatingActionButton(onClick = { mapView.controller.zoomIn() }) {
+            SmallFloatingActionButton(onClick = { styledMap?.animateCamera(CameraUpdateFactory.zoomBy(1.0)) }) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.map_zoom_in))
             }
-            SmallFloatingActionButton(onClick = { mapView.controller.zoomOut() }) {
+            SmallFloatingActionButton(onClick = { styledMap?.animateCamera(CameraUpdateFactory.zoomBy(-1.0)) }) {
                 Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.map_zoom_out))
             }
             if (route.isNotEmpty()) {

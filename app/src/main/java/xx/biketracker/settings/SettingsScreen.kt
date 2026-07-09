@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import xx.biketracker.R
 import xx.biketracker.data.backupDatabase
 import xx.biketracker.data.restoreDatabase
+import xx.biketracker.map.OfflineMapDialog
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
 import xx.biketracker.ui.DialogButton
@@ -49,6 +50,7 @@ fun SettingsScreen() {
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showOfflineMapDialog by remember { mutableStateOf(false) }
 
     val themeMode by AppSettings.themeMode.collectAsState()
     val tracking by TrackingState.snapshot.collectAsState()
@@ -96,6 +98,12 @@ fun SettingsScreen() {
             onClick = { showThemeDialog = true },
         )
 
+        SectionHeader(stringResource(R.string.settings_map_section))
+        NavRow(
+            label = stringResource(R.string.map_offline_title),
+            onClick = { showOfflineMapDialog = true },
+        )
+
         SectionHeader(stringResource(R.string.settings_data_section))
         NavRow(
             label = stringResource(R.string.btn_backup),
@@ -140,6 +148,10 @@ fun SettingsScreen() {
     }
     // languageLabel/themeLabel below return string-resource ids (plain, not @Composable), so they
     // are safe to call inside the map lambdas above; ChoiceDialog resolves them with stringResource.
+
+    if (showOfflineMapDialog) {
+        OfflineMapDialog(onDismiss = { showOfflineMapDialog = false })
+    }
 
     if (showRestoreConfirm) {
         AlertDialog(

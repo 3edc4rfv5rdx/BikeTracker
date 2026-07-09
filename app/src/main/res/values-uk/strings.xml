@@ -45,6 +45,16 @@
     <string name="map_close_ride">Повернутися до поточної поїздки</string>
     <string name="map_zoom_in">Наблизити</string>
     <string name="map_zoom_out">Віддалити</string>
+    <string name="settings_map_section">Карта</string>
+    <string name="map_offline_title">Офлайн-карта</string>
+    <string name="map_offline_hint">Буде завантажено останню переглянуту область карти</string>
+    <string name="map_offline_regions">Завантажено областей</string>
+    <string name="map_offline_download">Завантажити</string>
+    <string name="map_offline_delete">Видалити всі</string>
+    <string name="map_offline_done">Область завантажена</string>
+    <string name="map_offline_failed">Не вдалося завантажити</string>
+    <string name="map_offline_no_area">Спочатку відкрийте вкладку Карта</string>
+    <string name="map_offline_deleted">Завантажені області видалено</string>
     <string name="history_show_on_map">Показати на карті</string>
 
     <string name="settings_appearance">Вигляд</string>

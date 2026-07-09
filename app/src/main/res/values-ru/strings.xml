@@ -45,6 +45,16 @@
     <string name="map_close_ride">Вернуться к текущей поездке</string>
     <string name="map_zoom_in">Приблизить</string>
     <string name="map_zoom_out">Отдалить</string>
+    <string name="settings_map_section">Карта</string>
+    <string name="map_offline_title">Офлайн-карта</string>
+    <string name="map_offline_hint">Будет скачана последняя просмотренная область карты</string>
+    <string name="map_offline_regions">Скачано областей</string>
+    <string name="map_offline_download">Скачать</string>
+    <string name="map_offline_delete">Удалить все</string>
+    <string name="map_offline_done">Область скачана</string>
+    <string name="map_offline_failed">Не удалось скачать</string>
+    <string name="map_offline_no_area">Сначала откройте вкладку Карта</string>
+    <string name="map_offline_deleted">Скачанные области удалены</string>
     <string name="history_show_on_map">Показать на карте</string>
 
     <string name="settings_appearance">Вид</string>
