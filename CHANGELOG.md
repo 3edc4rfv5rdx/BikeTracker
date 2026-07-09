@@ -4,6 +4,12 @@ Newest entries on top.
 
 ## Unreleased
 
+- Tracking screen: clock seconds render smaller than the HH:mm.
+- Exit button now shows only on the Tracking tab; the top bar title reflects the current tab.
+- History tree: tighter row spacing; ride cards sit at the day's indent and are tinted to read as buttons.
+- Ride dialog: unit shown as a small caption under each value so labels no longer wrap awkwardly.
+- Dialogs: filled (colored) buttons throughout; the ride dialog places Delete and OK in opposite corners.
+
 - Ride details: added pace (min/km), average GPS speed, and elevation gain alongside average and max speed.
 - History: ride details now open as a dialog (with Delete/OK) instead of a separate screen, so Back behaves predictably.
 - History: Back collapses the most recently opened year/month/day node before leaving the screen.

@@ -73,14 +73,21 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val currentTab = tabs.firstOrNull { tab ->
+        currentDestination?.hierarchy?.any { it.route == tab.route } == true
+    }
+    // The exit button lives only on the Tracking tab; other tabs leave the slot empty.
+    val onTrackingTab = currentTab == Destination.Tracking
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(id = R.string.app_name)) },
+                title = { Text(stringResource(id = (currentTab ?: Destination.Tracking).labelRes())) },
                 navigationIcon = {
-                    IconButton(onClick = onExit) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.action_exit))
+                    if (onTrackingTab) {
+                        IconButton(onClick = onExit) {
+                            Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.action_exit))
+                        }
                     }
                 }
             )

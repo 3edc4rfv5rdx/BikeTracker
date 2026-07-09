@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -88,7 +89,7 @@ fun HistoryScreen() {
             .fillMaxSize()
             .padding(horizontal = 12.dp),
         contentPadding = PaddingValues(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         item {
             SummaryCard(week, month, year, all)
@@ -252,7 +253,7 @@ private fun TreeRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(start = (level * 20).dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
+            .padding(start = (level * 20).dp, top = 7.dp, bottom = 7.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -277,13 +278,15 @@ private fun TreeRow(
     }
 }
 
-/** A selectable ride under an expanded day: start time plus the trip's summary line. */
+/** A selectable ride under an expanded day: start time plus the trip's summary line.
+ *  Indented to the day row's level (not the deeper text) and tinted so it reads as a button. */
 @Composable
 private fun RideRow(trip: Trip, onClick: () -> Unit) {
     Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 60.dp, top = 2.dp, bottom = 2.dp)
+            .padding(start = 40.dp, top = 2.dp, bottom = 2.dp)
             .clickable(onClick = onClick),
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -294,7 +297,6 @@ private fun RideRow(trip: Trip, onClick: () -> Unit) {
             Text(
                 text = tripSummaryLine(trip),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

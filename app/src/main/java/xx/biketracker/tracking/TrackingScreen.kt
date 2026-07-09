@@ -19,7 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import xx.biketracker.ui.DialogButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,8 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -143,13 +146,12 @@ fun TrackingScreen() {
 
         Spacer(Modifier.height(24.dp))
 
-        // Wall clock, centered just above the controls.
-        StatCell(
-            stat = Stat(stringResource(R.string.stat_clock), formatClock(nowMillis, withSeconds = true)),
+        // Wall clock, centered just above the controls. Seconds render smaller than HH:mm.
+        ClockCell(
+            nowMillis = nowMillis,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 8.dp),
-            valueSize = 44.sp,
         )
 
         Spacer(Modifier.weight(1f))
@@ -231,6 +233,34 @@ private fun StatCell(stat: Stat, modifier: Modifier, valueSize: TextUnit = 42.sp
     }
 }
 
+/** Wall clock with HH:mm large and the trailing seconds noticeably smaller. */
+@Composable
+private fun ClockCell(nowMillis: Long, modifier: Modifier) {
+    val full = formatClock(nowMillis, withSeconds = true) // "HH:mm:ss"
+    val hoursMinutes = full.substringBeforeLast(':')
+    val seconds = full.substringAfterLast(':')
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = stringResource(R.string.stat_clock),
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 2,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(fontSize = 44.sp)) { append(hoursMinutes) }
+                withStyle(SpanStyle(fontSize = 26.sp)) { append(":$seconds") }
+            },
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
 @Composable
 private fun Controls(
     status: TrackingStatus,
@@ -293,10 +323,10 @@ private fun BackgroundPermissionDialog(onAllow: () -> Unit, onSkip: () -> Unit) 
         title = { Text(stringResource(R.string.perm_bg_title)) },
         text = { Text(stringResource(R.string.perm_bg_text)) },
         confirmButton = {
-            TextButton(onClick = onAllow) { Text(stringResource(R.string.perm_bg_allow)) }
+            DialogButton(stringResource(R.string.perm_bg_allow), onClick = onAllow)
         },
         dismissButton = {
-            TextButton(onClick = onSkip) { Text(stringResource(R.string.perm_bg_skip)) }
+            DialogButton(stringResource(R.string.perm_bg_skip), onClick = onSkip)
         },
     )
 }

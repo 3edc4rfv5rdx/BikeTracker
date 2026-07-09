@@ -20,7 +20,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +38,7 @@ import kotlinx.coroutines.launch
 import xx.biketracker.R
 import xx.biketracker.data.backupDatabase
 import xx.biketracker.data.restoreDatabase
+import xx.biketracker.ui.DialogButton
 
 @Composable
 fun SettingsScreen() {
@@ -135,15 +135,17 @@ fun SettingsScreen() {
             title = { Text(stringResource(R.string.restore_confirm_title)) },
             text = { Text(stringResource(R.string.restore_confirm_text)) },
             confirmButton = {
-                TextButton(onClick = {
-                    showRestoreConfirm = false
-                    restoreLauncher.launch(arrayOf("application/zip", "*/*"))
-                }) { Text(stringResource(R.string.btn_restore)) }
+                DialogButton(
+                    text = stringResource(R.string.btn_restore),
+                    destructive = true,
+                    onClick = {
+                        showRestoreConfirm = false
+                        restoreLauncher.launch(arrayOf("application/zip", "*/*"))
+                    },
+                )
             },
             dismissButton = {
-                TextButton(onClick = { showRestoreConfirm = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
+                DialogButton(stringResource(R.string.action_cancel), onClick = { showRestoreConfirm = false })
             },
         )
     }
@@ -247,7 +249,7 @@ private fun <T> ChoiceDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            DialogButton(stringResource(R.string.action_cancel), onClick = onDismiss)
         },
     )
 }
