@@ -224,7 +224,12 @@ class TrackingService : Service() {
         cancelAutoSave()
         autoSaveJob = scope.launch {
             delay(DEFAULT_AUTO_SAVE_MS)
-            if (status == TrackingStatus.PAUSED) stopAndSave()
+            // Decide and stop on the main thread so this can't race with a resume or
+            // recordLocation mutating status/points; a resume's cancelAutoSave() then
+            // aborts here before the check.
+            withContext(Dispatchers.Main) {
+                if (status == TrackingStatus.PAUSED) stopAndSave()
+            }
         }
     }
 
