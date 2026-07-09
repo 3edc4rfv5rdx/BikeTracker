@@ -76,6 +76,8 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
     val mapView = remember {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
+            // Scale tiles to the screen density: labels stay readable on high-dpi displays.
+            isTilesScaledToDpi = true
             setMultiTouchControls(true)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             controller.setZoom(RIDE_ZOOM)

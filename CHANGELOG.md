@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Map tiles are scaled to the screen density, so labels are readable on high-dpi displays.
+
 - The screen no longer dims on the Map tab while a ride is active (same as on Tracking).
 - Map: zoom in/out buttons next to the re-center one.
 
