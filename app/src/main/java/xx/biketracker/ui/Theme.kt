@@ -29,14 +29,18 @@ private val DarkColors = darkColorScheme(
     surfaceContainerHighest = ContainerDarkHighest,
 )
 
+/** True when the app renders dark for the given theme choice; shared by the theme and the map. */
+@Composable
+fun isDarkTheme(themeMode: ThemeMode): Boolean = when (themeMode) {
+    ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    ThemeMode.LIGHT -> false
+    ThemeMode.DARK -> true
+}
+
 /** Applies the light or dark Material color scheme according to the user's theme choice. */
 @Composable
 fun BikeTrackerTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
-    val dark = when (themeMode) {
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-    }
+    val dark = isDarkTheme(themeMode)
     MaterialTheme(
         colorScheme = if (dark) DarkColors else LightColors,
         typography = AppTypography,

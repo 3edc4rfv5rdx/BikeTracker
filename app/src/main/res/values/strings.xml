@@ -40,7 +40,8 @@
     <string name="perm_bg_allow">Allow</string>
     <string name="perm_bg_skip">Not now</string>
 
-    <string name="map_placeholder">Map coming soon</string>
+    <string name="map_no_ride">No active ride</string>
+    <string name="map_center_route">Center on route</string>
 
     <string name="settings_appearance">Appearance</string>
     <string name="settings_language">Language</string>

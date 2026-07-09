@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -25,7 +24,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.lifecycleScope
@@ -38,6 +36,7 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import xx.biketracker.data.finalizeAbandonedTrips
 import xx.biketracker.history.HistoryScreen
+import xx.biketracker.map.MapScreen
 import xx.biketracker.settings.AppSettings
 import xx.biketracker.settings.SettingsScreen
 import xx.biketracker.tracking.TrackingScreen
@@ -128,7 +127,7 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Destination.Tracking.route) { TrackingScreen() }
-            composable(Destination.Map.route) { PlaceholderScreen(R.string.map_placeholder) }
+            composable(Destination.Map.route) { MapScreen() }
             composable(Destination.History.route) { HistoryScreen() }
             composable(Destination.Settings.route) { SettingsScreen() }
         }
@@ -147,11 +146,4 @@ private fun Destination.labelRes() = when (this) {
     Destination.Map -> R.string.nav_map
     Destination.History -> R.string.nav_history
     Destination.Settings -> R.string.nav_settings
-}
-
-@Composable
-private fun PlaceholderScreen(textRes: Int) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = stringResource(id = textRes))
-    }
 }

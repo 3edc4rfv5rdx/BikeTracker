@@ -40,7 +40,8 @@
     <string name="perm_bg_allow">Дозволити</string>
     <string name="perm_bg_skip">Не зараз</string>
 
-    <string name="map_placeholder">Карта незабаром з\'явиться</string>
+    <string name="map_no_ride">Немає активної поїздки</string>
+    <string name="map_center_route">Центрувати на маршруті</string>
 
     <string name="settings_appearance">Вигляд</string>
     <string name="settings_language">Мова</string>
