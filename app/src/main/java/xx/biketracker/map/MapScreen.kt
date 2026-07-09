@@ -29,6 +29,8 @@ import xx.biketracker.data.AppDatabase
 import xx.biketracker.formatClock
 import xx.biketracker.formatDate
 import xx.biketracker.tracking.TrackingState
+import xx.biketracker.tracking.TrackingStatus
+import xx.biketracker.ui.KeepScreenOnWhile
 
 /**
  * The Map tab. Shows the current ride's live track, or — when a ride was sent here from the
@@ -50,6 +52,9 @@ fun MapScreen() {
     }
 
     val route = if (selected != null) selectedRoute else snapshot.route
+
+    // The map is watched mid-ride too; don't let the screen dim while one is active.
+    KeepScreenOnWhile(snapshot.status != TrackingStatus.IDLE)
 
     Box(modifier = Modifier.fillMaxSize()) {
         RouteMap(

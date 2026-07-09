@@ -20,8 +20,8 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import xx.biketracker.ui.DialogButton
+import xx.biketracker.ui.KeepScreenOnWhile
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -95,12 +94,7 @@ fun TrackingScreen() {
     }
 
     // Keep the screen awake while a ride is active — readable in sunlight, no missed taps.
-    val view = LocalView.current
-    val keepScreenOn = snapshot.status != TrackingStatus.IDLE
-    DisposableEffect(keepScreenOn) {
-        view.keepScreenOn = keepScreenOn
-        onDispose { view.keepScreenOn = false }
-    }
+    KeepScreenOnWhile(snapshot.status != TrackingStatus.IDLE)
 
     // Ride time ticks every second locally between the ~1.5 s GPS updates.
     val liveMovingMs = snapshot.movingTimeMillis +

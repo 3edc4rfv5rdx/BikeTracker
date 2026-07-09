@@ -1,11 +1,15 @@
 package xx.biketracker.map
 
 import android.graphics.Paint
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
@@ -143,17 +147,26 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
     Box(modifier = modifier) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
-        if (route.isNotEmpty()) {
-            SmallFloatingActionButton(
-                onClick = ::centerOnRoute,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp),
-            ) {
-                Icon(
-                    Icons.Default.MyLocation,
-                    contentDescription = stringResource(R.string.map_center_route),
-                )
+        // Zoom buttons: pinch works on device, but the emulator (and gloves) want plain taps.
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SmallFloatingActionButton(onClick = { mapView.controller.zoomIn() }) {
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.map_zoom_in))
+            }
+            SmallFloatingActionButton(onClick = { mapView.controller.zoomOut() }) {
+                Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.map_zoom_out))
+            }
+            if (route.isNotEmpty()) {
+                SmallFloatingActionButton(onClick = ::centerOnRoute) {
+                    Icon(
+                        Icons.Default.MyLocation,
+                        contentDescription = stringResource(R.string.map_center_route),
+                    )
+                }
             }
         }
     }

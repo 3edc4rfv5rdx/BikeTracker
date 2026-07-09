@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- The screen no longer dims on the Map tab while a ride is active (same as on Tracking).
+- Map: zoom in/out buttons next to the re-center one.
+
 - History: a map button on each ride opens its track on the Map tab; a chip there returns to the live view.
 - Map tab: current ride's track on OpenStreetMap (osmdroid, no keys), dark-theme tiles, re-center button.
 - Rides are now saved incrementally during recording; a ride interrupted by process death is recovered at the next launch.

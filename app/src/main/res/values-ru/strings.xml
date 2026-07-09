@@ -43,6 +43,8 @@
     <string name="map_no_ride">Нет активной поездки</string>
     <string name="map_center_route">Центрировать на маршруте</string>
     <string name="map_close_ride">Вернуться к текущей поездке</string>
+    <string name="map_zoom_in">Приблизить</string>
+    <string name="map_zoom_out">Отдалить</string>
     <string name="history_show_on_map">Показать на карте</string>
 
     <string name="settings_appearance">Вид</string>
