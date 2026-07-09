@@ -7,6 +7,7 @@ Newest entries on top.
 - Fixed rides being lost on stop: the save now finishes before the service shuts down, so it no longer races with cancellation.
 - Prevented a duplicate ride when a manual Stop races with the pause auto-save.
 - Fixed the pause auto-save racing with resume/recording: it now decides and stops on the main thread, avoiding a crash and lost ride.
+- Fixed a late GPS fix after stop leaving the UI stuck in recording state and re-posting the dismissed notification.
 
 - Ride dialog: replaced average GPS speed with elevation gain (total ascent).
 

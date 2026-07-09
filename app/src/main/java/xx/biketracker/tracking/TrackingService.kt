@@ -134,6 +134,9 @@ class TrackingService : Service() {
     }
 
     private fun onLocation(location: Location) {
+        // A fix already queued on the main looper can arrive after stopAndSave; processing it
+        // would re-post the removed notification and overwrite the TrackingState reset.
+        if (stopping.get()) return
         currentSpeedMps = if (location.hasSpeed()) location.speed.toDouble() else currentSpeedMps
         altitudeMeters = if (location.hasAltitude()) location.altitude else altitudeMeters
 
@@ -276,8 +279,10 @@ class TrackingService : Service() {
                         )
                         db.tripDao().insertPoints(recorded.map { it.copy(tripId = id) })
                     }
+                    // Finish on the main thread: status and TrackingState belong to it, so the
+                    // reset serializes with onLocation instead of racing it from Default.
+                    withContext(Dispatchers.Main) { finishService() }
                 }
-                finishService()
             }
         } else {
             finishService()
