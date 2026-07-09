@@ -9,6 +9,7 @@ Newest entries on top.
 - Fixed the pause auto-save racing with resume/recording: it now decides and stops on the main thread, avoiding a crash and lost ride.
 - Fixed a late GPS fix after stop leaving the UI stuck in recording state and re-posting the dismissed notification.
 - Fixed a foreground-timeout crash when Pause/Resume reached a freshly created service instance.
+- Backup and restore are refused while a ride is active, so they can no longer corrupt the database mid-save.
 
 - Ride dialog: replaced average GPS speed with elevation gain (total ascent).
 

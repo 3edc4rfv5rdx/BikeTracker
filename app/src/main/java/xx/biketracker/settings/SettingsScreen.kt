@@ -38,6 +38,8 @@ import kotlinx.coroutines.launch
 import xx.biketracker.R
 import xx.biketracker.data.backupDatabase
 import xx.biketracker.data.restoreDatabase
+import xx.biketracker.tracking.TrackingState
+import xx.biketracker.tracking.TrackingStatus
 import xx.biketracker.ui.DialogButton
 
 @Composable
@@ -49,13 +51,23 @@ fun SettingsScreen() {
     var showThemeDialog by remember { mutableStateOf(false) }
 
     val themeMode by AppSettings.themeMode.collectAsState()
+    val tracking by TrackingState.snapshot.collectAsState()
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+
+    // Backup copies the live DB file and restore replaces it; either racing an in-flight ride
+    // save could corrupt data, so both are refused while a ride is active.
+    fun refuseIfRideActive(): Boolean {
+        val active = tracking.status != TrackingStatus.IDLE
+        if (active) toast(context.getString(R.string.backup_ride_active))
+        return active
+    }
 
     val restoreLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        if (uri != null) scope.launch {
+        // Re-check after the picker: a ride could have started while it was open.
+        if (uri != null && !refuseIfRideActive()) scope.launch {
             runCatching { restoreDatabase(context, uri) }
                 .onSuccess {
                     toast(context.getString(R.string.backup_restored))
@@ -88,7 +100,7 @@ fun SettingsScreen() {
         NavRow(
             label = stringResource(R.string.btn_backup),
             onClick = {
-                scope.launch {
+                if (!refuseIfRideActive()) scope.launch {
                     runCatching { backupDatabase(context) }
                         .onSuccess { path -> toast("${context.getString(R.string.backup_saved)}\n$path") }
                         .onFailure { toast(context.getString(R.string.backup_failed)) }
@@ -97,7 +109,7 @@ fun SettingsScreen() {
         )
         NavRow(
             label = stringResource(R.string.btn_restore),
-            onClick = { showRestoreConfirm = true },
+            onClick = { if (!refuseIfRideActive()) showRestoreConfirm = true },
         )
     }
 

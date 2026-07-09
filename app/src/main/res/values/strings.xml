@@ -61,6 +61,7 @@
     <string name="backup_saved">Backup saved</string>
     <string name="backup_restored">Backup restored</string>
     <string name="backup_failed">Operation failed</string>
+    <string name="backup_ride_active">Stop the ride first</string>
 
     <string name="history_empty">No rides yet</string>
     <string name="summary_week">Week</string>

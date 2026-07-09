@@ -58,6 +58,7 @@
     <string name="backup_saved">Резервная копия сохранена</string>
     <string name="backup_restored">Резервная копия восстановлена</string>
     <string name="backup_failed">Не удалось выполнить</string>
+    <string name="backup_ride_active">Сначала остановите поездку</string>
 
     <string name="history_empty">Поездок пока нет</string>
     <string name="summary_week">Неделя</string>
