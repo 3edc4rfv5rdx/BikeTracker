@@ -21,8 +21,12 @@
     <string name="stat_distance">Відстань</string>
     <string name="stat_time">Час</string>
     <string name="stat_avg_speed">Сер. швидкість</string>
+    <string name="stat_avg_speed_gps">Сер. швидкість GPS</string>
     <string name="stat_max_speed">Макс. швидкість</string>
+    <string name="stat_pace">Темп</string>
+    <string name="unit_pace">хв/км</string>
     <string name="stat_altitude">Висота</string>
+    <string name="stat_elevation_gain">Набір висоти</string>
     <string name="stat_clock">Годинник</string>
 
     <string name="btn_start">Старт</string>
@@ -37,6 +41,33 @@
     <string name="perm_bg_skip">Не зараз</string>
 
     <string name="map_placeholder">Карта незабаром з\'явиться</string>
-    <string name="history_placeholder">Історія незабаром з\'явиться</string>
-    <string name="settings_placeholder">Налаштування незабаром з\'являться</string>
+
+    <string name="settings_appearance">Вигляд</string>
+    <string name="settings_language">Мова</string>
+    <string name="settings_theme">Тема</string>
+    <string name="language_system">Системна</string>
+    <string name="theme_system">Системна</string>
+    <string name="theme_light">Світла</string>
+    <string name="theme_dark">Темна</string>
+
+    <string name="settings_data_section">Дані</string>
+    <string name="btn_backup">Резервна копія</string>
+    <string name="btn_restore">Відновити</string>
+    <string name="restore_confirm_title">Замінити всі дані</string>
+    <string name="restore_confirm_text">Відновлення замінить усі поточні поїздки</string>
+    <string name="backup_saved">Резервну копію збережено</string>
+    <string name="backup_restored">Резервну копію відновлено</string>
+    <string name="backup_failed">Не вдалося виконати</string>
+
+    <string name="history_empty">Поїздок ще немає</string>
+    <string name="summary_week">Тиждень</string>
+    <string name="summary_month">Місяць</string>
+    <string name="summary_year">Рік</string>
+    <string name="summary_all">Увесь час</string>
+
+    <string name="action_ok">Гаразд</string>
+    <string name="action_delete">Видалити</string>
+    <string name="action_cancel">Скасувати</string>
+    <string name="delete_title">Видалити поїздку</string>
+    <string name="delete_text">Цю поїздку буде видалено назавжди</string>
 </resources>

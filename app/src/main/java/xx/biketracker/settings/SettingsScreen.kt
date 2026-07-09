@@ -1,0 +1,253 @@
+package xx.biketracker.settings
+
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import xx.biketracker.R
+import xx.biketracker.data.backupDatabase
+import xx.biketracker.data.restoreDatabase
+
+@Composable
+fun SettingsScreen() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+
+    val themeMode by AppSettings.themeMode.collectAsState()
+
+    fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) scope.launch {
+            runCatching { restoreDatabase(context, uri) }
+                .onSuccess {
+                    toast(context.getString(R.string.backup_restored))
+                    // Rebuild the UI so every screen re-reads the freshly restored database.
+                    (context as? Activity)?.recreate()
+                }
+                .onFailure { toast(context.getString(R.string.backup_failed)) }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+    ) {
+        SectionHeader(stringResource(R.string.settings_appearance))
+        ValueRow(
+            label = stringResource(R.string.settings_language),
+            value = stringResource(languageLabel(AppSettings.currentLanguage(context))),
+            onClick = { showLanguageDialog = true },
+        )
+        ValueRow(
+            label = stringResource(R.string.settings_theme),
+            value = stringResource(themeLabel(themeMode)),
+            onClick = { showThemeDialog = true },
+        )
+
+        SectionHeader(stringResource(R.string.settings_data_section))
+        NavRow(
+            label = stringResource(R.string.btn_backup),
+            onClick = {
+                scope.launch {
+                    runCatching { backupDatabase(context) }
+                        .onSuccess { path -> toast("${context.getString(R.string.backup_saved)}\n$path") }
+                        .onFailure { toast(context.getString(R.string.backup_failed)) }
+                }
+            },
+        )
+        NavRow(
+            label = stringResource(R.string.btn_restore),
+            onClick = { showRestoreConfirm = true },
+        )
+    }
+
+    if (showLanguageDialog) {
+        ChoiceDialog(
+            title = stringResource(R.string.settings_language),
+            options = AppLanguage.entries.map { it to languageLabel(it) },
+            selected = AppSettings.currentLanguage(context),
+            onSelect = {
+                showLanguageDialog = false
+                AppSettings.setLanguage(context, it) // recreates the activity with the new locale
+            },
+            onDismiss = { showLanguageDialog = false },
+        )
+    }
+
+    if (showThemeDialog) {
+        ChoiceDialog(
+            title = stringResource(R.string.settings_theme),
+            options = ThemeMode.entries.map { it to themeLabel(it) },
+            selected = themeMode,
+            onSelect = {
+                showThemeDialog = false
+                AppSettings.setThemeMode(context, it)
+            },
+            onDismiss = { showThemeDialog = false },
+        )
+    }
+    // languageLabel/themeLabel below return string-resource ids (plain, not @Composable), so they
+    // are safe to call inside the map lambdas above; ChoiceDialog resolves them with stringResource.
+
+    if (showRestoreConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirm = false },
+            title = { Text(stringResource(R.string.restore_confirm_title)) },
+            text = { Text(stringResource(R.string.restore_confirm_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestoreConfirm = false
+                    restoreLauncher.launch(arrayOf("application/zip", "*/*"))
+                }) { Text(stringResource(R.string.btn_restore)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+}
+
+private fun languageLabel(language: AppLanguage): Int = when (language) {
+    AppLanguage.SYSTEM -> R.string.language_system
+    AppLanguage.ENGLISH -> R.string.language_english
+    AppLanguage.UKRAINIAN -> R.string.language_ukrainian
+    AppLanguage.RUSSIAN -> R.string.language_russian
+}
+
+private fun themeLabel(mode: ThemeMode): Int = when (mode) {
+    ThemeMode.SYSTEM -> R.string.theme_system
+    ThemeMode.LIGHT -> R.string.theme_light
+    ThemeMode.DARK -> R.string.theme_dark
+}
+
+/** Group heading — larger, bold, tinted; separates settings blocks. */
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
+    )
+}
+
+/** A row that opens a dialog/screen: label on the left, trailing chevron. */
+@Composable
+private fun NavRow(label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.weight(1f))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** A row showing the current value on the right plus a chevron. */
+@Composable
+private fun ValueRow(label: String, value: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.weight(1f))
+        Text(
+            text = value,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.End,
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Single-choice radio dialog; selecting an option applies it immediately and closes. */
+@Composable
+private fun <T> ChoiceDialog(
+    title: String,
+    options: List<Pair<T, Int>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                options.forEach { (value, labelRes) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = value == selected, onClick = { onSelect(value) })
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = value == selected, onClick = { onSelect(value) })
+                        Text(stringResource(labelRes), modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}

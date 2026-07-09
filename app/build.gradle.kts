@@ -38,7 +38,7 @@ android {
 
     defaultConfig {
         applicationId = "xx.biketracker"
-        minSdk = 31
+        minSdk = 33
         targetSdk = 36
         versionCode = releaseVersionCode
         versionName = releaseVersionName

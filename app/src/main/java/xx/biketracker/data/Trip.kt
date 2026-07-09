@@ -20,4 +20,9 @@ data class Trip(
     val distanceMeters: Double,
     val movingTimeMillis: Long,   // elapsed time excluding paused stretches
     val maxSpeedMps: Double,
+    // Reductions over the track points, computed once at save (like maxSpeedMps) so the detail
+    // and any future period summaries never reload points. Null when the source had no such data
+    // (e.g. imported/older rides): avg over no GPS speeds, or a route with no altitude fixes.
+    val avgGpsSpeedMps: Double? = null,
+    val elevationGainMeters: Double? = null,
 )

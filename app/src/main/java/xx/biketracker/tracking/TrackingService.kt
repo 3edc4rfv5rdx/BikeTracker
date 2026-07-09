@@ -35,6 +35,7 @@ import xx.biketracker.AUTO_PAUSE_DEBOUNCE_MS
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
 import xx.biketracker.AUTO_RESUME_SPEED_MPS
 import xx.biketracker.DEFAULT_AUTO_SAVE_MS
+import xx.biketracker.elevationGainMeters
 import xx.biketracker.GPS_INTERVAL_MS
 import xx.biketracker.GPS_MIN_INTERVAL_MS
 import xx.biketracker.GeoPoint
@@ -163,6 +164,7 @@ class TrackingService : Service() {
             lon = location.longitude,
             time = now,
             speedMps = location.speed,
+            altitudeMeters = if (location.hasAltitude()) location.altitude else null,
         )
         points += point
         route += GeoPoint(location.latitude, location.longitude)
@@ -235,6 +237,10 @@ class TrackingService : Service() {
         val tripDistance = distanceMeters
         val tripMovingTime = movingTimeMillis
         val tripMaxSpeed = maxSpeedMps
+        // Point reductions computed once here, mirroring maxSpeed, so the detail never reloads points.
+        val tripAvgGps = recorded.map { it.speedMps.toDouble() }.average()
+        val altitudes = recorded.map { it.altitudeMeters }
+        val tripElevationGain = if (altitudes.any { it != null }) elevationGainMeters(altitudes) else null
 
         if (recorded.size >= 2 && tripDistance > 0) {
             scope.launch {
@@ -247,6 +253,8 @@ class TrackingService : Service() {
                             distanceMeters = tripDistance,
                             movingTimeMillis = tripMovingTime,
                             maxSpeedMps = tripMaxSpeed,
+                            avgGpsSpeedMps = tripAvgGps,
+                            elevationGainMeters = tripElevationGain,
                         )
                     )
                     db.tripDao().insertPoints(recorded.map { it.copy(tripId = id) })

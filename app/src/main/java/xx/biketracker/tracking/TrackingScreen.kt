@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
+import xx.biketracker.PREFS_NAME
 import xx.biketracker.R
 import xx.biketracker.avgSpeedMps
 import xx.biketracker.formatClock
@@ -126,7 +127,7 @@ fun TrackingScreen() {
         Spacer(Modifier.height(6.dp))
 
         StatRow(
-            left = Stat(withUnit(R.string.stat_distance, R.string.unit_km), formatKm(snapshot.distanceMeters)),
+            left = Stat(withUnit(R.string.stat_distance, R.string.unit_km), formatKm(snapshot.distanceMeters, decimals = 2)),
             right = Stat(stringResource(R.string.stat_time), formatDuration(liveMovingMs)),
         )
         StatRow(
@@ -321,7 +322,6 @@ private fun hasBackgroundLocation(context: Context): Boolean =
         PackageManager.PERMISSION_GRANTED
 
 // We ask for background location at most once; after that the user manages it in system settings.
-private const val PREFS_NAME = "biketracker_prefs"
 private const val KEY_ASKED_BACKGROUND = "asked_background_location"
 
 private fun hasAskedBackground(context: Context): Boolean =

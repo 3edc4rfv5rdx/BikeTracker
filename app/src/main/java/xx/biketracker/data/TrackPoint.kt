@@ -26,6 +26,7 @@ data class TrackPoint(
     val tripId: Long,
     val lat: Double,
     val lon: Double,
-    val time: Long,        // epoch millis
-    val speedMps: Float,   // instantaneous speed reported by the GPS fix
+    val time: Long,               // epoch millis
+    val speedMps: Float,          // instantaneous speed reported by the GPS fix
+    val altitudeMeters: Double? = null, // GPS altitude if the fix had one, else null (added in schema v2)
 )

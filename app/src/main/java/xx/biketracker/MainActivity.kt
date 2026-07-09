@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -24,6 +23,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +34,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import xx.biketracker.history.HistoryScreen
+import xx.biketracker.settings.AppSettings
+import xx.biketracker.settings.SettingsScreen
 import xx.biketracker.tracking.TrackingScreen
+import xx.biketracker.ui.BikeTrackerTheme
+import xx.biketracker.ui.NavLabelStyle
 
 private sealed class Destination(val route: String) {
     data object Tracking : Destination("tracking")
@@ -46,9 +51,12 @@ private sealed class Destination(val route: String) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppSettings.load(this)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme {
+            // Observing the theme here re-colors the whole app the moment it changes.
+            val themeMode by AppSettings.themeMode.collectAsState()
+            BikeTrackerTheme(themeMode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     BikeTrackerApp(onExit = { finishAndRemoveTask() })
                 }
@@ -63,6 +71,9 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     val navController = rememberNavController()
     val tabs = listOf(Destination.Tracking, Destination.Map, Destination.History, Destination.Settings)
 
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = backStackEntry?.destination
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -76,9 +87,6 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
         },
         bottomBar = {
             NavigationBar {
-                val backStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = backStackEntry?.destination
-
                 tabs.forEach { tab ->
                     val selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true
                     NavigationBarItem(
@@ -93,7 +101,7 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                             }
                         },
                         icon = { Icon(tab.icon(), contentDescription = null) },
-                        label = { Text(stringResource(id = tab.labelRes())) }
+                        label = { Text(stringResource(id = tab.labelRes()), style = NavLabelStyle) }
                     )
                 }
             }
@@ -106,8 +114,8 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
         ) {
             composable(Destination.Tracking.route) { TrackingScreen() }
             composable(Destination.Map.route) { PlaceholderScreen(R.string.map_placeholder) }
-            composable(Destination.History.route) { PlaceholderScreen(R.string.history_placeholder) }
-            composable(Destination.Settings.route) { PlaceholderScreen(R.string.settings_placeholder) }
+            composable(Destination.History.route) { HistoryScreen() }
+            composable(Destination.Settings.route) { SettingsScreen() }
         }
     }
 }

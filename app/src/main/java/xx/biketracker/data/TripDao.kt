@@ -25,7 +25,7 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE id = :tripId")
     suspend fun getTrip(tripId: Long): Trip?
 
-    /** Route points of one trip in recorded order — used for the map and GPX export. */
+    /** Route points of one trip in recorded order — used for the map, stats, and GPX export. */
     @Query("SELECT * FROM track_points WHERE tripId = :tripId ORDER BY time ASC")
     suspend fun getPoints(tripId: Long): List<TrackPoint>
 

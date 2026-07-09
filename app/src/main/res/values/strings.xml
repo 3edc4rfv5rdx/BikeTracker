@@ -21,8 +21,12 @@
     <string name="stat_distance">Distance</string>
     <string name="stat_time">Time</string>
     <string name="stat_avg_speed">Avg speed</string>
+    <string name="stat_avg_speed_gps">Avg GPS speed</string>
     <string name="stat_max_speed">Max speed</string>
+    <string name="stat_pace">Pace</string>
+    <string name="unit_pace">min/km</string>
     <string name="stat_altitude">Altitude</string>
+    <string name="stat_elevation_gain">Elevation gain</string>
     <string name="stat_clock">Clock</string>
 
     <string name="btn_start">Start</string>
@@ -37,6 +41,36 @@
     <string name="perm_bg_skip">Not now</string>
 
     <string name="map_placeholder">Map coming soon</string>
-    <string name="history_placeholder">History coming soon</string>
-    <string name="settings_placeholder">Settings coming soon</string>
+
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_theme">Theme</string>
+    <string name="language_system">System default</string>
+    <string name="language_english">English</string>
+    <string name="language_ukrainian">Українська</string>
+    <string name="language_russian">Русский</string>
+    <string name="theme_system">System default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+
+    <string name="settings_data_section">Data</string>
+    <string name="btn_backup">Backup</string>
+    <string name="btn_restore">Restore</string>
+    <string name="restore_confirm_title">Replace all data</string>
+    <string name="restore_confirm_text">Restore replaces all current rides</string>
+    <string name="backup_saved">Backup saved</string>
+    <string name="backup_restored">Backup restored</string>
+    <string name="backup_failed">Operation failed</string>
+
+    <string name="history_empty">No rides yet</string>
+    <string name="summary_week">Week</string>
+    <string name="summary_month">Month</string>
+    <string name="summary_year">Year</string>
+    <string name="summary_all">All time</string>
+
+    <string name="action_ok">OK</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="delete_title">Delete ride</string>
+    <string name="delete_text">This ride will be permanently removed</string>
 </resources>

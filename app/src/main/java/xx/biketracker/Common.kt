@@ -1,10 +1,12 @@
 package xx.biketracker
 
+import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -41,6 +43,13 @@ const val AUTO_RESUME_SPEED_MPS = 4.0 / MPS_TO_KMH
 /** A ride paused longer than this is finished and saved automatically (default 15 min). */
 const val DEFAULT_AUTO_SAVE_MS = 15L * 60L * 1000L
 
+// --- Time windows ---
+const val DAY_MS = 24L * 60L * 60L * 1000L
+
+// --- Preferences ---
+/** Single SharedPreferences file for all app settings. */
+const val PREFS_NAME = "biketracker_prefs"
+
 /** A latitude/longitude pair; the live route and stored track are ordered lists of these. */
 data class GeoPoint(val lat: Double, val lon: Double)
 
@@ -65,11 +74,55 @@ fun avgSpeedMps(distanceMeters: Double, movingTimeMillis: Long): Double =
 
 // --- Display formatting (numbers only; caller appends the localized unit label) ---
 
-fun formatKm(meters: Double): String =
-    String.format(Locale.getDefault(), "%.1f", metersToKm(meters))
+fun formatKm(meters: Double, decimals: Int = 1): String =
+    String.format(Locale.getDefault(), "%.${decimals}f", metersToKm(meters))
 
 fun formatSpeedKmh(mps: Double): String =
     String.format(Locale.getDefault(), "%.1f", mpsToKmh(mps))
+
+/**
+ * Total ascent from a sequence of GPS altitudes (meters), nulls skipped. GPS vertical noise is
+ * large, so climbs are only counted once the rise past the last reference exceeds
+ * [thresholdMeters]; descents lower the reference so the next climb is measured from the low point.
+ */
+fun elevationGainMeters(altitudes: List<Double?>, thresholdMeters: Double = 3.0): Double {
+    var gain = 0.0
+    var reference: Double? = null
+    for (a in altitudes) {
+        if (a == null) continue
+        val ref = reference
+        if (ref == null) {
+            reference = a
+        } else if (a - ref >= thresholdMeters) {
+            gain += a - ref
+            reference = a
+        } else if (a < ref) {
+            reference = a
+        }
+    }
+    return gain
+}
+
+/** Riding pace as "M:SS" minutes per kilometer, or "—" when there is no distance. */
+fun formatPace(distanceMeters: Double, movingTimeMillis: Long): String {
+    if (distanceMeters <= 0) return "—"
+    val secondsPerKm = (movingTimeMillis / 1000.0) / (distanceMeters / METERS_PER_KM)
+    val total = secondsPerKm.roundToInt()
+    return String.format(Locale.getDefault(), "%d:%02d", total / 60, total % 60)
+}
+
+/** Localized calendar date, e.g. "9 Jul 2026" — medium style, respects device locale. */
+fun formatDate(epochMillis: Long): String =
+    DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault()).format(Date(epochMillis))
+
+/** Standalone month name for the date browser, e.g. "July" / "Липень" / "Июль". */
+fun formatMonthName(epochMillis: Long): String =
+    SimpleDateFormat("LLLL", Locale.getDefault()).format(Date(epochMillis))
+        .replaceFirstChar { it.uppercase() }
+
+/** Day-of-month then weekday for the date browser, e.g. "22 Saturday" / "22 суббота". */
+fun formatDayLabel(epochMillis: Long): String =
+    SimpleDateFormat("d EEEE", Locale.getDefault()).format(Date(epochMillis))
 
 /** Wall-clock time of day, "HH:mm" or "HH:mm:ss". */
 fun formatClock(epochMillis: Long, withSeconds: Boolean = false): String =

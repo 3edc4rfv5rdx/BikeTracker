@@ -21,8 +21,12 @@
     <string name="stat_distance">Расстояние</string>
     <string name="stat_time">Время</string>
     <string name="stat_avg_speed">Ср. скорость</string>
+    <string name="stat_avg_speed_gps">Ср. скорость GPS</string>
     <string name="stat_max_speed">Макс. скорость</string>
+    <string name="stat_pace">Темп</string>
+    <string name="unit_pace">мин/км</string>
     <string name="stat_altitude">Высота</string>
+    <string name="stat_elevation_gain">Набор высоты</string>
     <string name="stat_clock">Часы</string>
 
     <string name="btn_start">Старт</string>
@@ -37,6 +41,33 @@
     <string name="perm_bg_skip">Не сейчас</string>
 
     <string name="map_placeholder">Карта скоро появится</string>
-    <string name="history_placeholder">История скоро появится</string>
-    <string name="settings_placeholder">Настройки скоро появятся</string>
+
+    <string name="settings_appearance">Вид</string>
+    <string name="settings_language">Язык</string>
+    <string name="settings_theme">Тема</string>
+    <string name="language_system">Системный</string>
+    <string name="theme_system">Системная</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_dark">Тёмная</string>
+
+    <string name="settings_data_section">Данные</string>
+    <string name="btn_backup">Резервная копия</string>
+    <string name="btn_restore">Восстановить</string>
+    <string name="restore_confirm_title">Заменить все данные</string>
+    <string name="restore_confirm_text">Восстановление заменит все текущие поездки</string>
+    <string name="backup_saved">Резервная копия сохранена</string>
+    <string name="backup_restored">Резервная копия восстановлена</string>
+    <string name="backup_failed">Не удалось выполнить</string>
+
+    <string name="history_empty">Поездок пока нет</string>
+    <string name="summary_week">Неделя</string>
+    <string name="summary_month">Месяц</string>
+    <string name="summary_year">Год</string>
+    <string name="summary_all">Всё время</string>
+
+    <string name="action_ok">ОК</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="delete_title">Удалить поездку</string>
+    <string name="delete_text">Эта поездка будет удалена навсегда</string>
 </resources>
