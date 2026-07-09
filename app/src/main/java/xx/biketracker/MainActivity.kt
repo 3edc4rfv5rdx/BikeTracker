@@ -28,12 +28,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.launch
+import xx.biketracker.data.finalizeAbandonedTrips
 import xx.biketracker.history.HistoryScreen
 import xx.biketracker.settings.AppSettings
 import xx.biketracker.settings.SettingsScreen
@@ -52,6 +55,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppSettings.load(this)
+        // Rescue any ride a process death left as an unfinished draft; the cutoff keeps a ride
+        // started right after launch out of reach.
+        lifecycleScope.launch {
+            finalizeAbandonedTrips(this@MainActivity, startedBefore = System.currentTimeMillis())
+        }
         enableEdgeToEdge()
         setContent {
             // Observing the theme here re-colors the whole app the moment it changes.

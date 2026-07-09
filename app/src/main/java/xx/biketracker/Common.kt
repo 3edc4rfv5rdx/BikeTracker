@@ -43,6 +43,10 @@ const val AUTO_RESUME_SPEED_MPS = 4.0 / MPS_TO_KMH
 /** A ride paused longer than this is finished and saved automatically (default 15 min). */
 const val DEFAULT_AUTO_SAVE_MS = 15L * 60L * 1000L
 
+// --- Draft persistence ---
+/** Flush recorded points to the draft trip every this many points (~30 s at GPS cadence). */
+const val DRAFT_FLUSH_EVERY_POINTS = 20
+
 // --- Time windows ---
 const val DAY_MS = 24L * 60L * 60L * 1000L
 

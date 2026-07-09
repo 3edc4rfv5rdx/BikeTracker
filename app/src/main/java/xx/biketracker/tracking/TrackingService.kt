@@ -24,8 +24,10 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -37,6 +39,7 @@ import xx.biketracker.AUTO_PAUSE_DEBOUNCE_MS
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
 import xx.biketracker.AUTO_RESUME_SPEED_MPS
 import xx.biketracker.DEFAULT_AUTO_SAVE_MS
+import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
 import xx.biketracker.elevationGainMeters
 import xx.biketracker.GPS_INTERVAL_MS
 import xx.biketracker.GPS_MIN_INTERVAL_MS
@@ -88,6 +91,14 @@ class TrackingService : Service() {
     // different threads) can't persist the same ride twice.
     private val stopping = AtomicBoolean(false)
 
+    // Incremental persistence: a draft Trip row is created at start, and recorded points plus
+    // running aggregates are flushed into it in batches, so a process death loses at most the
+    // last unflushed batch (finalizeAbandonedTrips rescues the draft at next launch). Flush jobs
+    // are chained through lastFlushJob so writes hit the database in recording order.
+    private var draftTrip: Deferred<Long>? = null
+    private var flushedCount = 0
+    private var lastFlushJob: Job? = null
+
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             result.lastLocation?.let(::onLocation)
@@ -128,6 +139,18 @@ class TrackingService : Service() {
         stopping.set(false)
         status = TrackingStatus.RECORDING
         startTime = System.currentTimeMillis()
+        draftTrip = scope.async {
+            AppDatabase.get(applicationContext).tripDao().insertTrip(
+                Trip(
+                    startTime = startTime,
+                    endTime = startTime,
+                    distanceMeters = 0.0,
+                    movingTimeMillis = 0L,
+                    maxSpeedMps = 0.0,
+                    finished = false,
+                )
+            )
+        }
         requestUpdates()
         publish()
     }
@@ -189,6 +212,7 @@ class TrackingService : Service() {
         points += point
         route += GeoPoint(location.latitude, location.longitude)
         lastPoint = point
+        if (points.size - flushedCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
 
         updateNotification()
         evaluateAutoPause(speed, now)
@@ -219,6 +243,7 @@ class TrackingService : Service() {
         lowSpeedSince = 0L
         // Break the segment so the paused gap adds neither distance nor time.
         lastPoint = null
+        flushDraft() // checkpoint the ride at every pause
         scheduleAutoSave()
         updateNotification()
         publish()
@@ -251,6 +276,40 @@ class TrackingService : Service() {
         autoSaveJob = null
     }
 
+    /** Persist the points recorded since the last flush plus the running aggregates.
+     *  Runs on the main thread; the write itself is chained onto the previous flush. */
+    private fun flushDraft() {
+        val draft = draftTrip ?: return
+        if (points.size == flushedCount) return
+        val slice = points.subList(flushedCount, points.size).toList()
+        flushedCount = points.size
+        val tripStart = startTime
+        val tripEnd = slice.last().time
+        val tripDistance = distanceMeters
+        val tripMovingTime = movingTimeMillis
+        val tripMaxSpeed = maxSpeedMps
+        val prev = lastFlushJob
+        lastFlushJob = scope.launch {
+            prev?.join()
+            val id = draft.await()
+            val db = AppDatabase.get(applicationContext)
+            db.withTransaction {
+                db.tripDao().insertPoints(slice.map { it.copy(tripId = id) })
+                db.tripDao().updateTrip(
+                    Trip(
+                        id = id,
+                        startTime = tripStart,
+                        endTime = tripEnd,
+                        distanceMeters = tripDistance,
+                        movingTimeMillis = tripMovingTime,
+                        maxSpeedMps = tripMaxSpeed,
+                        finished = false,
+                    )
+                )
+            }
+        }
+    }
+
     private fun stopAndSave() {
         if (!stopping.compareAndSet(false, true)) return
         cancelAutoSave()
@@ -258,6 +317,8 @@ class TrackingService : Service() {
             fusedClient.removeLocationUpdates(locationCallback)
         }
         val recorded = points.toList()
+        val unflushed = recorded.subList(flushedCount, recorded.size)
+        flushedCount = recorded.size
         val tripStart = startTime
         val tripEnd = recorded.lastOrNull()?.time ?: System.currentTimeMillis()
         val tripDistance = distanceMeters
@@ -268,34 +329,44 @@ class TrackingService : Service() {
         val altitudes = recorded.map { it.altitudeMeters }
         val tripElevationGain = if (altitudes.any { it != null }) elevationGainMeters(altitudes) else null
 
-        if (recorded.size >= 2 && tripDistance > 0) {
-            // Persist under NonCancellable and finish only after the commit, so the
-            // stopSelf() below (which triggers onDestroy → scope.cancel()) cannot abort
-            // the write mid-flight.
-            scope.launch {
-                withContext(NonCancellable) {
-                    val db = AppDatabase.get(applicationContext)
-                    db.withTransaction {
-                        val id = db.tripDao().insertTrip(
-                            Trip(
-                                startTime = tripStart,
-                                endTime = tripEnd,
-                                distanceMeters = tripDistance,
-                                movingTimeMillis = tripMovingTime,
-                                maxSpeedMps = tripMaxSpeed,
-                                avgGpsSpeedMps = tripAvgGps,
-                                elevationGainMeters = tripElevationGain,
-                            )
-                        )
-                        db.tripDao().insertPoints(recorded.map { it.copy(tripId = id) })
+        val draft = draftTrip
+        val prevFlush = lastFlushJob
+        // Finalize under NonCancellable and finish only after the commit, so the stopSelf()
+        // below (which triggers onDestroy → scope.cancel()) cannot abort the write mid-flight.
+        scope.launch {
+            withContext(NonCancellable) {
+                try {
+                    val id = draft?.await()
+                    if (id != null) {
+                        prevFlush?.join() // pending flushes must not overtake the final write
+                        val db = AppDatabase.get(applicationContext)
+                        db.withTransaction {
+                            if (recorded.size >= 2 && tripDistance > 0) {
+                                db.tripDao().insertPoints(unflushed.map { it.copy(tripId = id) })
+                                db.tripDao().updateTrip(
+                                    Trip(
+                                        id = id,
+                                        startTime = tripStart,
+                                        endTime = tripEnd,
+                                        distanceMeters = tripDistance,
+                                        movingTimeMillis = tripMovingTime,
+                                        maxSpeedMps = tripMaxSpeed,
+                                        avgGpsSpeedMps = tripAvgGps,
+                                        elevationGainMeters = tripElevationGain,
+                                        finished = true,
+                                    )
+                                )
+                            } else {
+                                db.tripDao().deleteTripById(id) // cascade removes any flushed points
+                            }
+                        }
                     }
+                } finally {
                     // Finish on the main thread: status and TrackingState belong to it, so the
                     // reset serializes with onLocation instead of racing it from Default.
                     withContext(Dispatchers.Main) { finishService() }
                 }
             }
-        } else {
-            finishService()
         }
     }
 

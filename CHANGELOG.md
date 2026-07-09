@@ -10,6 +10,7 @@ Newest entries on top.
 - Fixed a late GPS fix after stop leaving the UI stuck in recording state and re-posting the dismissed notification.
 - Fixed a foreground-timeout crash when Pause/Resume reached a freshly created service instance.
 - Backup and restore are refused while a ride is active, so they can no longer corrupt the database mid-save.
+- Rides are now saved incrementally during recording; a ride interrupted by process death is recovered at the next launch.
 
 - Ride dialog: replaced average GPS speed with elevation gain (total ascent).
 

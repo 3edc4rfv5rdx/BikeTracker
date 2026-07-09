@@ -25,4 +25,8 @@ data class Trip(
     // (e.g. imported/older rides): avg over no GPS speeds, or a route with no altitude fixes.
     val avgGpsSpeedMps: Double? = null,
     val elevationGainMeters: Double? = null,
+    // False while the ride is still being recorded: points and running aggregates are flushed
+    // into this draft row incrementally, so a process death loses at most the last batch.
+    // History/totals queries only show finished trips; finalizeAbandonedTrips() rescues drafts.
+    val finished: Boolean = true,
 )
