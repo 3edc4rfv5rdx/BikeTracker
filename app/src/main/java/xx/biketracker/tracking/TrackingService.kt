@@ -97,6 +97,14 @@ class TrackingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // A command other than START can reach a freshly created instance (e.g. the user taps
+        // Resume just as the auto-save finished the previous service). Such an instance must
+        // stop immediately: it was started via startForegroundService, and neither calling
+        // startForeground nor stopSelf would crash with a foreground-timeout exception.
+        if (status == TrackingStatus.IDLE && intent?.action != ACTION_START) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_START -> startTracking()
             ACTION_PAUSE -> pauseTracking(automatic = false)
@@ -116,6 +124,8 @@ class TrackingService : Service() {
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
         startForegroundNotification()
 
+        // In the rare case this instance is reused after a stop, allow the new ride to save.
+        stopping.set(false)
         status = TrackingStatus.RECORDING
         startTime = System.currentTimeMillis()
         requestUpdates()
