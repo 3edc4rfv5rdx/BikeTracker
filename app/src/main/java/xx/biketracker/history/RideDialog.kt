@@ -78,18 +78,10 @@ fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
                 StatRow(
                     Stat(stringResource(R.string.stat_pace), formatPace(trip.distanceMeters, trip.movingTimeMillis), stringResource(R.string.unit_pace)),
                     Stat(
-                        stringResource(R.string.stat_avg_speed_gps),
-                        trip.avgGpsSpeedMps?.let { formatSpeedKmh(it) } ?: "—",
-                        stringResource(R.string.unit_kmh),
-                    ),
-                )
-                StatRow(
-                    Stat(
                         stringResource(R.string.stat_elevation_gain),
                         trip.elevationGainMeters?.roundToInt()?.toString() ?: "—",
                         stringResource(R.string.unit_m),
                     ),
-                    null,
                 )
             }
         },

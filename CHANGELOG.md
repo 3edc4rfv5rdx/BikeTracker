@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Ride dialog: replaced average GPS speed with elevation gain (total ascent).
+
 - Tracking screen: clock seconds render smaller than the HH:mm.
 - Exit button now shows only on the Tracking tab; the top bar title reflects the current tab.
 - History tree: tighter row spacing; ride cards sit at the day's indent and are tinted to read as buttons.
