@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- History keeps its expanded tree branches when switching tabs (e.g. after sending a ride to the Map).
 - Map tiles are scaled to the screen density, so labels are readable on high-dpi displays.
 
 - The screen no longer dims on the Map tab while a ride is active (same as on Tracking).

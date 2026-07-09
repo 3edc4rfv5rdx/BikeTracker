@@ -28,7 +28,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -72,7 +75,10 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
 
     // Which year/month/day nodes are currently expanded, keyed by their stable node key.
     // Insertion order is expansion order, so the last entry is always the deepest open node.
-    val expanded = remember { mutableStateListOf<String>() }
+    // Saveable so the open branches survive switching tabs (e.g. a ride sent to the Map).
+    val expanded = rememberSaveable(
+        saver = listSaver(save = { it.toList() }, restore = { it.toMutableStateList() }),
+    ) { mutableStateListOf<String>() }
     fun toggle(key: String) {
         if (expanded.remove(key)) {
             expanded.removeAll { it.startsWith("$key-") } // collapsing a node closes its descendants too
