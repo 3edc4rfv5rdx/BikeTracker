@@ -4,15 +4,15 @@ Newest entries on top.
 
 ## Unreleased
 
-- Fixed rides being lost on stop: the save now finishes before the service shuts down, so it no longer races with cancellation.
-- Prevented a duplicate ride when a manual Stop races with the pause auto-save.
-- Fixed the pause auto-save racing with resume/recording: it now decides and stops on the main thread, avoiding a crash and lost ride.
-- Fixed a late GPS fix after stop leaving the UI stuck in recording state and re-posting the dismissed notification.
-- Fixed a foreground-timeout crash when Pause/Resume reached a freshly created service instance.
-- Backup and restore are refused while a ride is active, so they can no longer corrupt the database mid-save.
+- History: a map button on each ride opens its track on the Map tab; a chip there returns to the live view.
 - Map tab: current ride's track on OpenStreetMap (osmdroid, no keys), dark-theme tiles, re-center button.
-
 - Rides are now saved incrementally during recording; a ride interrupted by process death is recovered at the next launch.
+- Backup and restore are refused while a ride is active, so they can no longer corrupt the database mid-save.
+- Fixed a foreground-timeout crash when Pause/Resume reached a freshly created service instance.
+- Fixed a late GPS fix after stop leaving the UI stuck in recording state and re-posting the dismissed notification.
+- Fixed the pause auto-save racing with resume/recording: it now decides and stops on the main thread, avoiding a crash and lost ride.
+- Prevented a duplicate ride when a manual Stop races with the pause auto-save.
+- Fixed rides being lost on stop: the save now finishes before the service shuts down, so it no longer races with cancellation.
 
 - Ride dialog: replaced average GPS speed with elevation gain (total ascent).
 

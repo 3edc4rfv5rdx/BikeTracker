@@ -35,6 +35,7 @@ import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.formatPace
 import xx.biketracker.formatSpeedKmh
+import xx.biketracker.map.MapSelection
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.DialogButtonRow
 import kotlin.math.roundToInt
@@ -112,6 +113,7 @@ fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
                         confirmDelete = false
                         scope.launch {
                             dao.deleteTrip(trip)
+                            MapSelection.clearIf(trip.id) // the Map tab must not keep a deleted ride
                             onDeleted()
                         }
                     },

@@ -42,6 +42,8 @@
 
     <string name="map_no_ride">No active ride</string>
     <string name="map_center_route">Center on route</string>
+    <string name="map_close_ride">Back to current ride</string>
+    <string name="history_show_on_map">Show on map</string>
 
     <string name="settings_appearance">Appearance</string>
     <string name="settings_language">Language</string>

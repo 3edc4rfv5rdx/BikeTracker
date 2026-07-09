@@ -15,9 +15,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +51,7 @@ import xx.biketracker.formatSpeedKmh
 import java.util.Calendar
 
 @Composable
-fun HistoryScreen() {
+fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
     val context = LocalContext.current
     val dao = remember { AppDatabase.get(context).tripDao() }
 
@@ -146,7 +148,11 @@ fun HistoryScreen() {
                             }
                             if (dayNode.key in expanded) {
                                 items(dayNode.trips, key = { "t-${it.id}" }) { trip ->
-                                    RideRow(trip) { selectedTrip = trip }
+                                    RideRow(
+                                        trip = trip,
+                                        onClick = { selectedTrip = trip },
+                                        onShowOnMap = { onShowRideOnMap(trip) },
+                                    )
                                 }
                             }
                         }
@@ -278,10 +284,11 @@ private fun TreeRow(
     }
 }
 
-/** A selectable ride under an expanded day: start time plus the trip's summary line.
- *  Indented to the day row's level (not the deeper text) and tinted so it reads as a button. */
+/** A selectable ride under an expanded day: start time plus the trip's summary line, and a map
+ *  button at the right edge that opens this ride's track on the Map tab. Indented to the day
+ *  row's level (not the deeper text) and tinted so it reads as a button. */
 @Composable
-private fun RideRow(trip: Trip, onClick: () -> Unit) {
+private fun RideRow(trip: Trip, onClick: () -> Unit, onShowOnMap: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         modifier = Modifier
@@ -289,15 +296,27 @@ private fun RideRow(trip: Trip, onClick: () -> Unit) {
             .padding(start = 40.dp, top = 2.dp, bottom = 2.dp)
             .clickable(onClick = onClick),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text(
-                text = formatClock(trip.startTime),
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = tripSummaryLine(trip),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 14.dp, top = 10.dp, bottom = 10.dp),
+            ) {
+                Text(
+                    text = formatClock(trip.startTime),
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = tripSummaryLine(trip),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            IconButton(onClick = onShowOnMap, modifier = Modifier.padding(end = 4.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Map,
+                    contentDescription = stringResource(R.string.history_show_on_map),
+                )
+            }
         }
     }
 }

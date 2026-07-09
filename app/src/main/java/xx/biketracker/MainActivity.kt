@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import xx.biketracker.data.finalizeAbandonedTrips
 import xx.biketracker.history.HistoryScreen
 import xx.biketracker.map.MapScreen
+import xx.biketracker.map.MapSelection
 import xx.biketracker.settings.AppSettings
 import xx.biketracker.settings.SettingsScreen
 import xx.biketracker.tracking.TrackingScreen
@@ -86,6 +87,17 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     // The exit button lives only on the Tracking tab; other tabs leave the slot empty.
     val onTrackingTab = currentTab == Destination.Tracking
 
+    // Shared by the bottom bar and History's "show on map": switch tabs, keeping their state.
+    fun navigateTo(tab: Destination) {
+        navController.navigate(tab.route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -105,15 +117,7 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                     val selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true
                     NavigationBarItem(
                         selected = selected,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
+                        onClick = { navigateTo(tab) },
                         icon = { Icon(tab.icon(), contentDescription = null) },
                         label = { Text(stringResource(id = tab.labelRes()), style = NavLabelStyle) }
                     )
@@ -128,7 +132,14 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
         ) {
             composable(Destination.Tracking.route) { TrackingScreen() }
             composable(Destination.Map.route) { MapScreen() }
-            composable(Destination.History.route) { HistoryScreen() }
+            composable(Destination.History.route) {
+                HistoryScreen(
+                    onShowRideOnMap = { trip ->
+                        MapSelection.select(trip)
+                        navigateTo(Destination.Map)
+                    },
+                )
+            }
             composable(Destination.Settings.route) { SettingsScreen() }
         }
     }
