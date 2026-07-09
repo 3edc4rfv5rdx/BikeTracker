@@ -50,6 +50,7 @@ import xx.biketracker.data.TrackPoint
 import xx.biketracker.data.Trip
 import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
 /**
@@ -82,6 +83,10 @@ class TrackingService : Service() {
 
     private var currentSpeedMps = 0.0
     private var altitudeMeters: Double? = null
+
+    // Guards stopAndSave so a manual Stop racing with the pause auto-save (on
+    // different threads) can't persist the same ride twice.
+    private val stopping = AtomicBoolean(false)
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -229,6 +234,7 @@ class TrackingService : Service() {
     }
 
     private fun stopAndSave() {
+        if (!stopping.compareAndSet(false, true)) return
         cancelAutoSave()
         if (::fusedClient.isInitialized) {
             fusedClient.removeLocationUpdates(locationCallback)
