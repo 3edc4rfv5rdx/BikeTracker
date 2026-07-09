@@ -30,6 +30,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import xx.biketracker.ACCURACY_THRESHOLD_M
 import xx.biketracker.AUTO_PAUSE_DEBOUNCE_MS
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
@@ -243,25 +245,32 @@ class TrackingService : Service() {
         val tripElevationGain = if (altitudes.any { it != null }) elevationGainMeters(altitudes) else null
 
         if (recorded.size >= 2 && tripDistance > 0) {
+            // Persist under NonCancellable and finish only after the commit, so the
+            // stopSelf() below (which triggers onDestroy → scope.cancel()) cannot abort
+            // the write mid-flight.
             scope.launch {
-                val db = AppDatabase.get(applicationContext)
-                db.withTransaction {
-                    val id = db.tripDao().insertTrip(
-                        Trip(
-                            startTime = tripStart,
-                            endTime = tripEnd,
-                            distanceMeters = tripDistance,
-                            movingTimeMillis = tripMovingTime,
-                            maxSpeedMps = tripMaxSpeed,
-                            avgGpsSpeedMps = tripAvgGps,
-                            elevationGainMeters = tripElevationGain,
+                withContext(NonCancellable) {
+                    val db = AppDatabase.get(applicationContext)
+                    db.withTransaction {
+                        val id = db.tripDao().insertTrip(
+                            Trip(
+                                startTime = tripStart,
+                                endTime = tripEnd,
+                                distanceMeters = tripDistance,
+                                movingTimeMillis = tripMovingTime,
+                                maxSpeedMps = tripMaxSpeed,
+                                avgGpsSpeedMps = tripAvgGps,
+                                elevationGainMeters = tripElevationGain,
+                            )
                         )
-                    )
-                    db.tripDao().insertPoints(recorded.map { it.copy(tripId = id) })
+                        db.tripDao().insertPoints(recorded.map { it.copy(tripId = id) })
+                    }
                 }
+                finishService()
             }
+        } else {
+            finishService()
         }
-        finishService()
     }
 
     private fun finishService() {

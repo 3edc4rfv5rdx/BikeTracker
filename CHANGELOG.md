@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed rides being lost on stop: the save now finishes before the service shuts down, so it no longer races with cancellation.
+
 - Ride dialog: replaced average GPS speed with elevation gain (total ascent).
 
 - Tracking screen: clock seconds render smaller than the HH:mm.
