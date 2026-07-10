@@ -75,7 +75,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            include("arm64-v8a", "x86_64")
             isUniversalApk = true
         }
     }
@@ -117,7 +117,6 @@ abstract class RenameReleaseApks : DefaultTask() {
         val mappings = mapOf(
             "app-universal-release.apk" to "$prefix-universal.apk",
             "app-arm64-v8a-release.apk" to "$prefix-arm64-v8a.apk",
-            "app-armeabi-v7a-release.apk" to "$prefix-armeabi-v7a.apk",
             "app-x86_64-release.apk" to "$prefix-x86_64.apk"
         )
         mappings.forEach { (srcName, dstName) ->

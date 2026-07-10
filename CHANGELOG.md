@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Dropped the 32-bit armeabi-v7a APK; minSdk 33 devices are all arm64.
+
 ## v0.3.20260710+65
 
 - First public release.
