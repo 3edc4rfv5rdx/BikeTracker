@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.1.20260710+64
 
 - About dialog uses the standard filled dialog button, matching the other dialogs.
 - "Speed" caption above the speed digits, in the same slot the GPS banner uses.
