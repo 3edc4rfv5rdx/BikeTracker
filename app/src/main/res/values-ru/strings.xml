@@ -85,7 +85,11 @@
     <string name="summary_week">Неделя</string>
     <string name="summary_month">Месяц</string>
     <string name="summary_year">Год</string>
-    <string name="summary_all">Всё время</string>
+    <string name="summary_all">Всего</string>
+
+    <string name="about_title">О приложении</string>
+    <string name="about_version">Версия</string>
+    <string name="about_build">Сборка</string>
 
     <string name="action_ok">ОК</string>
     <string name="action_delete">Удалить</string>

@@ -85,7 +85,11 @@
     <string name="summary_week">Тиждень</string>
     <string name="summary_month">Місяць</string>
     <string name="summary_year">Рік</string>
-    <string name="summary_all">Увесь час</string>
+    <string name="summary_all">Усього</string>
+
+    <string name="about_title">Про застосунок</string>
+    <string name="about_version">Версія</string>
+    <string name="about_build">Збірка</string>
 
     <string name="action_ok">Гаразд</string>
     <string name="action_delete">Видалити</string>

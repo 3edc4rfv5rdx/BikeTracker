@@ -29,6 +29,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.KeepScreenOnWhile
@@ -65,6 +71,34 @@ import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.formatSpeedKmh
 import kotlin.math.roundToInt
+
+/** Fixed height of the two empty fields around the speed: a status banner (~40dp: a 24sp line plus
+ *  6dp padding top and bottom) with 2dp of slack above and below. Fixed so swapping the content
+ *  inside (banner ↔ km/h) never shifts the layout. */
+private val BANNER_FIELD_HEIGHT = 44.dp
+
+/** Disables the extra font padding Android reserves above/below the glyphs. */
+private val NO_FONT_PADDING = TextStyle(
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+)
+
+/** Physically crops a single-line text box down to the visible glyphs: from the cap height at the
+ *  top to the baseline at the bottom, dropping the font's ascent slack and descent. This is what
+ *  actually removes the tall empty box around huge numbers — LineHeightStyle.Trim cannot, since
+ *  that slack is the font's own ascent/descent, not line leading. [capHeightFraction] is the
+ *  glyph height as a fraction of the font size (~0.72 for Roboto digits). */
+private fun Modifier.cropToGlyphs(fontSize: TextUnit, capHeightFraction: Float = 0.72f) =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        val baseline = placeable[FirstBaseline]
+        if (baseline == AlignmentLine.Unspecified) {
+            return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+        }
+        val top = (baseline - (fontSize.toPx() * capHeightFraction).roundToInt()).coerceAtLeast(0)
+        val bottom = (placeable.height - baseline).coerceAtLeast(0)
+        val height = (placeable.height - top - bottom).coerceAtLeast(0)
+        layout(placeable.width, height) { placeable.place(0, -top) }
+    }
 
 @Composable
 fun TrackingScreen() {
@@ -131,17 +165,16 @@ fun TrackingScreen() {
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // GPS warning rides just under the top bar. The slot is always reserved, so a flickering
-        // signal toggling the banner never shifts the speed and stats below it.
+        // Top empty field: fixed height, so nothing below ever moves. The GPS banner is written
+        // into it (glued flush under the top bar) only when there is trouble; otherwise it stays
+        // empty.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
+                .height(BANNER_FIELD_HEIGHT),
             contentAlignment = Alignment.Center,
         ) {
             if (gpsTrouble) {
@@ -153,83 +186,110 @@ fun TrackingScreen() {
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
 
-        // Big current speed — pure number, with the unit as a caption below. Auto-pause overlays
-        // the bottom (over the km/h caption), so it never shifts the layout.
-        Box(contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = formatSpeedKmh(snapshot.currentSpeedMps),
-                    fontSize = 120.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = stringResource(R.string.unit_kmh),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
+        // Big current speed — pure number. The font's own leading above/below the digits is trimmed
+        // so the visible glyphs sit tight against the fields, with just 2dp of slack.
+        Text(
+            text = formatSpeedKmh(snapshot.currentSpeedMps),
+            fontSize = 120.sp,
+            fontWeight = FontWeight.Bold,
+            style = NO_FONT_PADDING,
+            modifier = Modifier
+                .padding(vertical = 2.dp)
+                .cropToGlyphs(120.sp),
+        )
+
+        // Bottom empty field: fixed height. Holds the "km/h" caption (pinned right under the digits)
+        // by default, replaced in place by the auto-pause banner while auto-paused — same slot, so
+        // nothing moves.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(BANNER_FIELD_HEIGHT),
+            contentAlignment = Alignment.TopCenter,
+        ) {
             if (snapshot.status == TrackingStatus.PAUSED && snapshot.pausedAutomatically) {
                 StatusBanner(
                     stringResource(R.string.track_auto_paused),
                     AccentOrange,
                     Color.Black,
-                    Modifier.align(Alignment.BottomCenter),
+                    Modifier.padding(horizontal = 16.dp),
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.unit_kmh),
+                    style = MaterialTheme.typography.titleMedium.merge(NO_FONT_PADDING),
                 )
             }
         }
 
-        Spacer(Modifier.height(6.dp))
-
-        StatRow(
-            left = Stat(withUnit(R.string.stat_distance, R.string.unit_km), formatKm(snapshot.distanceMeters, decimals = 2)),
-            right = Stat(stringResource(R.string.stat_time), formatDuration(liveMovingMs)),
-        )
-        StatRow(
-            left = Stat(
-                withUnit(R.string.stat_avg_speed, R.string.unit_kmh),
-                formatSpeedKmh(avgSpeedMps(snapshot.distanceMeters, snapshot.movingTimeMillis)),
-            ),
-            right = Stat(
-                withUnit(R.string.stat_altitude, R.string.unit_m),
-                snapshot.altitudeMeters?.roundToInt()?.toString() ?: "—",
-            ),
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // Wall clock, centered just above the controls. Seconds render smaller than HH:mm.
-        ClockCell(
-            nowMillis = nowMillis,
+        // Stats and clock, padded off the screen edges, with 2dp of slack above.
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        )
+                .padding(horizontal = 16.dp)
+                .padding(top = 2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            StatRow(
+                left = Stat(withUnit(R.string.stat_distance, R.string.unit_km), formatKm(snapshot.distanceMeters, decimals = 2)),
+                right = Stat(stringResource(R.string.stat_time), formatDuration(liveMovingMs)),
+            )
+            StatRow(
+                left = Stat(
+                    withUnit(R.string.stat_avg_speed, R.string.unit_kmh),
+                    formatSpeedKmh(avgSpeedMps(snapshot.distanceMeters, snapshot.movingTimeMillis)),
+                ),
+                right = Stat(
+                    withUnit(R.string.stat_altitude, R.string.unit_m),
+                    snapshot.altitudeMeters?.roundToInt()?.toString() ?: "—",
+                ),
+            )
 
-        Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(24.dp))
 
-        if (permissionDenied) {
-            Text(
-                text = stringResource(R.string.perm_denied),
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 12.dp),
+            // Wall clock. Seconds render smaller than HH:mm.
+            ClockCell(
+                nowMillis = nowMillis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
             )
         }
 
-        Controls(
-            status = snapshot.status,
-            onStart = ::onStart,
-            onPause = { TrackingService.pause(context) },
-            onResume = { TrackingService.resume(context) },
-            onStopSave = { TrackingService.stopAndSave(context) },
-            onStopDiscard = {
-                TrackingService.discard(context)
-                scope.launch { snackbarHostState.showSnackbar(discardedMessage) }
-            },
-        )
+        // Flexible field between the clock and the controls.
+        Spacer(Modifier.weight(1f))
 
-        Spacer(Modifier.height(24.dp))
+        // Controls pinned near the bottom, padded off the screen edges.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (permissionDenied) {
+                Text(
+                    text = stringResource(R.string.perm_denied),
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            }
+
+            Controls(
+                status = snapshot.status,
+                onStart = ::onStart,
+                onPause = { TrackingService.pause(context) },
+                onResume = { TrackingService.resume(context) },
+                onStopSave = { TrackingService.stopAndSave(context) },
+                onStopDiscard = {
+                    TrackingService.discard(context)
+                    scope.launch { snackbarHostState.showSnackbar(discardedMessage) }
+                },
+            )
+
+            Spacer(Modifier.height(24.dp))
+        }
     }
         SnackbarHost(
             hostState = snackbarHostState,
@@ -256,7 +316,13 @@ fun TrackingScreen() {
 
 /** Full-width high-contrast status banner: bold text on a solid fill, readable in sunlight. */
 @Composable
-private fun StatusBanner(text: String, background: Color, textColor: Color, modifier: Modifier = Modifier) {
+private fun StatusBanner(
+    text: String,
+    background: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(12.dp),
+) {
     Text(
         text = text,
         color = textColor,
@@ -265,7 +331,7 @@ private fun StatusBanner(text: String, background: Color, textColor: Color, modi
         textAlign = TextAlign.Center,
         modifier = modifier
             .fillMaxWidth()
-            .background(background, RoundedCornerShape(12.dp))
+            .background(background, shape)
             .padding(vertical = 6.dp),
     )
 }

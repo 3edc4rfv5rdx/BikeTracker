@@ -4,14 +4,17 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,11 +23,16 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -87,6 +95,9 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     // The exit button lives only on the Tracking tab; other tabs leave the slot empty.
     val onTrackingTab = currentTab == Destination.Tracking
 
+    // The About button lives only on the Settings tab.
+    var showAbout by remember { mutableStateOf(false) }
+
     // Shared by the bottom bar and History's "show on map": switch tabs, keeping their state.
     fun navigateTo(tab: Destination) {
         navController.navigate(tab.route) {
@@ -106,6 +117,13 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                     if (onTrackingTab) {
                         IconButton(onClick = onExit) {
                             Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.action_exit))
+                        }
+                    }
+                },
+                actions = {
+                    if (currentTab == Destination.Settings) {
+                        IconButton(onClick = { showAbout = true }) {
+                            Icon(Icons.Default.Info, contentDescription = stringResource(id = R.string.about_title))
                         }
                     }
                 }
@@ -142,6 +160,27 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
             }
             composable(Destination.Settings.route) { SettingsScreen() }
         }
+    }
+
+    if (showAbout) {
+        val context = LocalContext.current
+        val pkg = remember { context.packageManager.getPackageInfo(context.packageName, 0) }
+        AlertDialog(
+            onDismissRequest = { showAbout = false },
+            title = { Text(stringResource(id = R.string.about_title)) },
+            text = {
+                Column {
+                    Text(stringResource(id = R.string.app_name))
+                    Text("${stringResource(id = R.string.about_version)} ${pkg.versionName}")
+                    Text("${stringResource(id = R.string.about_build)} ${pkg.longVersionCode}")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAbout = false }) {
+                    Text(stringResource(id = R.string.action_ok))
+                }
+            }
+        )
     }
 }
 

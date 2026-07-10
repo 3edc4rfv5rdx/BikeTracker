@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- History "All time" summary renamed to "Total".
+- About button in the Settings top bar showing the app version and build.
+- Tracking screen rebuilt around fixed fields: the GPS and auto-pause banners sit in their own slots without overlapping the speed or shifting the layout, and the speed digits are trimmed of blank line-box space.
 - Track smoothing for the map runs in the background, so long rides can no longer stutter the UI.
 - Smoothed tracks keep their true start and finish points, so the live puck sits on the end of the drawn line.
 - A GPS outage (tunnel, indoors) no longer inflates moving time and distance: a gap over 10 s starts a new segment.
