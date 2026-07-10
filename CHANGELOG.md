@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A GPS outage (tunnel, indoors) no longer inflates moving time and distance: a gap over 10 s starts a new segment.
 - Offline map download reports failure after repeated network errors instead of hanging forever.
 - Long-press Stop to end a ride without saving it, confirmed by a "Not saved" snackbar.
 - Live position puck on the map: an arrow at the current fix that rotates to the heading of travel.

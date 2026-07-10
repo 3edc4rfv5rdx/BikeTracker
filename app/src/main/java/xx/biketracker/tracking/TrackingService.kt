@@ -45,6 +45,7 @@ import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
 import xx.biketracker.elevationGainMeters
 import xx.biketracker.GPS_INTERVAL_MS
 import xx.biketracker.GPS_MIN_INTERVAL_MS
+import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.haversineMeters
@@ -209,6 +210,9 @@ class TrackingService : Service() {
             val rawSpeed = haversineMeters(prev.lat, prev.lon, location.latitude, location.longitude) / (dt / 1000.0)
             if (rawSpeed > MAX_PLAUSIBLE_SPEED_MPS) return // GPS jump, skip
         }
+        // A long outage (tunnel, indoors) produces no fixes, so auto-pause can't trigger; without
+        // this break the first fix after the gap would add the whole outage to the moving time.
+        val gapped = prev != null && dt > GPS_STALE_MS
 
         val speed = if (location.hasSpeed()) location.speed.toDouble() else 0.0
         // Kalman-smooth the fix; the track and the distance both build on filtered points,
@@ -220,7 +224,7 @@ class TrackingService : Service() {
             timeMs = now,
             speedMps = speed,
         )
-        if (prev != null) {
+        if (prev != null && !gapped) {
             distanceMeters += haversineMeters(prev.lat, prev.lon, smoothed.lat, smoothed.lon)
             movingTimeMillis += dt
         }

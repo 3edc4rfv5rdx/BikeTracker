@@ -44,7 +44,8 @@ const val AUTO_PAUSE_DEBOUNCE_MS = 10_000L
 const val AUTO_RESUME_SPEED_MPS = 3.0 / MPS_TO_KMH
 
 // --- GPS signal quality ---
-/** No fix for this long while tracking means the GPS signal is effectively lost. */
+/** No fix for this long while tracking means the GPS signal is effectively lost. Also breaks
+ *  the recorded segment: a longer gap (tunnel, indoors) adds neither distance nor moving time. */
 const val GPS_STALE_MS = 10_000L
 
 // --- Auto-save ---
