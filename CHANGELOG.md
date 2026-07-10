@@ -4,6 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
+- New recordings are Kalman-filtered: the track no longer zigzags and standstill jitter no longer inflates the distance.
+- Tracks are smoothed for display (moving average + simplification) — old rides look better too.
+
 - History summary: week/month/year in three columns, the all-time total on its own full-width line so large figures fit.
 - GPS warnings over the speed: weak signal (fixes rejected by the accuracy filter) and no signal for over 10 s.
 - Auto-pause announces itself: an orange banner over the speed and a double vibration.

@@ -83,6 +83,7 @@ class TrackingService : Service() {
     private val points = mutableListOf<TrackPoint>()
     private val route = mutableListOf<GeoPoint>()
 
+    private val kalman = GpsKalmanFilter()
     private var pausedAutomatically = false
     private var lowSpeedSince = 0L
     private var autoSaveJob: Job? = null
@@ -141,6 +142,7 @@ class TrackingService : Service() {
 
         // In the rare case this instance is reused after a stop, allow the new ride to save.
         stopping.set(false)
+        kalman.reset()
         status = TrackingStatus.RECORDING
         startTime = System.currentTimeMillis()
         draftTrip = scope.async {
@@ -192,30 +194,42 @@ class TrackingService : Service() {
 
         val prev = lastPoint
         val now = location.time
+        var dt = 0L
         if (prev != null) {
-            val dt = now - prev.time
+            dt = now - prev.time
             if (dt <= 0) return
-            val segment = haversineSegment(prev, location)
-            val segmentSpeed = segment / (dt / 1000.0)
-            if (segmentSpeed > MAX_PLAUSIBLE_SPEED_MPS) return // GPS jump, skip
-
-            distanceMeters += segment
-            movingTimeMillis += dt
+            // Plausibility-check the raw fix before it can pollute the Kalman filter.
+            val rawSpeed = haversineMeters(prev.lat, prev.lon, location.latitude, location.longitude) / (dt / 1000.0)
+            if (rawSpeed > MAX_PLAUSIBLE_SPEED_MPS) return // GPS jump, skip
         }
 
         val speed = if (location.hasSpeed()) location.speed.toDouble() else 0.0
+        // Kalman-smooth the fix; the track and the distance both build on filtered points,
+        // so standstill jitter neither paints zigzags nor inflates the total.
+        val smoothed = kalman.filter(
+            rawLat = location.latitude,
+            rawLon = location.longitude,
+            accuracyM = if (location.hasAccuracy()) location.accuracy else ACCURACY_THRESHOLD_M,
+            timeMs = now,
+            speedMps = speed,
+        )
+        if (prev != null) {
+            distanceMeters += haversineMeters(prev.lat, prev.lon, smoothed.lat, smoothed.lon)
+            movingTimeMillis += dt
+        }
+
         if (speed <= MAX_PLAUSIBLE_SPEED_MPS) maxSpeedMps = max(maxSpeedMps, speed)
 
         val point = TrackPoint(
             tripId = 0,
-            lat = location.latitude,
-            lon = location.longitude,
+            lat = smoothed.lat,
+            lon = smoothed.lon,
             time = now,
             speedMps = location.speed,
             altitudeMeters = if (location.hasAltitude()) location.altitude else null,
         )
         points += point
-        route += GeoPoint(location.latitude, location.longitude)
+        route += smoothed
         lastPoint = point
         if (points.size - flushedCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
 
@@ -408,9 +422,6 @@ class TrackingService : Service() {
             )
         )
     }
-
-    private fun haversineSegment(prev: TrackPoint, cur: Location): Double =
-        haversineMeters(prev.lat, prev.lon, cur.latitude, cur.longitude)
 
     // --- Notification ---
 

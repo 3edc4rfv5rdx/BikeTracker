@@ -45,6 +45,7 @@ import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
 import xx.biketracker.settings.AppSettings
+import xx.biketracker.smoothRoute
 import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.isDarkTheme
 
@@ -155,7 +156,7 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
     LaunchedEffect(route, styleEpoch) {
         val style = mapInstance?.style ?: return@LaunchedEffect
         style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(
-            LineString.fromLngLats(route.map { Point.fromLngLat(it.lon, it.lat) })
+            LineString.fromLngLats(smoothRoute(route).map { Point.fromLngLat(it.lon, it.lat) })
         )
         if (!centeredOnce && route.isNotEmpty()) {
             centeredOnce = true

@@ -6,6 +6,9 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -52,6 +55,14 @@ const val DEFAULT_AUTO_SAVE_MS = 15L * 60L * 1000L
 /** Flush recorded points to the draft trip every this many points (~30 s at GPS cadence). */
 const val DRAFT_FLUSH_EVERY_POINTS = 20
 
+// --- Route display smoothing ---
+/** Centered moving-average window (points) applied before drawing a track. */
+const val ROUTE_SMOOTH_WINDOW = 5
+/** Douglas-Peucker tolerance (meters): detail below this is GPS noise, not geometry. */
+const val ROUTE_SIMPLIFY_TOLERANCE_M = 2.0
+/** Meters per degree of latitude — good enough for the local planar math below. */
+private const val METERS_PER_DEGREE = 111_320.0
+
 // --- Time windows ---
 const val DAY_MS = 24L * 60L * 60L * 1000L
 
@@ -80,6 +91,74 @@ fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Dou
 /** Average speed in m/s, derived from distance and moving time (0 if no time elapsed). */
 fun avgSpeedMps(distanceMeters: Double, movingTimeMillis: Long): Double =
     if (movingTimeMillis > 0) distanceMeters / (movingTimeMillis / 1000.0) else 0.0
+
+/**
+ * Display-only track smoothing: a centered moving average irons out per-fix GPS scatter,
+ * then Douglas-Peucker drops the points that no longer add geometry. Stored points are
+ * untouched, so this also benefits every previously recorded ride.
+ */
+fun smoothRoute(route: List<GeoPoint>): List<GeoPoint> {
+    if (route.size < 3) return route
+    return simplifyRoute(movingAverage(route, ROUTE_SMOOTH_WINDOW), ROUTE_SIMPLIFY_TOLERANCE_M)
+}
+
+/** Centered moving average; the window shrinks at the ends so start/finish stay anchored. */
+private fun movingAverage(points: List<GeoPoint>, window: Int): List<GeoPoint> {
+    val half = window / 2
+    return List(points.size) { i ->
+        val from = max(0, i - half)
+        val to = min(points.lastIndex, i + half)
+        var lat = 0.0
+        var lon = 0.0
+        for (j in from..to) {
+            lat += points[j].lat
+            lon += points[j].lon
+        }
+        val n = to - from + 1
+        GeoPoint(lat / n, lon / n)
+    }
+}
+
+/** Douglas-Peucker on a local planar projection (meters), iterative to spare the stack. */
+private fun simplifyRoute(points: List<GeoPoint>, toleranceM: Double): List<GeoPoint> {
+    if (points.size < 3) return points
+    val cosLat = cos(Math.toRadians(points.first().lat))
+    val xs = DoubleArray(points.size) { points[it].lon * cosLat * METERS_PER_DEGREE }
+    val ys = DoubleArray(points.size) { points[it].lat * METERS_PER_DEGREE }
+    val keep = BooleanArray(points.size)
+    keep[0] = true
+    keep[points.lastIndex] = true
+    val ranges = ArrayDeque<Pair<Int, Int>>()
+    ranges.addLast(0 to points.lastIndex)
+    while (ranges.isNotEmpty()) {
+        val (first, last) = ranges.removeLast()
+        if (last - first < 2) continue
+        var maxDist = 0.0
+        var farthest = -1
+        for (i in first + 1 until last) {
+            val d = pointToSegmentMeters(xs[i], ys[i], xs[first], ys[first], xs[last], ys[last])
+            if (d > maxDist) {
+                maxDist = d
+                farthest = i
+            }
+        }
+        if (maxDist > toleranceM) {
+            keep[farthest] = true
+            ranges.addLast(first to farthest)
+            ranges.addLast(farthest to last)
+        }
+    }
+    return points.filterIndexed { i, _ -> keep[i] }
+}
+
+private fun pointToSegmentMeters(px: Double, py: Double, ax: Double, ay: Double, bx: Double, by: Double): Double {
+    val dx = bx - ax
+    val dy = by - ay
+    val lengthSq = dx * dx + dy * dy
+    if (lengthSq == 0.0) return hypot(px - ax, py - ay)
+    val t = (((px - ax) * dx + (py - ay) * dy) / lengthSq).coerceIn(0.0, 1.0)
+    return hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
 
 // --- Display formatting (numbers only; caller appends the localized unit label) ---
 
