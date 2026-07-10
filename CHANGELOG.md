@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Track smoothing for the map runs in the background, so long rides can no longer stutter the UI.
 - Smoothed tracks keep their true start and finish points, so the live puck sits on the end of the drawn line.
 - A GPS outage (tunnel, indoors) no longer inflates moving time and distance: a gap over 10 s starts a new segment.
 - Offline map download reports failure after repeated network errors instead of hanging forever.

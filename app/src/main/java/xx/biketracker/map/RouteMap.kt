@@ -32,6 +32,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -186,9 +188,12 @@ fun RouteMap(
     var centeredOnce by remember(recenterKey) { mutableStateOf(false) }
     LaunchedEffect(route, styleEpoch) {
         val style = mapInstance?.style ?: return@LaunchedEffect
-        style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(
+        // Smoothing re-runs over the whole track on every fix; off the main thread so a
+        // multi-hour ride (thousands of points) can't jank the map.
+        val line = withContext(Dispatchers.Default) {
             LineString.fromLngLats(smoothRoute(route).map { Point.fromLngLat(it.lon, it.lat) })
-        )
+        }
+        style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(line)
         if (!centeredOnce && route.isNotEmpty()) {
             centeredOnce = true
             centerOnRoute()
