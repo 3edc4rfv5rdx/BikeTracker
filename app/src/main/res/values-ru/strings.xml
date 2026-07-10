@@ -14,6 +14,7 @@
     <string name="notif_channel_name">Запись поездки</string>
     <string name="notif_recording">Идёт запись поездки</string>
     <string name="notif_paused">Поездка на паузе</string>
+    <string name="notif_stop">Стоп</string>
 
     <string name="track_auto_paused">Авто-пауза</string>
     <string name="gps_weak">Слабый сигнал GPS</string>

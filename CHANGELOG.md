@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Live position puck on the map: an arrow at the current fix that rotates to the heading of travel.
+- Pause/Resume and Stop buttons in the tracking notification, controllable without opening the app.
 - New recordings are Kalman-filtered: the track no longer zigzags and standstill jitter no longer inflates the distance.
 - Tracks are smoothed for display (moving average + simplification) — old rides look better too.
 

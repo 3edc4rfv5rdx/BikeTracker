@@ -20,6 +20,7 @@ data class TrackingSnapshot(
     val maxSpeedMps: Double = 0.0,
     val altitudeMeters: Double? = null,
     val gpsAccuracyMeters: Float? = null, // horizontal accuracy of the last fix; null before one
+    val bearingDegrees: Float? = null, // heading of travel; null until the first fix that reports one
     val startTime: Long = 0L,
     val updatedAtWall: Long = 0L, // System wall clock when this snapshot was published
     val route: List<GeoPoint> = emptyList(),

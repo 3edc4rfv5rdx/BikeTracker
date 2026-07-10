@@ -14,6 +14,7 @@
     <string name="notif_channel_name">Ride tracking</string>
     <string name="notif_recording">Recording ride</string>
     <string name="notif_paused">Ride paused</string>
+    <string name="notif_stop">Stop</string>
 
     <string name="track_auto_paused">Auto-pause</string>
     <string name="gps_weak">Weak GPS signal</string>

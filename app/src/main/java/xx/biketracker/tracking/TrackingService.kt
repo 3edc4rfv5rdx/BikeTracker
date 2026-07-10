@@ -91,6 +91,7 @@ class TrackingService : Service() {
     private var currentSpeedMps = 0.0
     private var altitudeMeters: Double? = null
     private var gpsAccuracyMeters: Float? = null
+    private var bearingDegrees: Float? = null
 
     // Guards stopAndSave so a manual Stop racing with the pause auto-save (on
     // different threads) can't persist the same ride twice.
@@ -179,6 +180,11 @@ class TrackingService : Service() {
         currentSpeedMps = if (location.hasSpeed()) location.speed.toDouble() else currentSpeedMps
         altitudeMeters = if (location.hasAltitude()) location.altitude else altitudeMeters
         gpsAccuracyMeters = if (location.hasAccuracy()) location.accuracy else null
+        // Bearing is only trustworthy while moving; keep the last heading when the fix omits it,
+        // so the puck doesn't spin to north at a standstill.
+        if (location.hasBearing() && location.hasSpeed() && location.speed >= AUTO_PAUSE_SPEED_MPS) {
+            bearingDegrees = location.bearing
+        }
 
         when (status) {
             TrackingStatus.RECORDING -> recordLocation(location)
@@ -416,6 +422,7 @@ class TrackingService : Service() {
                 maxSpeedMps = maxSpeedMps,
                 altitudeMeters = altitudeMeters,
                 gpsAccuracyMeters = gpsAccuracyMeters,
+                bearingDegrees = bearingDegrees,
                 startTime = startTime,
                 updatedAtWall = System.currentTimeMillis(),
                 route = route.toList(),
@@ -455,14 +462,45 @@ class TrackingService : Service() {
             PendingIntent.FLAG_IMMUTABLE,
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_bike)
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(contentIntent)
-            .build()
+
+        // Pause/Resume toggles with state; Stop is always offered.
+        if (status == TrackingStatus.PAUSED) {
+            builder.addAction(
+                R.drawable.ic_notif_resume,
+                getString(R.string.btn_resume),
+                servicePendingIntent(ACTION_RESUME),
+            )
+        } else {
+            builder.addAction(
+                R.drawable.ic_notif_pause,
+                getString(R.string.btn_pause),
+                servicePendingIntent(ACTION_PAUSE),
+            )
+        }
+        builder.addAction(
+            R.drawable.ic_notif_stop,
+            getString(R.string.notif_stop),
+            servicePendingIntent(ACTION_STOP),
+        )
+
+        return builder.build()
+    }
+
+    private fun servicePendingIntent(action: String): PendingIntent {
+        val intent = Intent(this, TrackingService::class.java).setAction(action)
+        return PendingIntent.getService(
+            this,
+            action.hashCode(),
+            intent,
+            PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun createChannel() {

@@ -56,11 +56,17 @@ fun MapScreen() {
     // The map is watched mid-ride too; don't let the screen dim while one is active.
     KeepScreenOnWhile(snapshot.status != TrackingStatus.IDLE)
 
+    // The heading puck belongs to the live ride only, not to a stored ride opened from History.
+    val live = selected == null && snapshot.status != TrackingStatus.IDLE
+    val puckPosition = if (live) snapshot.route.lastOrNull() else null
+
     Box(modifier = Modifier.fillMaxSize()) {
         RouteMap(
             route = route,
             modifier = Modifier.fillMaxSize(),
             recenterKey = selected?.id,
+            position = puckPosition,
+            bearingDegrees = if (live) snapshot.bearingDegrees else null,
         )
 
         selected?.let { trip ->

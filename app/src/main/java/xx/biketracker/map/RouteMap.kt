@@ -21,8 +21,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -36,10 +39,14 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
@@ -63,6 +70,12 @@ private const val ROUTE_LINE_WIDTH = 4f
 private val ROUTE_LINE_COLOR = AccentOrange.toArgb()
 private const val ROUTE_BOUNDS_PADDING_PX = 64
 
+// Live-position puck: an arrow at the current fix, rotated to the heading of travel.
+private const val PUCK_SOURCE_ID = "ride-puck"
+private const val PUCK_LAYER_ID = "ride-puck-symbol"
+private const val PUCK_IMAGE_ID = "ride-puck-arrow"
+private const val PUCK_BEARING_KEY = "bearing"
+
 /**
  * Reusable MapLibre vector map with one route polyline — the Map tab shows the live ride or a
  * ride selected in History. Labels render on the device, so their size is constant across zooms.
@@ -71,7 +84,13 @@ private const val ROUTE_BOUNDS_PADDING_PX = 64
  * in [MapViewport] as the download area for the offline map (Settings).
  */
 @Composable
-fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: Any? = null) {
+fun RouteMap(
+    route: List<GeoPoint>,
+    modifier: Modifier = Modifier,
+    recenterKey: Any? = null,
+    position: GeoPoint? = null,
+    bearingDegrees: Float? = null,
+) {
     val context = LocalContext.current
     val themeMode by AppSettings.themeMode.collectAsState()
     val dark = isDarkTheme(themeMode)
@@ -129,6 +148,18 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 )
             )
+            // Puck on top of the track: an arrow image rotated per-feature to the heading.
+            puckBitmap(context)?.let { style.addImage(PUCK_IMAGE_ID, it) }
+            style.addSource(GeoJsonSource(PUCK_SOURCE_ID))
+            style.addLayer(
+                SymbolLayer(PUCK_LAYER_ID, PUCK_SOURCE_ID).withProperties(
+                    PropertyFactory.iconImage(PUCK_IMAGE_ID),
+                    PropertyFactory.iconRotate(Expression.get(PUCK_BEARING_KEY)),
+                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                )
+            )
             styleEpoch++
         }
     }
@@ -164,6 +195,19 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
         }
     }
 
+    // Move the puck to the current fix (empty when there is no live position).
+    LaunchedEffect(position, bearingDegrees, styleEpoch) {
+        val style = mapInstance?.style ?: return@LaunchedEffect
+        val source = style.getSourceAs<GeoJsonSource>(PUCK_SOURCE_ID) ?: return@LaunchedEffect
+        if (position == null) {
+            source.setGeoJson(FeatureCollection.fromFeatures(listOf<Feature>()))
+        } else {
+            val feature = Feature.fromGeometry(Point.fromLngLat(position.lon, position.lat))
+            feature.addNumberProperty(PUCK_BEARING_KEY, bearingDegrees ?: 0f)
+            source.setGeoJson(feature)
+        }
+    }
+
     Box(modifier = modifier) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
@@ -190,4 +234,18 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
             }
         }
     }
+}
+
+/** Rasterize the puck vector drawable into a bitmap the MapLibre style can register as an image. */
+private fun puckBitmap(context: android.content.Context): Bitmap? {
+    val drawable = ContextCompat.getDrawable(context, R.drawable.ic_map_puck) ?: return null
+    val bitmap = Bitmap.createBitmap(
+        drawable.intrinsicWidth,
+        drawable.intrinsicHeight,
+        Bitmap.Config.ARGB_8888,
+    )
+    val canvas = Canvas(bitmap)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bitmap
 }
