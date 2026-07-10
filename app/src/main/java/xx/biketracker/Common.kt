@@ -103,10 +103,12 @@ fun smoothRoute(route: List<GeoPoint>): List<GeoPoint> {
     return simplifyRoute(movingAverage(route, ROUTE_SMOOTH_WINDOW), ROUTE_SIMPLIFY_TOLERANCE_M)
 }
 
-/** Centered moving average; the window shrinks at the ends so start/finish stay anchored. */
+/** Centered moving average; the very first and last points are kept raw, so the track stays
+ *  anchored to the true start/finish and the live puck sits on the drawn line's end. */
 private fun movingAverage(points: List<GeoPoint>, window: Int): List<GeoPoint> {
     val half = window / 2
     return List(points.size) { i ->
+        if (i == 0 || i == points.lastIndex) return@List points[i]
         val from = max(0, i - half)
         val to = min(points.lastIndex, i + half)
         var lat = 0.0
