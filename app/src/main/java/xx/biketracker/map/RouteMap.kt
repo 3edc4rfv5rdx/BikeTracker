@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,9 +45,13 @@ import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
+import xx.biketracker.settings.AppSettings
+import xx.biketracker.ui.isDarkTheme
 
-/** Keyless vector style (OpenFreeMap); offline downloads reference the same style. */
+/** Keyless vector styles (OpenFreeMap). Offline downloads reference the light one — the vector
+ *  tiles (the bulk of a download) are shared between both styles. */
 const val MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
+private const val MAP_STYLE_URL_DARK = "https://tiles.openfreemap.org/styles/dark"
 
 // Map-only tuning; the shared tracking/units constants live in Common.kt.
 private const val RIDE_ZOOM = 16.0
@@ -66,11 +71,16 @@ private const val ROUTE_BOUNDS_PADDING_PX = 64
 fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: Any? = null) {
     val context = LocalContext.current
     val routeColor = MaterialTheme.colorScheme.primary.toArgb()
+    val themeMode by AppSettings.themeMode.collectAsState()
+    val dark = isDarkTheme(themeMode)
 
     // Must run once before the first MapView is constructed.
     remember { MapLibre.getInstance(context) }
     val mapView = remember { MapView(context) }
-    var styledMap by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    // Bumped after every style (re)load — a style swap drops all layers, so the route effect
+    // below must re-add its data once the new style is ready.
+    var styleEpoch by remember { mutableStateOf(0) }
 
     // Forward the lifecycle to the MapView (adding the observer replays CREATE..RESUME).
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -96,27 +106,33 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
 
     LaunchedEffect(Unit) {
         mapView.getMapAsync { map ->
-            map.setStyle(Style.Builder().fromUri(MAP_STYLE_URL)) { style ->
-                style.addSource(GeoJsonSource(ROUTE_SOURCE_ID))
-                style.addLayer(
-                    LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
-                        PropertyFactory.lineColor(routeColor),
-                        PropertyFactory.lineWidth(ROUTE_LINE_WIDTH),
-                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-                    )
-                )
-                styledMap = map
-            }
             // Remember the viewed area; Settings offers it as the offline download region.
             map.addOnCameraIdleListener {
                 MapViewport.update(map.projection.visibleRegion.latLngBounds, map.cameraPosition.zoom)
             }
+            mapInstance = map
+        }
+    }
+
+    // (Re)load the style matching the theme; the camera position survives the swap.
+    LaunchedEffect(mapInstance, dark) {
+        val map = mapInstance ?: return@LaunchedEffect
+        map.setStyle(Style.Builder().fromUri(if (dark) MAP_STYLE_URL_DARK else MAP_STYLE_URL)) { style ->
+            style.addSource(GeoJsonSource(ROUTE_SOURCE_ID))
+            style.addLayer(
+                LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
+                    PropertyFactory.lineColor(routeColor),
+                    PropertyFactory.lineWidth(ROUTE_LINE_WIDTH),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                )
+            )
+            styleEpoch++
         }
     }
 
     fun centerOnRoute() {
-        val map = styledMap ?: return
+        val map = mapInstance ?: return
         when {
             route.isEmpty() -> return
             route.size == 1 -> map.animateCamera(
@@ -135,8 +151,8 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
     // the user can pan and zoom without the map snapping back every update. A recenterKey
     // change (another ride selected) re-arms the one-time centering.
     var centeredOnce by remember(recenterKey) { mutableStateOf(false) }
-    LaunchedEffect(route, styledMap, routeColor) {
-        val style = styledMap?.style ?: return@LaunchedEffect
+    LaunchedEffect(route, styleEpoch, routeColor) {
+        val style = mapInstance?.style ?: return@LaunchedEffect
         style.getLayerAs<LineLayer>(ROUTE_LAYER_ID)?.setProperties(PropertyFactory.lineColor(routeColor))
         style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(
             LineString.fromLngLats(route.map { Point.fromLngLat(it.lon, it.lat) })
@@ -157,10 +173,10 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SmallFloatingActionButton(onClick = { styledMap?.animateCamera(CameraUpdateFactory.zoomBy(1.0)) }) {
+            SmallFloatingActionButton(onClick = { mapInstance?.animateCamera(CameraUpdateFactory.zoomBy(1.0)) }) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.map_zoom_in))
             }
-            SmallFloatingActionButton(onClick = { styledMap?.animateCamera(CameraUpdateFactory.zoomBy(-1.0)) }) {
+            SmallFloatingActionButton(onClick = { mapInstance?.animateCamera(CameraUpdateFactory.zoomBy(-1.0)) }) {
                 Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.map_zoom_out))
             }
             if (route.isNotEmpty()) {

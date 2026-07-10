@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Dark theme now uses a dark vector map style, switching live with the theme.
+
 - Map migrated to vector tiles (MapLibre + OpenFreeMap, no keys): labels keep a constant size at any zoom.
 - Offline map in Settings: download the last viewed area for use without internet; delete downloaded areas there too.
 
