@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Added a project README and a GPL-3.0 license.
+
 ## v0.1.20260710+64
 
 - About dialog uses the standard filled dialog button, matching the other dialogs.
