@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- About dialog uses the standard filled dialog button, matching the other dialogs.
 - "Speed" caption above the speed digits, in the same slot the GPS banner uses.
 - History "All time" summary renamed to "Total".
 - About button in the Settings top bar showing the app version and build.

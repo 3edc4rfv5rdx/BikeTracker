@@ -23,7 +23,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -50,6 +49,7 @@ import xx.biketracker.settings.AppSettings
 import xx.biketracker.settings.SettingsScreen
 import xx.biketracker.tracking.TrackingScreen
 import xx.biketracker.ui.BikeTrackerTheme
+import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.NavLabelStyle
 
 private sealed class Destination(val route: String) {
@@ -176,9 +176,7 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showAbout = false }) {
-                    Text(stringResource(id = R.string.action_ok))
-                }
+                DialogButton(stringResource(id = R.string.action_ok), onClick = { showAbout = false })
             }
         )
     }
