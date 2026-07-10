@@ -12,6 +12,8 @@ import kotlin.math.floor
 /** Extra detail levels fetched below the viewed zoom; bounds the tile count of a download. */
 private const val OFFLINE_EXTRA_ZOOM = 4.0
 private const val OFFLINE_MAX_ZOOM = 16.0
+/** Consecutive resource errors with no progress in between — the network is effectively gone. */
+private const val OFFLINE_MAX_CONSECUTIVE_ERRORS = 5
 
 /**
  * Last camera rest position of the map, published by [RouteMap] on every camera stop. Settings
@@ -60,6 +62,8 @@ fun downloadViewedRegion(
             override fun onCreate(offlineRegion: OfflineRegion) {
                 offlineRegion.setObserver(object : OfflineRegion.OfflineRegionObserver {
                     private var finished = false
+                    private var consecutiveErrors = 0
+                    private var lastCompletedCount = -1L
 
                     override fun onStatusChanged(status: OfflineRegionStatus) {
                         if (finished) return
@@ -68,13 +72,25 @@ fun downloadViewedRegion(
                             offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                             onFinished(true)
                         } else if (status.requiredResourceCount > 0) {
+                            // Resources still coming in — earlier errors were transient.
+                            if (status.completedResourceCount > lastCompletedCount) {
+                                lastCompletedCount = status.completedResourceCount
+                                consecutiveErrors = 0
+                            }
                             onProgress((100L * status.completedResourceCount / status.requiredResourceCount).toInt())
                         }
                     }
 
                     override fun onError(error: OfflineRegionError) {
-                        // Tile-level errors can be transient; give up only on the final failure
-                        // path (mapboxTileCountLimitExceeded) or let completion win.
+                        // A lone error can be a server hiccup, but a streak with zero progress
+                        // means the network is gone — fail instead of hanging forever. The
+                        // partial region is kept; a retry re-downloads only what is missing.
+                        if (finished) return
+                        if (++consecutiveErrors >= OFFLINE_MAX_CONSECUTIVE_ERRORS) {
+                            finished = true
+                            offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
+                            onFinished(false)
+                        }
                     }
 
                     override fun mapboxTileCountLimitExceeded(limit: Long) {

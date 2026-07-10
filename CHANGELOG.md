@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Offline map download reports failure after repeated network errors instead of hanging forever.
 - Long-press Stop to end a ride without saving it, confirmed by a "Not saved" snackbar.
 - Live position puck on the map: an arrow at the current fix that rotates to the heading of travel.
 - Pause/Resume and Stop buttons in the tracking notification, controllable without opening the app.
