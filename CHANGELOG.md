@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- "Speed" caption above the speed digits, in the same slot the GPS banner uses.
 - History "All time" summary renamed to "Total".
 - About button in the Settings top bar showing the app version and build.
 - Tracking screen rebuilt around fixed fields: the GPS and auto-pause banners sit in their own slots without overlapping the speed or shifting the layout, and the speed digits are trimmed of blank line-box space.

@@ -168,9 +168,9 @@ fun TrackingScreen() {
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Top empty field: fixed height, so nothing below ever moves. The GPS banner is written
-        // into it (glued flush under the top bar) only when there is trouble; otherwise it stays
-        // empty.
+        // Top empty field: fixed height, so nothing below ever moves. Holds the "Speed" caption
+        // (pinned right above the digits) by default, replaced in place by the GPS banner while
+        // there is trouble — same slot, so nothing moves.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -183,6 +183,12 @@ fun TrackingScreen() {
                     else stringResource(R.string.gps_weak),
                     MaterialTheme.colorScheme.error,
                     MaterialTheme.colorScheme.onError,
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.stat_speed),
+                    style = MaterialTheme.typography.titleMedium.merge(NO_FONT_PADDING),
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
         }
