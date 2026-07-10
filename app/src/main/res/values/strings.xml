@@ -15,6 +15,10 @@
     <string name="notif_recording">Recording ride</string>
     <string name="notif_paused">Ride paused</string>
 
+    <string name="track_auto_paused">Auto-pause</string>
+    <string name="gps_weak">Weak GPS signal</string>
+    <string name="gps_no_signal">No GPS signal</string>
+
     <string name="unit_m">m</string>
 
     <string name="stat_speed">Speed</string>

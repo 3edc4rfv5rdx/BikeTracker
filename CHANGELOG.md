@@ -4,6 +4,13 @@ Newest entries on top.
 
 ## Unreleased
 
+- History summary: week/month/year in three columns, the all-time total on its own full-width line so large figures fit.
+- GPS warnings over the speed: weak signal (fixes rejected by the accuracy filter) and no signal for over 10 s.
+- Auto-pause announces itself: an orange banner over the speed and a double vibration.
+- Manual pause is sticky (only Resume ends it); auto-pause resumes by itself above 3 km/h and triggers after 10 s of standstill (was 5).
+- Start/Pause button turns orange with black text while paused, so the paused state is obvious.
+- The track on the map is a fixed bright orange instead of the pale theme color.
+
 - Dark theme now uses a dark vector map style, switching live with the theme.
 
 - Map migrated to vector tiles (MapLibre + OpenFreeMap, no keys): labels keep a constant size at any zoom.

@@ -6,7 +6,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,11 +16,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
+import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.KeepScreenOnWhile
 import androidx.compose.runtime.Composable
@@ -42,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
+import xx.biketracker.ACCURACY_THRESHOLD_M
+import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.PREFS_NAME
 import xx.biketracker.R
 import xx.biketracker.avgSpeedMps
@@ -110,16 +118,42 @@ fun TrackingScreen() {
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Big current speed — pure number, with the unit as a caption below.
-        Text(
-            text = formatSpeedKmh(snapshot.currentSpeedMps),
-            fontSize = 120.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = stringResource(R.string.unit_kmh),
-            style = MaterialTheme.typography.titleMedium,
-        )
+        // Big current speed — pure number, with the unit as a caption below. Status banners
+        // (auto-pause, GPS trouble) overlay its middle, so they never shift the layout.
+        Box(contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = formatSpeedKmh(snapshot.currentSpeedMps),
+                    fontSize = 120.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = stringResource(R.string.unit_kmh),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (snapshot.status == TrackingStatus.PAUSED && snapshot.pausedAutomatically) {
+                    StatusBanner(stringResource(R.string.track_auto_paused), AccentOrange, Color.Black)
+                }
+                // GPS trouble: fixes rejected by the accuracy filter, or none arriving at all.
+                val accuracy = snapshot.gpsAccuracyMeters
+                val stale = nowMillis - snapshot.updatedAtWall > GPS_STALE_MS
+                if (snapshot.status != TrackingStatus.IDLE &&
+                    (stale || accuracy == null || accuracy > ACCURACY_THRESHOLD_M)
+                ) {
+                    val text = if (stale || accuracy == null) {
+                        stringResource(R.string.gps_no_signal)
+                    } else {
+                        stringResource(R.string.gps_weak)
+                    }
+                    StatusBanner(text, MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.onError)
+                }
+            }
+        }
 
         Spacer(Modifier.height(6.dp))
 
@@ -183,6 +217,22 @@ fun TrackingScreen() {
             },
         )
     }
+}
+
+/** Full-width high-contrast status banner: bold text on a solid fill, readable in sunlight. */
+@Composable
+private fun StatusBanner(text: String, background: Color, textColor: Color) {
+    Text(
+        text = text,
+        color = textColor,
+        fontSize = 24.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(background, RoundedCornerShape(12.dp))
+            .padding(vertical = 10.dp),
+    )
 }
 
 private data class Stat(val label: String, val value: String)
@@ -280,7 +330,13 @@ private fun Controls(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        BigButton(primaryText, primaryAction, Modifier.weight(1f))
+        BigButton(
+            text = primaryText,
+            onClick = primaryAction,
+            modifier = Modifier.weight(1f),
+            // Paused is easy to miss otherwise — flag it with the accent color.
+            containerColor = if (status == TrackingStatus.PAUSED) AccentOrange else null,
+        )
         BigButton(
             text = stringResource(R.string.btn_stop_save),
             onClick = onStopSave,
@@ -299,6 +355,7 @@ private fun BigButton(
     modifier: Modifier = Modifier,
     tonal: Boolean = false,
     enabled: Boolean = true,
+    containerColor: Color? = null,
 ) {
     val label: @Composable () -> Unit = {
         Text(text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -306,7 +363,12 @@ private fun BigButton(
     if (tonal) {
         FilledTonalButton(onClick = onClick, enabled = enabled, modifier = modifier.height(68.dp)) { label() }
     } else {
-        Button(onClick = onClick, enabled = enabled, modifier = modifier.height(68.dp)) { label() }
+        val colors = if (containerColor != null) {
+            ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = Color.Black)
+        } else {
+            ButtonDefaults.buttonColors()
+        }
+        Button(onClick = onClick, enabled = enabled, colors = colors, modifier = modifier.height(68.dp)) { label() }
     }
 }
 

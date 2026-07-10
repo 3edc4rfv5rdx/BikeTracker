@@ -341,11 +341,33 @@ private fun tripSummaryLine(trip: Trip): String {
 @Composable
 private fun SummaryCard(week: RideTotals, month: RideTotals, year: RideTotals, all: RideTotals) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(vertical = 12.dp)) {
-            SummaryCell(R.string.summary_week, week, Modifier.weight(1f))
-            SummaryCell(R.string.summary_month, month, Modifier.weight(1f))
-            SummaryCell(R.string.summary_year, year, Modifier.weight(1f))
-            SummaryCell(R.string.summary_all, all, Modifier.weight(1f))
+        Column(modifier = Modifier.padding(vertical = 12.dp)) {
+            // Three columns; the all-time total gets a full-width line below, where large
+            // figures can't outgrow a narrow cell.
+            Row {
+                SummaryCell(R.string.summary_week, week, Modifier.weight(1f))
+                SummaryCell(R.string.summary_month, month, Modifier.weight(1f))
+                SummaryCell(R.string.summary_year, year, Modifier.weight(1f))
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${stringResource(R.string.summary_all)}:  ",
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(
+                    text = "${formatKm(all.distanceMeters)} ${stringResource(R.string.unit_km)} · " +
+                        formatDuration(all.movingTimeMillis),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

@@ -35,9 +35,14 @@ const val MAX_PLAUSIBLE_SPEED_MPS = 30.0
 /** Below this speed (m/s ≈ 2 km/h) the ride is a candidate for auto-pause. */
 const val AUTO_PAUSE_SPEED_MPS = 2.0 / MPS_TO_KMH
 /** Speed must stay low this long before auto-pause actually triggers. */
-const val AUTO_PAUSE_DEBOUNCE_MS = 5_000L
-/** Above this speed (m/s ≈ 4 km/h) an auto-paused ride resumes; hysteresis avoids flapping. */
-const val AUTO_RESUME_SPEED_MPS = 4.0 / MPS_TO_KMH
+const val AUTO_PAUSE_DEBOUNCE_MS = 10_000L
+/** Above this speed (m/s ≈ 3 km/h) an auto-paused ride resumes; hysteresis avoids flapping.
+ *  A manual pause is sticky and never auto-resumes. */
+const val AUTO_RESUME_SPEED_MPS = 3.0 / MPS_TO_KMH
+
+// --- GPS signal quality ---
+/** No fix for this long while tracking means the GPS signal is effectively lost. */
+const val GPS_STALE_MS = 10_000L
 
 // --- Auto-save ---
 /** A ride paused longer than this is finished and saved automatically (default 15 min). */

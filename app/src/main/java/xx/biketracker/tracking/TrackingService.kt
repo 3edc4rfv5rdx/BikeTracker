@@ -13,6 +13,8 @@ import android.content.pm.ServiceInfo
 import android.location.Location
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -60,7 +62,8 @@ import kotlin.math.max
  * Foreground service that records a ride: it pulls GPS fixes from the fused
  * location provider, filters noise, accumulates distance / moving time / peak
  * speed, and drives the start → pause → resume → stop state machine (including
- * auto-pause on standstill and auto-save after a long pause). On stop it persists
+ * auto-pause on standstill with auto-resume on movement, and auto-save after a
+ * long pause). A manual pause is sticky: only the Resume button ends it. On stop it persists
  * the ride and its points, then stops itself.
  *
  * The UI never binds here; it sends commands via the companion helpers and reads
@@ -86,6 +89,7 @@ class TrackingService : Service() {
 
     private var currentSpeedMps = 0.0
     private var altitudeMeters: Double? = null
+    private var gpsAccuracyMeters: Float? = null
 
     // Guards stopAndSave so a manual Stop racing with the pause auto-save (on
     // different threads) can't persist the same ride twice.
@@ -172,6 +176,7 @@ class TrackingService : Service() {
         if (stopping.get()) return
         currentSpeedMps = if (location.hasSpeed()) location.speed.toDouble() else currentSpeedMps
         altitudeMeters = if (location.hasAltitude()) location.altitude else altitudeMeters
+        gpsAccuracyMeters = if (location.hasAccuracy()) location.accuracy else null
 
         when (status) {
             TrackingStatus.RECORDING -> recordLocation(location)
@@ -230,6 +235,7 @@ class TrackingService : Service() {
         }
     }
 
+    // Only an automatic pause resumes by itself; a manual one waits for the button.
     private fun maybeAutoResume() {
         if (pausedAutomatically && currentSpeedMps >= AUTO_RESUME_SPEED_MPS) {
             resumeTracking()
@@ -247,6 +253,8 @@ class TrackingService : Service() {
         scheduleAutoSave()
         updateNotification()
         publish()
+        // The rider chose a manual pause; only the unasked-for one warrants a buzz.
+        if (automatic) vibrateAutoPause()
     }
 
     private fun resumeTracking() {
@@ -256,6 +264,12 @@ class TrackingService : Service() {
         cancelAutoSave()
         updateNotification()
         publish()
+    }
+
+    /** Double buzz on auto-pause — noticeable in a pocket, unlike any on-screen hint. */
+    private fun vibrateAutoPause() {
+        val vibrator = getSystemService(VibratorManager::class.java)?.defaultVibrator ?: return
+        vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 200, 150, 200), -1))
     }
 
     private fun scheduleAutoSave() {
@@ -381,11 +395,13 @@ class TrackingService : Service() {
         TrackingState.publish(
             TrackingSnapshot(
                 status = status,
+                pausedAutomatically = pausedAutomatically,
                 distanceMeters = distanceMeters,
                 movingTimeMillis = movingTimeMillis,
                 currentSpeedMps = if (status == TrackingStatus.RECORDING) currentSpeedMps else 0.0,
                 maxSpeedMps = maxSpeedMps,
                 altitudeMeters = altitudeMeters,
+                gpsAccuracyMeters = gpsAccuracyMeters,
                 startTime = startTime,
                 updatedAtWall = System.currentTimeMillis(),
                 route = route.toList(),

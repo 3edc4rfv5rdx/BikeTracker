@@ -7,6 +7,10 @@ import androidx.compose.ui.graphics.Color
  * roles (dialogs, menus) so overlays stand out against the screen behind them.
  */
 
+// Bright red-orange accent shared by the map track and the paused Start/Pause button:
+// high contrast in sunlight and against both light and dark map styles.
+val AccentOrange = Color(0xFFFF3D00)
+
 // Light theme: a faint grey window with pure-white containers.
 val WindowLight = Color(0xFFF1F2F4)
 val ContainerLight = Color.White

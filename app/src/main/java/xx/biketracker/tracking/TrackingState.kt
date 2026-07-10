@@ -13,11 +13,13 @@ enum class TrackingStatus { IDLE, RECORDING, PAUSED }
  */
 data class TrackingSnapshot(
     val status: TrackingStatus = TrackingStatus.IDLE,
+    val pausedAutomatically: Boolean = false, // meaningful only while status == PAUSED
     val distanceMeters: Double = 0.0,
     val movingTimeMillis: Long = 0L,
     val currentSpeedMps: Double = 0.0,
     val maxSpeedMps: Double = 0.0,
     val altitudeMeters: Double? = null,
+    val gpsAccuracyMeters: Float? = null, // horizontal accuracy of the last fix; null before one
     val startTime: Long = 0L,
     val updatedAtWall: Long = 0L, // System wall clock when this snapshot was published
     val route: List<GeoPoint> = emptyList(),

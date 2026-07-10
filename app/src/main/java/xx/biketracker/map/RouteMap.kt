@@ -10,7 +10,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,6 +45,7 @@ import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
 import xx.biketracker.settings.AppSettings
+import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.isDarkTheme
 
 /** Keyless vector styles (OpenFreeMap). Offline downloads reference the light one — the vector
@@ -58,6 +58,8 @@ private const val RIDE_ZOOM = 16.0
 private const val ROUTE_SOURCE_ID = "ride-route"
 private const val ROUTE_LAYER_ID = "ride-route-line"
 private const val ROUTE_LINE_WIDTH = 4f
+// Fixed accent color (not theme-derived): high contrast against both map styles.
+private val ROUTE_LINE_COLOR = AccentOrange.toArgb()
 private const val ROUTE_BOUNDS_PADDING_PX = 64
 
 /**
@@ -70,7 +72,6 @@ private const val ROUTE_BOUNDS_PADDING_PX = 64
 @Composable
 fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: Any? = null) {
     val context = LocalContext.current
-    val routeColor = MaterialTheme.colorScheme.primary.toArgb()
     val themeMode by AppSettings.themeMode.collectAsState()
     val dark = isDarkTheme(themeMode)
 
@@ -121,7 +122,7 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
             style.addSource(GeoJsonSource(ROUTE_SOURCE_ID))
             style.addLayer(
                 LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
-                    PropertyFactory.lineColor(routeColor),
+                    PropertyFactory.lineColor(ROUTE_LINE_COLOR),
                     PropertyFactory.lineWidth(ROUTE_LINE_WIDTH),
                     PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
@@ -151,9 +152,8 @@ fun RouteMap(route: List<GeoPoint>, modifier: Modifier = Modifier, recenterKey: 
     // the user can pan and zoom without the map snapping back every update. A recenterKey
     // change (another ride selected) re-arms the one-time centering.
     var centeredOnce by remember(recenterKey) { mutableStateOf(false) }
-    LaunchedEffect(route, styleEpoch, routeColor) {
+    LaunchedEffect(route, styleEpoch) {
         val style = mapInstance?.style ?: return@LaunchedEffect
-        style.getLayerAs<LineLayer>(ROUTE_LAYER_ID)?.setProperties(PropertyFactory.lineColor(routeColor))
         style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(
             LineString.fromLngLats(route.map { Point.fromLngLat(it.lon, it.lat) })
         )
