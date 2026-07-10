@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.3.20260710+65
 
 - First public release.
 - Added a project README and a GPL-3.0 license.
