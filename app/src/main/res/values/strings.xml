@@ -17,6 +17,7 @@
     <string name="notif_stop">Stop</string>
 
     <string name="track_auto_paused">Auto-pause</string>
+    <string name="track_discarded">Not saved</string>
     <string name="gps_weak">Weak GPS signal</string>
     <string name="gps_no_signal">No GPS signal</string>
 

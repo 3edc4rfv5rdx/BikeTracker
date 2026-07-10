@@ -127,6 +127,7 @@ class TrackingService : Service() {
             ACTION_PAUSE -> pauseTracking(automatic = false)
             ACTION_RESUME -> resumeTracking()
             ACTION_STOP -> stopAndSave()
+            ACTION_DISCARD -> stopAndDiscard()
             else -> stopSelf()
         }
         return START_NOT_STICKY
@@ -344,11 +345,33 @@ class TrackingService : Service() {
         }
     }
 
-    private fun stopAndSave() {
+    private fun stopAndSave() = stop(save = true)
+    private fun stopAndDiscard() = stop(save = false)
+
+    private fun stop(save: Boolean) {
         if (!stopping.compareAndSet(false, true)) return
         cancelAutoSave()
         if (::fusedClient.isInitialized) {
             fusedClient.removeLocationUpdates(locationCallback)
+        }
+        // Discard: drop the draft row and any flushed points, then stop — nothing persisted.
+        if (!save) {
+            val draft = draftTrip
+            val prevFlush = lastFlushJob
+            scope.launch {
+                withContext(NonCancellable) {
+                    try {
+                        val id = draft?.await()
+                        if (id != null) {
+                            prevFlush?.join()
+                            AppDatabase.get(applicationContext).tripDao().deleteTripById(id)
+                        }
+                    } finally {
+                        withContext(Dispatchers.Main) { finishService() }
+                    }
+                }
+            }
+            return
         }
         val recorded = points.toList()
         val unflushed = recorded.subList(flushedCount, recorded.size)
@@ -533,11 +556,13 @@ class TrackingService : Service() {
         const val ACTION_PAUSE = "xx.biketracker.action.PAUSE"
         const val ACTION_RESUME = "xx.biketracker.action.RESUME"
         const val ACTION_STOP = "xx.biketracker.action.STOP"
+        const val ACTION_DISCARD = "xx.biketracker.action.DISCARD"
 
         fun start(context: Context) = send(context, ACTION_START)
         fun pause(context: Context) = send(context, ACTION_PAUSE)
         fun resume(context: Context) = send(context, ACTION_RESUME)
         fun stopAndSave(context: Context) = send(context, ACTION_STOP)
+        fun discard(context: Context) = send(context, ACTION_DISCARD)
 
         private fun send(context: Context, action: String) {
             val intent = Intent(context, TrackingService::class.java).setAction(action)

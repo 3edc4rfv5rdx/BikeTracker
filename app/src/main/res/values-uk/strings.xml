@@ -17,6 +17,7 @@
     <string name="notif_stop">Стоп</string>
 
     <string name="track_auto_paused">Авто-пауза</string>
+    <string name="track_discarded">Не збережено</string>
     <string name="gps_weak">Слабкий сигнал GPS</string>
     <string name="gps_no_signal">Немає сигналу GPS</string>
 
