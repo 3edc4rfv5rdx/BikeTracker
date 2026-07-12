@@ -1,6 +1,7 @@
 package xx.biketracker.map
 
 import android.content.Context
+import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.offline.OfflineManager
 import org.maplibre.android.offline.OfflineRegion
@@ -14,6 +15,16 @@ private const val OFFLINE_EXTRA_ZOOM = 4.0
 private const val OFFLINE_MAX_ZOOM = 16.0
 /** Consecutive resource errors with no progress in between — the network is effectively gone. */
 private const val OFFLINE_MAX_CONSECUTIVE_ERRORS = 5
+
+/**
+ * OfflineManager requires MapLibre to be initialized, which otherwise happens only when the
+ * first MapView is built. The offline dialog can be opened straight after launch without ever
+ * visiting the Map tab — going to OfflineManager directly then crashed the app.
+ */
+private fun offlineManager(context: Context): OfflineManager {
+    MapLibre.getInstance(context)
+    return OfflineManager.getInstance(context)
+}
 
 /**
  * Last camera rest position of the map, published by [RouteMap] on every camera stop. Settings
@@ -55,7 +66,7 @@ fun downloadViewedRegion(
         (minZoom + OFFLINE_EXTRA_ZOOM).coerceAtMost(OFFLINE_MAX_ZOOM),
         context.resources.displayMetrics.density,
     )
-    OfflineManager.getInstance(context).createOfflineRegion(
+    offlineManager(context).createOfflineRegion(
         definition,
         ByteArray(0),
         object : OfflineManager.CreateOfflineRegionCallback {
@@ -111,7 +122,7 @@ fun downloadViewedRegion(
 
 /** Number of downloaded offline areas, delivered asynchronously. */
 fun countOfflineRegions(context: Context, onResult: (Int) -> Unit) {
-    OfflineManager.getInstance(context).listOfflineRegions(
+    offlineManager(context).listOfflineRegions(
         object : OfflineManager.ListOfflineRegionsCallback {
             override fun onList(offlineRegions: Array<OfflineRegion>?) = onResult(offlineRegions?.size ?: 0)
             override fun onError(error: String) = onResult(0)
@@ -121,7 +132,7 @@ fun countOfflineRegions(context: Context, onResult: (Int) -> Unit) {
 
 /** Delete every downloaded offline area; [onDone] fires after the last one (or on failure). */
 fun deleteAllOfflineRegions(context: Context, onDone: () -> Unit) {
-    OfflineManager.getInstance(context).listOfflineRegions(
+    offlineManager(context).listOfflineRegions(
         object : OfflineManager.ListOfflineRegionsCallback {
             override fun onList(offlineRegions: Array<OfflineRegion>?) {
                 val regions = offlineRegions.orEmpty()

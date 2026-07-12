@@ -82,6 +82,8 @@
     <string name="backup_ride_active">Спочатку зупиніть поїздку</string>
 
     <string name="history_empty">Поїздок ще немає</string>
+    <string name="history_today">Сьогодні</string>
+    <string name="history_collapse_all">Згорнути все</string>
     <string name="summary_week">Тиждень</string>
     <string name="summary_month">Місяць</string>
     <string name="summary_year">Рік</string>

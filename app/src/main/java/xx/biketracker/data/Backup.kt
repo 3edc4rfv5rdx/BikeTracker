@@ -74,6 +74,8 @@ suspend fun restoreDatabase(context: Context, source: Uri): Unit = withContext(D
         extractDatabase(context, source, temp)
         require(isBikeTrackerDatabase(temp)) { "Not a BikeTracker backup" }
 
+        // The launch-time recovery pass may still be querying; closing under it would crash.
+        recoveryJob?.join()
         AppDatabase.closeAndReset()
         val dbFile = AppDatabase.databaseFile(context)
         // Stale WAL/SHM would otherwise be replayed over the restored file.

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,6 +24,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -42,6 +44,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import xx.biketracker.data.finalizeAbandonedTrips
+import xx.biketracker.data.recoveryJob
+import xx.biketracker.history.HistoryCommands
 import xx.biketracker.history.HistoryScreen
 import xx.biketracker.map.MapScreen
 import xx.biketracker.map.MapSelection
@@ -65,7 +69,7 @@ class MainActivity : ComponentActivity() {
         AppSettings.load(this)
         // Rescue any ride a process death left as an unfinished draft; the cutoff keeps a ride
         // started right after launch out of reach.
-        lifecycleScope.launch {
+        recoveryJob = lifecycleScope.launch {
             finalizeAbandonedTrips(this@MainActivity, startedBefore = System.currentTimeMillis())
         }
         enableEdgeToEdge()
@@ -121,6 +125,17 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                     }
                 },
                 actions = {
+                    if (currentTab == Destination.History) {
+                        TextButton(onClick = { HistoryCommands.send(HistoryCommands.Command.OPEN_TODAY) }) {
+                            Text(stringResource(id = R.string.history_today))
+                        }
+                        IconButton(onClick = { HistoryCommands.send(HistoryCommands.Command.COLLAPSE_ALL) }) {
+                            Icon(
+                                Icons.Default.UnfoldLess,
+                                contentDescription = stringResource(id = R.string.history_collapse_all),
+                            )
+                        }
+                    }
                     if (currentTab == Destination.Settings) {
                         IconButton(onClick = { showAbout = true }) {
                             Icon(Icons.Default.Info, contentDescription = stringResource(id = R.string.about_title))

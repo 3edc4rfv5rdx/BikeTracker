@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -482,7 +483,14 @@ private fun BigButton(
         Text(text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
     if (tonal) {
-        FilledTonalButton(onClick = onClick, enabled = enabled, modifier = modifier.height(68.dp)) { label() }
+        // The tonal fill is close to the background; an outline makes the button read as one.
+        val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 1f else 0.38f)
+        FilledTonalButton(
+            onClick = onClick,
+            enabled = enabled,
+            border = BorderStroke(2.dp, borderColor),
+            modifier = modifier.height(68.dp),
+        ) { label() }
     } else {
         val colors = if (containerColor != null) {
             ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = Color.Black)

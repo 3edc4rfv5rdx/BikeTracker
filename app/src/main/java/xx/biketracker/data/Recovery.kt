@@ -1,9 +1,17 @@
 package xx.biketracker.data
 
 import android.content.Context
+import kotlinx.coroutines.Job
 import xx.biketracker.elevationGainMeters
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
+
+/**
+ * The launch-time recovery pass started by MainActivity. Restore joins it before closing the
+ * database: closing mid-pass would crash the queries still running here.
+ */
+@Volatile
+var recoveryJob: Job? = null
 
 /**
  * Finalize trips left unfinished by a process death mid-ride. The service flushes points and

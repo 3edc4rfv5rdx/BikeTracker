@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -90,6 +91,29 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
     // Back collapses the most recently opened node before leaving the screen.
     BackHandler(enabled = expanded.isNotEmpty()) {
         expanded.removeAt(expanded.lastIndex)
+    }
+
+    // Open today's branch once, when the screen first shows data. Saveable, so returning to
+    // the tab doesn't force the branch back open after a manual collapse.
+    var autoOpenedToday by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(years) {
+        if (!autoOpenedToday && years.isNotEmpty()) {
+            autoOpenedToday = true
+            todayNodeKeys(years)?.let { expanded.addAll(it.filterNot(expanded::contains)) }
+        }
+    }
+
+    // The Today / Collapse-all top-bar buttons live in the activity; taps arrive as commands.
+    LaunchedEffect(years) {
+        HistoryCommands.commands.collect { command ->
+            when (command) {
+                HistoryCommands.Command.OPEN_TODAY -> todayNodeKeys(years)?.let {
+                    expanded.clear()
+                    expanded.addAll(it)
+                }
+                HistoryCommands.Command.COLLAPSE_ALL -> expanded.clear()
+            }
+        }
     }
 
     LazyColumn(
@@ -246,6 +270,18 @@ private fun groupByDate(trips: List<Trip>): List<YearNode> {
             months = monthNodes,
         )
     }
+}
+
+/** Expansion keys of today's year > month > day branch, or null when today has no rides. */
+private fun todayNodeKeys(years: List<YearNode>): List<String>? {
+    val cal = Calendar.getInstance()
+    val yearKey = "y${cal.get(Calendar.YEAR)}"
+    val monthKey = "$yearKey-m${cal.get(Calendar.MONTH)}"
+    val dayKey = "$monthKey-d${cal.get(Calendar.DAY_OF_YEAR)}"
+    val exists = years.firstOrNull { it.key == yearKey }
+        ?.months?.firstOrNull { it.key == monthKey }
+        ?.days?.any { it.key == dayKey } == true
+    return if (exists) listOf(yearKey, monthKey, dayKey) else null
 }
 
 // --- Rows ---

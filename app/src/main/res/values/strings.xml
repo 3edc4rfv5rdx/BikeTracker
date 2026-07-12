@@ -85,6 +85,8 @@
     <string name="backup_ride_active">Stop the ride first</string>
 
     <string name="history_empty">No rides yet</string>
+    <string name="history_today">Today</string>
+    <string name="history_collapse_all">Collapse all</string>
     <string name="summary_week">Week</string>
     <string name="summary_month">Month</string>
     <string name="summary_year">Year</string>

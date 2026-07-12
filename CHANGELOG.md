@@ -4,6 +4,13 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed a crash when opening the offline-map dialog right after launch, before the Map tab ever initialized MapLibre.
+- Stop button gets an outline so its edge is visible against the background.
+- History top bar: a Today button jumps to today's branch and a collapse-all button folds the whole tree.
+- History opens with today's branch expanded when there are rides today.
+- Map follows the ride: when the arrow moves off the visible area, the map shifts to it at the current zoom, without disturbing manual panning.
+- Removed the dark map style — it was unreadable; the map is always light regardless of theme.
+- Fixed a crash when restoring a backup right after launch: restore now waits for the startup ride-recovery pass before closing the database.
 - Dropped the 32-bit armeabi-v7a APK; minSdk 33 devices are all arm64.
 
 ## v0.3.20260710+65

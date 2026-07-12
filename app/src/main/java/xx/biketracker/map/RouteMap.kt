@@ -13,7 +13,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,15 +52,11 @@ import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
-import xx.biketracker.settings.AppSettings
 import xx.biketracker.smoothRoute
 import xx.biketracker.ui.AccentOrange
-import xx.biketracker.ui.isDarkTheme
 
-/** Keyless vector styles (OpenFreeMap). Offline downloads reference the light one — the vector
- *  tiles (the bulk of a download) are shared between both styles. */
+/** Keyless vector style (OpenFreeMap), used in both themes — the dark style was unreadable. */
 const val MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
-private const val MAP_STYLE_URL_DARK = "https://tiles.openfreemap.org/styles/dark"
 
 // Map-only tuning; the shared tracking/units constants live in Common.kt.
 private const val RIDE_ZOOM = 16.0
@@ -94,13 +89,13 @@ fun RouteMap(
     bearingDegrees: Float? = null,
 ) {
     val context = LocalContext.current
-    val themeMode by AppSettings.themeMode.collectAsState()
-    val dark = isDarkTheme(themeMode)
 
     // Must run once before the first MapView is constructed.
     remember { MapLibre.getInstance(context) }
     val mapView = remember { MapView(context) }
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    // True while the user is dragging the map; the arrow-follow logic must not fight the gesture.
+    var gestureInProgress by remember { mutableStateOf(false) }
     // Bumped after every style (re)load — a style swap drops all layers, so the route effect
     // below must re-add its data once the new style is ready.
     var styleEpoch by remember { mutableStateOf(0) }
@@ -131,16 +126,22 @@ fun RouteMap(
         mapView.getMapAsync { map ->
             // Remember the viewed area; Settings offers it as the offline download region.
             map.addOnCameraIdleListener {
+                gestureInProgress = false
                 MapViewport.update(map.projection.visibleRegion.latLngBounds, map.cameraPosition.zoom)
+            }
+            map.addOnCameraMoveStartedListener { reason ->
+                if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                    gestureInProgress = true
+                }
             }
             mapInstance = map
         }
     }
 
-    // (Re)load the style matching the theme; the camera position survives the swap.
-    LaunchedEffect(mapInstance, dark) {
+    // Load the style once the map is ready.
+    LaunchedEffect(mapInstance) {
         val map = mapInstance ?: return@LaunchedEffect
-        map.setStyle(Style.Builder().fromUri(if (dark) MAP_STYLE_URL_DARK else MAP_STYLE_URL)) { style ->
+        map.setStyle(Style.Builder().fromUri(MAP_STYLE_URL)) { style ->
             style.addSource(GeoJsonSource(ROUTE_SOURCE_ID))
             style.addLayer(
                 LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
@@ -202,14 +203,20 @@ fun RouteMap(
 
     // Move the puck to the current fix (empty when there is no live position).
     LaunchedEffect(position, bearingDegrees, styleEpoch) {
-        val style = mapInstance?.style ?: return@LaunchedEffect
-        val source = style.getSourceAs<GeoJsonSource>(PUCK_SOURCE_ID) ?: return@LaunchedEffect
+        val map = mapInstance ?: return@LaunchedEffect
+        val source = map.style?.getSourceAs<GeoJsonSource>(PUCK_SOURCE_ID) ?: return@LaunchedEffect
         if (position == null) {
             source.setGeoJson(FeatureCollection.fromFeatures(listOf<Feature>()))
         } else {
             val feature = Feature.fromGeometry(Point.fromLngLat(position.lon, position.lat))
             feature.addNumberProperty(PUCK_BEARING_KEY, bearingDegrees ?: 0f)
             source.setGeoJson(feature)
+            // Keep the arrow on screen: a fix outside the viewed area shifts the map to it at
+            // the current zoom. A hand-panned map is left alone while the arrow stays visible.
+            val latLng = LatLng(position.lat, position.lon)
+            if (!gestureInProgress && !map.projection.visibleRegion.latLngBounds.contains(latLng)) {
+                map.animateCamera(CameraUpdateFactory.newLatLng(latLng))
+            }
         }
     }
 
