@@ -1,57 +1,52 @@
 #!/usr/bin/env python3
-"""Render a placeholder BikeTracker launcher icon: green background, white bike silhouette."""
+"""Build the launcher icon from the chosen artwork in ADD/pict/ok/icon.png.
+
+The AI-generated source has a fake-transparency checkerboard baked into the
+pixels and no crisp circle edge, so the icon is rebuilt instead of cropped:
+the checkerboard (and every light neutral area connected to the border) is
+flooded to pure white, the artwork is located by its saturated pixels, and
+the result is a clean white disc with the artwork centered on it.
+"""
 from PIL import Image, ImageDraw
 
-GREEN = (0x2E, 0x7D, 0x32, 255)
-WHITE = (255, 255, 255, 255)
+SOURCE = "ADD/pict/ok/icon.png"
+TARGET = "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 
-BASE = 432
-S = 4
-N = BASE * S
+SIZE = 432          # xxxhdpi launcher icon, 108dp * 4
+SUPER = 4           # supersampling factor for the disc's antialiased edge
+ART_FRACTION = 0.80 # artwork's share of the disc diameter
 
-img = Image.new("RGBA", (N, N), (0, 0, 0, 0))
-d = ImageDraw.Draw(img)
+src = Image.open(SOURCE).convert("RGB")
+w, h = src.size
 
+# Flood the checkerboard to white from all four corners. The fill also leaks
+# into the (white) disc interior through white cells — harmless, it is white
+# already. Saturated artwork pixels stay outside the threshold.
+for seed in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
+    ImageDraw.floodfill(src, seed, (255, 255, 255), thresh=70)
 
-def sc(v):
-    return v * S
+# Bounding box of the artwork: anything still visibly non-white.
+px = src.load()
+xs, ys = [], []
+for y in range(h):
+    for x in range(w):
+        r, g, b = px[x, y]
+        if r < 235 or g < 235 or b < 235:
+            xs.append(x)
+            ys.append(y)
+art = src.crop((min(xs), min(ys), max(xs) + 1, max(ys) + 1))
 
+# Scale the artwork to its share of the disc and center it on a white square.
+scale = ART_FRACTION * SIZE / max(art.size)
+art = art.resize((round(art.width * scale), round(art.height * scale)), Image.LANCZOS)
+icon = Image.new("RGB", (SIZE, SIZE), (255, 255, 255))
+icon.paste(art, ((SIZE - art.width) // 2, (SIZE - art.height) // 2))
 
-d.rectangle([0, 0, N, N], fill=GREEN)
+# Cut the full-bleed disc with a supersampled circular mask.
+mask = Image.new("L", (SIZE * SUPER, SIZE * SUPER), 0)
+ImageDraw.Draw(mask).ellipse([0, 0, SIZE * SUPER - 1, SIZE * SUPER - 1], fill=255)
+mask = mask.resize((SIZE, SIZE), Image.LANCZOS)
+icon.putalpha(mask)
 
-stroke = sc(14)
-
-# Two wheels
-r = sc(70)
-left_c = (sc(140), sc(300))
-right_c = (sc(300), sc(300))
-for c in (left_c, right_c):
-    d.ellipse([c[0] - r, c[1] - r, c[0] + r, c[1] + r], outline=WHITE, width=stroke)
-
-# Frame (simplified bike triangle shapes)
-seat = (sc(190), sc(150))
-pedal = (sc(190), sc(300))
-handlebar = (sc(280), sc(150))
-
-lines = [
-    (left_c, seat),
-    (seat, pedal),
-    (pedal, left_c),
-    (pedal, right_c),
-    (pedal, handlebar),
-    (handlebar, right_c),
-    (seat, handlebar),
-]
-for a, b in lines:
-    d.line([a, b], fill=WHITE, width=stroke)
-
-# Seat and handlebar caps
-d.ellipse([seat[0] - sc(10), seat[1] - sc(10), seat[0] + sc(10), seat[1] + sc(10)], fill=WHITE)
-d.ellipse(
-    [handlebar[0] - sc(10), handlebar[1] - sc(10), handlebar[0] + sc(10), handlebar[1] + sc(10)],
-    fill=WHITE,
-)
-
-img = img.resize((BASE, BASE), Image.LANCZOS)
-img.save("app/src/main/res/mipmap-xxxhdpi/ic_launcher.png")
-print("Saved icon")
+icon.save(TARGET)
+print(f"Saved {TARGET}")

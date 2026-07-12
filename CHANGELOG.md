@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- New launcher icon: bike, route and location pin on a white disc (make_icon.py rebuilds it from the source artwork).
 - Fixed a crash when opening the offline-map dialog right after launch, before the Map tab ever initialized MapLibre.
 - Stop button gets an outline so its edge is visible against the background.
 - History top-bar actions are outlined icon buttons: a calendar for Today, fold-up for collapse all.
