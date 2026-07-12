@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
-"""Build the launcher icon from the chosen artwork in ADD/pict/ok/icon.png.
+"""Build the launcher icons from the chosen artwork in ADD/pict/ok/icon.png.
 
 The AI-generated source has a fake-transparency checkerboard baked into the
 pixels and no crisp circle edge, so the icon is rebuilt instead of cropped:
 the checkerboard (and every light neutral area connected to the border) is
-flooded to pure white, the artwork is located by its saturated pixels, and
-the result is a clean white disc with the artwork centered on it.
+flooded to pure white and the artwork is located by its saturated pixels.
+Two outputs: the adaptive-icon foreground layer (white square, artwork sized
+to the launcher's visible safe zone) and a legacy white-disc PNG.
 """
 from PIL import Image, ImageDraw
 
 SOURCE = "ADD/pict/ok/icon.png"
-TARGET = "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+TARGET_LEGACY = "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+TARGET_FOREGROUND = "app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
 
 SIZE = 432          # xxxhdpi launcher icon, 108dp * 4
 SUPER = 4           # supersampling factor for the disc's antialiased edge
-ART_FRACTION = 0.80 # artwork's share of the disc diameter
+ART_FRACTION = 0.88 # artwork's share of the legacy disc diameter
+# Adaptive foreground: the launcher mask shows the central ~72 of 108dp. Sized visually — the
+# artwork's diagonal extremes (the pin) may run under the mask edge, which looks fine.
+FG_FRACTION = 0.74
 
 src = Image.open(SOURCE).convert("RGB")
 w, h = src.size
@@ -36,17 +41,23 @@ for y in range(h):
             ys.append(y)
 art = src.crop((min(xs), min(ys), max(xs) + 1, max(ys) + 1))
 
-# Scale the artwork to its share of the disc and center it on a white square.
-scale = ART_FRACTION * SIZE / max(art.size)
-art = art.resize((round(art.width * scale), round(art.height * scale)), Image.LANCZOS)
-icon = Image.new("RGB", (SIZE, SIZE), (255, 255, 255))
-icon.paste(art, ((SIZE - art.width) // 2, (SIZE - art.height) // 2))
+def artwork_on_white(scale):
+    """The artwork at `scale`, centered on a white square."""
+    scaled = art.resize((round(art.width * scale), round(art.height * scale)), Image.LANCZOS)
+    square = Image.new("RGB", (SIZE, SIZE), (255, 255, 255))
+    square.paste(scaled, ((SIZE - scaled.width) // 2, (SIZE - scaled.height) // 2))
+    return square
 
-# Cut the full-bleed disc with a supersampled circular mask.
+
+# Adaptive foreground layer: opaque white, the launcher masks it to its own shape.
+artwork_on_white(FG_FRACTION * SIZE / max(art.size)).save(TARGET_FOREGROUND)
+print(f"Saved {TARGET_FOREGROUND}")
+
+# Legacy icon: the same artwork on a full-bleed white disc with transparent corners.
+icon = artwork_on_white(ART_FRACTION * SIZE / max(art.size))
 mask = Image.new("L", (SIZE * SUPER, SIZE * SUPER), 0)
 ImageDraw.Draw(mask).ellipse([0, 0, SIZE * SUPER - 1, SIZE * SUPER - 1], fill=255)
 mask = mask.resize((SIZE, SIZE), Image.LANCZOS)
 icon.putalpha(mask)
-
-icon.save(TARGET)
-print(f"Saved {TARGET}")
+icon.save(TARGET_LEGACY)
+print(f"Saved {TARGET_LEGACY}")
