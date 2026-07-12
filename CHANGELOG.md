@@ -6,6 +6,7 @@ Newest entries on top.
 
 - Fixed a crash when opening the offline-map dialog right after launch, before the Map tab ever initialized MapLibre.
 - Stop button gets an outline so its edge is visible against the background.
+- History top-bar actions are outlined icon buttons: a calendar for Today, fold-up for collapse all.
 - History top bar: a Today button jumps to today's branch and a collapse-all button folds the whole tree.
 - History opens with today's branch expanded when there are rides today.
 - Map follows the ride: when the arrow moves off the visible area, the map shifts to it at the current zoom, without disturbing manual panning.

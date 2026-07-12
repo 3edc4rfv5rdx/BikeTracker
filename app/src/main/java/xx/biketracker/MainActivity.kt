@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -22,9 +23,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,8 +34,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -126,14 +129,11 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                 },
                 actions = {
                     if (currentTab == Destination.History) {
-                        TextButton(onClick = { HistoryCommands.send(HistoryCommands.Command.OPEN_TODAY) }) {
-                            Text(stringResource(id = R.string.history_today))
+                        TopBarButton(Icons.Default.Today, stringResource(id = R.string.history_today)) {
+                            HistoryCommands.send(HistoryCommands.Command.OPEN_TODAY)
                         }
-                        IconButton(onClick = { HistoryCommands.send(HistoryCommands.Command.COLLAPSE_ALL) }) {
-                            Icon(
-                                Icons.Default.UnfoldLess,
-                                contentDescription = stringResource(id = R.string.history_collapse_all),
-                            )
+                        TopBarButton(Icons.Default.UnfoldLess, stringResource(id = R.string.history_collapse_all)) {
+                            HistoryCommands.send(HistoryCommands.Command.COLLAPSE_ALL)
                         }
                     }
                     if (currentTab == Destination.Settings) {
@@ -194,6 +194,17 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                 DialogButton(stringResource(id = R.string.action_ok), onClick = { showAbout = false })
             }
         )
+    }
+}
+
+/** Outlined top-bar icon action: framed so it reads as a button, not a plain label. */
+@Composable
+private fun TopBarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+    OutlinedIconButton(
+        onClick = onClick,
+        modifier = Modifier.padding(end = 8.dp),
+    ) {
+        Icon(icon, contentDescription = contentDescription)
     }
 }
 
