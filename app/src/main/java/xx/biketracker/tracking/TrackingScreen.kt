@@ -51,11 +51,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,7 +64,6 @@ import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.PREFS_NAME
 import xx.biketracker.R
 import xx.biketracker.avgSpeedMps
-import xx.biketracker.formatClock
 import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.formatSpeedKmh
@@ -154,6 +150,13 @@ fun TrackingScreen() {
             0L
         }
 
+    // Total ride time including pauses: wall clock elapsed since the start.
+    val liveTotalMs = if (snapshot.status != TrackingStatus.IDLE) {
+        (nowMillis - snapshot.startTime).coerceAtLeast(0L)
+    } else {
+        0L
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val discardedMessage = stringResource(R.string.track_discarded)
@@ -226,6 +229,7 @@ fun TrackingScreen() {
                 Text(
                     text = stringResource(R.string.unit_kmh),
                     style = MaterialTheme.typography.titleMedium.merge(NO_FONT_PADDING),
+                    modifier = Modifier.padding(top = 12.dp),
                 )
             }
         }
@@ -247,18 +251,18 @@ fun TrackingScreen() {
                     withUnit(R.string.stat_avg_speed, R.string.unit_kmh),
                     formatSpeedKmh(avgSpeedMps(snapshot.distanceMeters, snapshot.movingTimeMillis)),
                 ),
-                right = Stat(
-                    withUnit(R.string.stat_altitude, R.string.unit_m),
-                    snapshot.altitudeMeters?.roundToInt()?.toString() ?: "—",
-                ),
+                right = Stat(stringResource(R.string.stat_total_time), formatDuration(liveTotalMs)),
             )
 
             Spacer(Modifier.height(24.dp))
 
-            // Wall clock. Seconds render smaller than HH:mm.
-            ClockCell(
-                nowMillis = nowMillis,
-                modifier = Modifier
+            // Altitude in the wide slot the wall clock used to occupy; the clock moved to the top bar.
+            StatCell(
+                Stat(
+                    withUnit(R.string.stat_altitude, R.string.unit_m),
+                    snapshot.altitudeMeters?.roundToInt()?.toString() ?: "—",
+                ),
+                Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
             )
@@ -378,34 +382,6 @@ private fun StatCell(stat: Stat, modifier: Modifier, valueSize: TextUnit = 42.sp
         Text(
             text = stat.value,
             fontSize = valueSize,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            softWrap = false,
-        )
-    }
-}
-
-/** Wall clock with HH:mm large and the trailing seconds noticeably smaller. */
-@Composable
-private fun ClockCell(nowMillis: Long, modifier: Modifier) {
-    val full = formatClock(nowMillis, withSeconds = true) // "HH:mm:ss"
-    val hoursMinutes = full.substringBeforeLast(':')
-    val seconds = full.substringAfterLast(':')
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(R.string.stat_clock),
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 2,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(fontSize = 44.sp)) { append(hoursMinutes) }
-                withStyle(SpanStyle(fontSize = 26.sp)) { append(":$seconds") }
-            },
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             softWrap = false,

@@ -26,6 +26,7 @@
     <string name="stat_speed">Speed</string>
     <string name="stat_distance">Distance</string>
     <string name="stat_time">Time</string>
+    <string name="stat_total_time">Total time</string>
     <string name="stat_avg_speed">Avg speed</string>
     <string name="stat_avg_speed_gps">Avg GPS speed</string>
     <string name="stat_max_speed">Max speed</string>

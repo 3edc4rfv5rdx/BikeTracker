@@ -1,14 +1,9 @@
 package xx.biketracker.map
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,16 +21,14 @@ import androidx.compose.ui.unit.dp
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
 import xx.biketracker.data.AppDatabase
-import xx.biketracker.formatClock
-import xx.biketracker.formatDate
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
 import xx.biketracker.ui.KeepScreenOnWhile
 
 /**
  * The Map tab. Shows the current ride's live track, or — when a ride was sent here from the
- * History tree — that ride's stored track with a chip naming it; closing the chip returns to
- * the live view.
+ * History tree — that ride's stored track; the ride is named in the top bar, where closing it
+ * returns to the live view.
  */
 @Composable
 fun MapScreen() {
@@ -68,28 +61,6 @@ fun MapScreen() {
             position = puckPosition,
             bearingDegrees = if (live) snapshot.bearingDegrees else null,
         )
-
-        selected?.let { trip ->
-            Card(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 16.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "${formatDate(trip.startTime)} · ${formatClock(trip.startTime)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 16.dp),
-                    )
-                    IconButton(onClick = { MapSelection.clear() }) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = stringResource(R.string.map_close_ride),
-                        )
-                    }
-                }
-            }
-        }
 
         if (selected == null && snapshot.route.isEmpty()) {
             Card(

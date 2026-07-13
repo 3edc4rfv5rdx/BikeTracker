@@ -20,6 +20,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -28,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,7 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -45,6 +52,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xx.biketracker.data.finalizeAbandonedTrips
 import xx.biketracker.data.recoveryJob
@@ -128,6 +136,22 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                     }
                 },
                 actions = {
+                    if (onTrackingTab) {
+                        TopBarClock()
+                    }
+                    if (currentTab == Destination.Map) {
+                        // The ride opened from History is named here, off the map itself.
+                        val selectedTrip by MapSelection.trip.collectAsState()
+                        selectedTrip?.let { trip ->
+                            Text(
+                                text = "${formatDate(trip.startTime)} · ${formatClock(trip.startTime)}",
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            IconButton(onClick = { MapSelection.clear() }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.map_close_ride))
+                            }
+                        }
+                    }
                     if (currentTab == Destination.History) {
                         TopBarButton(Icons.Default.Today, stringResource(id = R.string.history_today)) {
                             HistoryCommands.send(HistoryCommands.Command.OPEN_TODAY)
@@ -137,8 +161,8 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                         }
                     }
                     if (currentTab == Destination.Settings) {
-                        IconButton(onClick = { showAbout = true }) {
-                            Icon(Icons.Default.Info, contentDescription = stringResource(id = R.string.about_title))
+                        TopBarButton(Icons.Default.Info, stringResource(id = R.string.about_title)) {
+                            showAbout = true
                         }
                     }
                 }
@@ -195,6 +219,29 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
             }
         )
     }
+}
+
+/** Ticking wall clock in the top bar; HH:mm large, the trailing seconds smaller. */
+@Composable
+private fun TopBarClock() {
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val full = formatClock(nowMillis, withSeconds = true) // "HH:mm:ss"
+    val hoursMinutes = full.substringBeforeLast(':')
+    val seconds = full.substringAfterLast(':')
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(fontSize = 24.sp)) { append(hoursMinutes) }
+            withStyle(SpanStyle(fontSize = 16.sp)) { append(":$seconds") }
+        },
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(end = 16.dp),
+    )
 }
 
 /** Outlined top-bar icon action: framed so it reads as a button, not a plain label. */

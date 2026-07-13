@@ -26,6 +26,7 @@
     <string name="stat_speed">Швидкість</string>
     <string name="stat_distance">Відстань</string>
     <string name="stat_time">Час</string>
+    <string name="stat_total_time">Загальний час</string>
     <string name="stat_avg_speed">Сер. швидкість</string>
     <string name="stat_avg_speed_gps">Сер.GPS швидкість</string>
     <string name="stat_max_speed">Макс. швидкість</string>

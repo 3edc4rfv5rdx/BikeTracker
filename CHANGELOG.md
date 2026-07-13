@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- About button in Settings is an outlined icon button, matching the History top-bar actions.
+- Ride date on the Map tab moved from a chip over the map into the top bar, in a lighter font.
+- Wall clock moved into the Tracking top bar; altitude takes its wide slot, and a new "Total time" stat (elapsed including pauses) sits in the grid.
+- "km/h" caption sits lower, clear of the speed digits.
 - Launcher icon is adaptive now, so it fills the launcher circle instead of being shrunk onto a plate.
 - New launcher icon: bike, route and location pin on a white disc (make_icon.py rebuilds it from the source artwork).
 - Fixed a crash when opening the offline-map dialog right after launch, before the Map tab ever initialized MapLibre.
