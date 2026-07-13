@@ -30,6 +30,17 @@ import xx.biketracker.tracking.hasGpsTrouble
 import xx.biketracker.ui.KeepScreenOnWhile
 
 /**
+ * One-time-centering identity of what the map shows. A stored trip is its row id; a live ride
+ * is its service start timestamp, which the service sets once per ride and which strictly grows
+ * between rides — so every new ride re-arms centering even after an earlier one was centered in
+ * the same composition. The prefixes keep a trip id from colliding with a timestamp when
+ * switching between a stored trip and the active ride. Deliberately NOT route size or the
+ * latest fix: the key must stay constant within one ride or it would fight user panning.
+ */
+internal fun mapRecenterKey(selectedTripId: Long?, liveRideStartElapsedRealtime: Long): String =
+    if (selectedTripId != null) "trip-$selectedTripId" else "live-$liveRideStartElapsedRealtime"
+
+/**
  * The Map tab. Shows the current ride's live track, or — when a ride was sent here from the
  * History tree — that ride's stored track; the ride is named in the top bar, where closing it
  * returns to the live view.
@@ -76,7 +87,7 @@ fun MapScreen() {
         RouteMap(
             route = route,
             modifier = Modifier.fillMaxSize(),
-            recenterKey = selected?.id,
+            recenterKey = mapRecenterKey(selected?.id, snapshot.startElapsedRealtime),
             position = puckPosition,
             bearingDegrees = if (live) snapshot.bearingDegrees else null,
             puckState = puckState,

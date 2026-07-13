@@ -100,7 +100,7 @@ Refactor `app/src/main/java/xx/biketracker/map/OfflineMaps.kt` and `OfflineMapDi
 
 Create a process-level offline-download manager that identifies regions with metadata, distinguishes complete/incomplete/active states, resumes the matching incomplete region, and prevents duplicate concurrent downloads for the same definition. Let MapLibre handle recoverable network errors; expose pause/cancel/retry explicitly and reserve failure for terminal conditions. Reconnect a reopened dialog to current status, report completed and partial regions accurately, and make Delete-all coordinate with active downloads. Add callback-driven tests for temporary offline periods followed by recovery, terminal tile-limit failure, dialog dismissal/reopen, retry without duplication, deletion during download, and process recreation.
 
-## 13. Low: re-arm live-map centering for every new ride
+## 13. FIXED: re-arm live-map centering for every new ride
 
 **Prompt:**
 
