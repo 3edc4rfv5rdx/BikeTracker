@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Platform backup is fully disabled to match the offline privacy promise: allowBackup is off and data-extraction rules exclude every domain from cloud backup and device transfer, so the location database can only leave the device as the user's own ZIP backup; a unit test guards the policy and README states the exact behavior.
 - The Exit button now refuses to close the app while a ride is recording or paused, explaining that the ride must be saved or discarded first, as SPEC.md always required.
 - Removed the ACCESS_BACKGROUND_LOCATION permission and its dead-end one-shot dialog: the location foreground service is always started from the visible Tracking screen, so while-in-use permission already keeps recording alive in background and with the screen off.
 - Launcher icon: the adaptive foreground artwork is enlarged to 0.78 of the canvas.

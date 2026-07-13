@@ -84,7 +84,7 @@ Implement the active-ride exit guard in `app/src/main/java/xx/biketracker/MainAc
 
 Observe `TrackingState.snapshot` at the app-shell level. When status is RECORDING or PAUSED, show a localized dialog explaining that the ride must be stopped/saved or discarded first, and do not remove the task. When idle, retain the current exit behavior. Also handle system Back/task-removal semantics consistently enough that the UI does not promise an exit guard only on one button. Keep all three locales synchronized and add Compose/state tests for idle, recording, paused, and rapid stop-then-exit transitions.
 
-## 11. Medium: align Android Auto Backup with the app's no-cloud privacy claim
+## 11. FIXED (policy: platform backup disabled entirely; explicit ZIP backup is the only data exit): align Android Auto Backup with the app's no-cloud privacy claim
 
 **Prompt:**
 

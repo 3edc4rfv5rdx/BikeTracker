@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Explicit opt-out of every backup domain on Android 12+, mirroring allowBackup="false":
+     the Room database holds precise location history and must not leave the device via
+     cloud backup or device-to-device transfer. The user's explicit ZIP backups are written
+     to MediaStore (Documents/BikeTracker) and are not part of these domains. -->
 <data-extraction-rules>
-    <cloud-backup />
-    <device-transfer />
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
 </data-extraction-rules>

@@ -1,7 +1,11 @@
 # BikeTracker
 
 An offline-first Android app for recording and reviewing bike rides. GPS tracking,
-vector maps, and ride history — no API keys, no accounts.
+vector maps, and ride history — no API keys, no accounts. Ride data never leaves the
+device: Android cloud backup and device-to-device transfer are disabled
+(`allowBackup="false"` plus a full data-extraction-rules opt-out), so the only copies
+are the timestamped ZIP backups you create yourself in Settings
+(`Documents/BikeTracker`).
 
 ## Features
 
