@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Ride intervals, GPS outage detection, auto-pause debounce, live duration, and GPS staleness now use monotonic elapsed realtime, so system clock corrections cannot stall or jump tracking; persisted route order no longer depends on wall-clock timestamps.
 - Batched Fused Location deliveries now process every fix oldest-to-newest instead of dropping all but the newest; UI state and the foreground notification are published once per batch.
 - Database backup/restore now uses one maintenance gate shared with ride drafts, recovery, final saves, discards, and history deletion; backups copy a checkpointed write-frozen snapshot, partial MediaStore files are removed on failure/cancellation, and ride starts or stale destructive actions cannot race maintenance.
 - Database restore is now cancellation-safe and atomic: backups are size/integrity/schema checked and migrated before use, the previous database is retained until Room opens the replacement, interrupted swaps roll back on the next launch, and leaving Settings no longer cancels an in-progress restore.

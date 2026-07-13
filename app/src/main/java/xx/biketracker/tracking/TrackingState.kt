@@ -24,14 +24,15 @@ data class TrackingSnapshot(
     val gpsAccuracyMeters: Float? = null, // horizontal accuracy of the last fix; null before one
     val bearingDegrees: Float? = null, // heading of travel; null until the first fix that reports one
     val startTime: Long = 0L,
-    val updatedAtWall: Long = 0L, // System wall clock when this snapshot was published
+    val startElapsedRealtime: Long = 0L,
+    val updatedAtElapsedRealtime: Long = 0L,
     val route: List<GeoPoint> = emptyList(),
 )
 
 /** True while a ride is active but the fixes are stale, missing, or too inaccurate to trust. */
-fun TrackingSnapshot.hasGpsTrouble(nowMillis: Long): Boolean =
+fun TrackingSnapshot.hasGpsTrouble(nowElapsedRealtime: Long): Boolean =
     status != TrackingStatus.IDLE &&
-        (nowMillis - updatedAtWall > GPS_STALE_MS ||
+        (nowElapsedRealtime - updatedAtElapsedRealtime > GPS_STALE_MS ||
             gpsAccuracyMeters == null ||
             gpsAccuracyMeters > ACCURACY_THRESHOLD_M)
 

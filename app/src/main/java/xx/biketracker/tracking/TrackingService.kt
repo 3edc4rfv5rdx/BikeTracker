@@ -13,6 +13,7 @@ import android.content.pm.ServiceInfo
 import android.location.Location
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
@@ -77,6 +78,14 @@ internal fun <T> processOrderedBatch(
     return processed
 }
 
+/** Positive elapsed time between fixes, or null for duplicate/non-monotonic provider data. */
+internal fun elapsedMillisBetween(previousNanos: Long, currentNanos: Long): Long? {
+    val deltaNanos = currentNanos - previousNanos
+    if (deltaNanos <= 0) return null
+    val deltaMillis = deltaNanos / 1_000_000L
+    return deltaMillis.takeIf { it > 0 }
+}
+
 /**
  * Foreground service that records a ride: it pulls GPS fixes from the fused
  * location provider, filters noise, accumulates distance / moving time / peak
@@ -95,10 +104,12 @@ class TrackingService : Service() {
 
     private var status = TrackingStatus.IDLE
     private var startTime = 0L
+    private var startElapsedRealtime = 0L
     private var distanceMeters = 0.0
     private var movingTimeMillis = 0L
     private var maxSpeedMps = 0.0
     private var lastPoint: TrackPoint? = null
+    private var lastPointElapsedRealtimeNanos: Long? = null
     private val points = mutableListOf<TrackPoint>()
     private val route = mutableListOf<GeoPoint>()
 
@@ -200,6 +211,7 @@ class TrackingService : Service() {
         kalman.reset()
         status = TrackingStatus.RECORDING
         startTime = System.currentTimeMillis()
+        startElapsedRealtime = SystemClock.elapsedRealtime()
         draftTrip = scope.async {
             DatabaseMaintenance.withWrite {
                 AppDatabase.get(applicationContext).tripDao().insertTrip(
@@ -255,11 +267,14 @@ class TrackingService : Service() {
         if (location.hasAccuracy() && location.accuracy > ACCURACY_THRESHOLD_M) return
 
         val prev = lastPoint
-        val now = location.time
+        val nowWall = location.time
+        val nowElapsedNanos = location.elapsedRealtimeNanos
+        if (nowElapsedNanos <= 0) return
+        val nowElapsedMillis = nowElapsedNanos / 1_000_000L
         var dt = 0L
         if (prev != null) {
-            dt = now - prev.time
-            if (dt <= 0) return
+            val prevElapsed = lastPointElapsedRealtimeNanos ?: return
+            dt = elapsedMillisBetween(prevElapsed, nowElapsedNanos) ?: return
             // Plausibility-check the raw fix before it can pollute the Kalman filter.
             val rawSpeed = haversineMeters(prev.lat, prev.lon, location.latitude, location.longitude) / (dt / 1000.0)
             if (rawSpeed > MAX_PLAUSIBLE_SPEED_MPS) return // GPS jump, skip
@@ -275,7 +290,7 @@ class TrackingService : Service() {
             rawLat = location.latitude,
             rawLon = location.longitude,
             accuracyM = if (location.hasAccuracy()) location.accuracy else ACCURACY_THRESHOLD_M,
-            timeMs = now,
+            timeMs = nowElapsedMillis,
             speedMps = speed,
         )
         if (prev != null && !gapped) {
@@ -289,17 +304,18 @@ class TrackingService : Service() {
             tripId = 0,
             lat = smoothed.lat,
             lon = smoothed.lon,
-            time = now,
+            time = nowWall,
             speedMps = location.speed,
             altitudeMeters = if (location.hasAltitude()) location.altitude else null,
         )
         points += point
         route += smoothed
         lastPoint = point
+        lastPointElapsedRealtimeNanos = nowElapsedNanos
         if (points.size - flushedCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
 
         updateNotification()
-        evaluateAutoPause(speed, now)
+        evaluateAutoPause(speed, nowElapsedMillis)
     }
 
     private fun evaluateAutoPause(speed: Double, now: Long) {
@@ -328,6 +344,7 @@ class TrackingService : Service() {
         lowSpeedSince = 0L
         // Break the segment so the paused gap adds neither distance nor time.
         lastPoint = null
+        lastPointElapsedRealtimeNanos = null
         flushDraft() // checkpoint the ride at every pause
         scheduleAutoSave()
         updateNotification()
@@ -516,7 +533,8 @@ class TrackingService : Service() {
                 gpsAccuracyMeters = gpsAccuracyMeters,
                 bearingDegrees = bearingDegrees,
                 startTime = startTime,
-                updatedAtWall = System.currentTimeMillis(),
+                startElapsedRealtime = startElapsedRealtime,
+                updatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
                 route = route.toList(),
             )
         )

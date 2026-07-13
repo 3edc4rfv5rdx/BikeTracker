@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -45,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -137,10 +139,10 @@ fun TrackingScreen() {
     }
 
     // Ticking wall clock, independent of GPS updates.
-    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var nowElapsedRealtime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(Unit) {
         while (true) {
-            nowMillis = System.currentTimeMillis()
+            nowElapsedRealtime = SystemClock.elapsedRealtime()
             delay(1000)
         }
     }
@@ -151,14 +153,14 @@ fun TrackingScreen() {
     // Ride time ticks every second locally between the ~1.5 s GPS updates.
     val liveMovingMs = snapshot.movingTimeMillis +
         if (snapshot.status == TrackingStatus.RECORDING) {
-            (nowMillis - snapshot.updatedAtWall).coerceAtLeast(0L)
+            (nowElapsedRealtime - snapshot.updatedAtElapsedRealtime).coerceAtLeast(0L)
         } else {
             0L
         }
 
     // Total ride time including pauses: wall clock elapsed since the start.
     val liveTotalMs = if (snapshot.status != TrackingStatus.IDLE) {
-        (nowMillis - snapshot.startTime).coerceAtLeast(0L)
+        (nowElapsedRealtime - snapshot.startElapsedRealtime).coerceAtLeast(0L)
     } else {
         0L
     }
@@ -169,8 +171,8 @@ fun TrackingScreen() {
 
     // GPS trouble: fixes rejected by the accuracy filter, or none arriving at all.
     val gpsAccuracy = snapshot.gpsAccuracyMeters
-    val gpsStale = nowMillis - snapshot.updatedAtWall > GPS_STALE_MS
-    val gpsTrouble = snapshot.hasGpsTrouble(nowMillis)
+    val gpsStale = nowElapsedRealtime - snapshot.updatedAtElapsedRealtime > GPS_STALE_MS
+    val gpsTrouble = snapshot.hasGpsTrouble(nowElapsedRealtime)
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(

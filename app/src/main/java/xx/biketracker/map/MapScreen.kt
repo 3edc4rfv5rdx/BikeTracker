@@ -1,5 +1,6 @@
 package xx.biketracker.map
 
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -11,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,16 +58,16 @@ fun MapScreen() {
     val puckPosition = if (live) snapshot.route.lastOrNull() else null
 
     // GPS staleness must surface even when no fixes arrive to recompose us, so tick locally.
-    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var nowElapsedRealtime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(live) {
         while (live) {
-            nowMillis = System.currentTimeMillis()
+            nowElapsedRealtime = SystemClock.elapsedRealtime()
             delay(1000)
         }
     }
     val puckState = when {
         !live -> PuckState.NORMAL
-        snapshot.hasGpsTrouble(nowMillis) -> PuckState.GPS_TROUBLE
+        snapshot.hasGpsTrouble(nowElapsedRealtime) -> PuckState.GPS_TROUBLE
         snapshot.status == TrackingStatus.PAUSED -> PuckState.PAUSED
         else -> PuckState.NORMAL
     }
