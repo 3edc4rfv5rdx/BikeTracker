@@ -60,6 +60,9 @@ fun SettingsScreen() {
     val restoreRunning = restoreState == RestoreOperationState.Running
     val maintenanceOperation by DatabaseMaintenance.operation.collectAsState()
     val maintenanceRunning = maintenanceOperation != DatabaseMaintenanceOperation.NONE
+    val rideActiveMessage = stringResource(R.string.backup_ride_active)
+    val backupSavedMessage = stringResource(R.string.backup_saved)
+    val backupFailedMessage = stringResource(R.string.backup_failed)
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
 
@@ -67,7 +70,7 @@ fun SettingsScreen() {
     // save could corrupt data, so both are refused while a ride is active.
     fun refuseIfRideActive(): Boolean {
         val active = tracking.status != TrackingStatus.IDLE
-        if (active) toast(context.getString(R.string.backup_ride_active))
+        if (active) toast(rideActiveMessage)
         return active
     }
 
@@ -115,8 +118,8 @@ fun SettingsScreen() {
             onClick = {
                 if (!refuseIfRideActive()) scope.launch {
                     runCatching { backupDatabase(context) }
-                        .onSuccess { path -> toast("${context.getString(R.string.backup_saved)}\n$path") }
-                        .onFailure { toast(context.getString(R.string.backup_failed)) }
+                        .onSuccess { path -> toast("$backupSavedMessage\n$path") }
+                        .onFailure { toast(backupFailedMessage) }
                 }
             },
         )

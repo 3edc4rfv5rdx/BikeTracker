@@ -31,8 +31,12 @@ fun OfflineMapDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     var regionCount by remember { mutableStateOf(-1) }
     var progress by remember { mutableStateOf<Int?>(null) }
+    val deletedMessage = stringResource(R.string.map_offline_deleted)
+    val downloadedMessage = stringResource(R.string.map_offline_done)
+    val downloadFailedMessage = stringResource(R.string.map_offline_failed)
+    val noAreaMessage = stringResource(R.string.map_offline_no_area)
 
-    fun toast(resId: Int) = Toast.makeText(context, context.getString(resId), Toast.LENGTH_LONG).show()
+    fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 
     LaunchedEffect(Unit) { countOfflineRegions(context) { regionCount = it } }
 
@@ -59,7 +63,7 @@ fun OfflineMapDialog(onDismiss: () -> Unit) {
                         onClick = {
                             deleteAllOfflineRegions(context) {
                                 regionCount = 0
-                                toast(R.string.map_offline_deleted)
+                                toast(deletedMessage)
                             }
                         },
                     )
@@ -75,10 +79,10 @@ fun OfflineMapDialog(onDismiss: () -> Unit) {
                                     onFinished = { ok ->
                                         progress = null
                                         countOfflineRegions(context) { regionCount = it }
-                                        toast(if (ok) R.string.map_offline_done else R.string.map_offline_failed)
+                                        toast(if (ok) downloadedMessage else downloadFailedMessage)
                                     },
                                 )
-                                if (started) progress = 0 else toast(R.string.map_offline_no_area)
+                                if (started) progress = 0 else toast(noAreaMessage)
                             }
                         },
                     )

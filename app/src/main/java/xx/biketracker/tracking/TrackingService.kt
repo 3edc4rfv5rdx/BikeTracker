@@ -327,6 +327,12 @@ class TrackingService : Service() {
     }
 
     private fun requestUpdates() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            failStartup()
+            return
+        }
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, GPS_INTERVAL_MS)
             .setMinUpdateIntervalMillis(GPS_MIN_INTERVAL_MS)
             .build()
@@ -337,6 +343,8 @@ class TrackingService : Service() {
                     completeStartupIfReady()
                 }
                 .addOnFailureListener { failStartup() }
+        } catch (_: SecurityException) {
+            failStartup()
         } catch (_: RuntimeException) {
             failStartup()
         }
