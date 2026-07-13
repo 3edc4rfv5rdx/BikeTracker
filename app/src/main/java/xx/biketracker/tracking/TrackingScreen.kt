@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -36,7 +35,6 @@ import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
-import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.KeepScreenOnWhile
 import xx.biketracker.ui.PausedOrange
 import androidx.compose.runtime.Composable
@@ -61,11 +59,9 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.core.content.edit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xx.biketracker.GPS_STALE_MS
-import xx.biketracker.PREFS_NAME
 import xx.biketracker.R
 import xx.biketracker.avgSpeedMps
 import xx.biketracker.formatDuration
@@ -111,19 +107,16 @@ fun TrackingScreen() {
     val snapshot by TrackingState.snapshot.collectAsState()
 
     var permissionDenied by remember { mutableStateOf(false) }
-    var showBackgroundDialog by remember { mutableStateOf(false) }
 
-    val backgroundLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* Recording works with foreground permission alone; this is best-effort. */ }
-
+    // While-in-use location is all the app needs: the tracking foreground service (type
+    // "location") is always started from this visible screen, so Android lets it keep
+    // receiving fixes after the app goes to background or the screen turns off.
     val foregroundLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
             permissionDenied = false
             TrackingService.start(context)
-            if (!hasBackgroundLocation(context) && !hasAskedBackground(context)) showBackgroundDialog = true
         } else {
             permissionDenied = true
         }
@@ -132,7 +125,6 @@ fun TrackingScreen() {
     fun onStart() {
         if (hasFineLocation(context)) {
             TrackingService.start(context)
-            if (!hasBackgroundLocation(context) && !hasAskedBackground(context)) showBackgroundDialog = true
         } else {
             foregroundLauncher.launch(foregroundPermissions())
         }
@@ -320,19 +312,6 @@ fun TrackingScreen() {
         )
     }
 
-    if (showBackgroundDialog) {
-        BackgroundPermissionDialog(
-            onAllow = {
-                showBackgroundDialog = false
-                markAskedBackground(context)
-                backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-            },
-            onSkip = {
-                showBackgroundDialog = false
-                markAskedBackground(context)
-            },
-        )
-    }
 }
 
 /** Full-width high-contrast status banner: bold text on a solid fill, readable in sunlight. */
@@ -497,21 +476,6 @@ private fun BigButton(
     }
 }
 
-@Composable
-private fun BackgroundPermissionDialog(onAllow: () -> Unit, onSkip: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onSkip,
-        title = { Text(stringResource(R.string.perm_bg_title)) },
-        text = { Text(stringResource(R.string.perm_bg_text)) },
-        confirmButton = {
-            DialogButton(stringResource(R.string.perm_bg_allow), onClick = onAllow)
-        },
-        dismissButton = {
-            DialogButton(stringResource(R.string.perm_bg_skip), onClick = onSkip)
-        },
-    )
-}
-
 private fun foregroundPermissions(): Array<String> {
     return arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -523,19 +487,3 @@ private fun foregroundPermissions(): Array<String> {
 private fun hasFineLocation(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
-
-private fun hasBackgroundLocation(context: Context): Boolean =
-    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
-        PackageManager.PERMISSION_GRANTED
-
-// We ask for background location at most once; after that the user manages it in system settings.
-private const val KEY_ASKED_BACKGROUND = "asked_background_location"
-
-private fun hasAskedBackground(context: Context): Boolean =
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        .getBoolean(KEY_ASKED_BACKGROUND, false)
-
-private fun markAskedBackground(context: Context) {
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        .edit { putBoolean(KEY_ASKED_BACKGROUND, true) }
-}

@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Removed the ACCESS_BACKGROUND_LOCATION permission and its dead-end one-shot dialog: the location foreground service is always started from the visible Tracking screen, so while-in-use permission already keeps recording alive in background and with the screen off.
 - Launcher icon: the adaptive foreground artwork is enlarged to 0.78 of the canvas.
 - Removed the obsolete emulator start script.
 - The map no longer draws a straight line across pauses or GPS outages: a track is split into recorded segments at time gaps, each segment is smoothed and drawn independently, and old rides get the same fix from their stored point times without any schema change.

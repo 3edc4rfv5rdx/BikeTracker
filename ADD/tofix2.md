@@ -68,7 +68,7 @@ Fix route geometry across discontinuities in `app/src/main/java/xx/biketracker/t
 
 Represent segment boundaries explicitly in persisted and live route data, with a Room migration and backward-compatible behavior for old trips. Draw and smooth each segment independently, never synthesize a connecting line, and make future GPX export emit separate track segments. Keep distance/moving-time behavior unchanged. Add tests for a short manual pause with movement, automatic pause/resume, a long GPS outage, old-schema data, single-point segments, and rendering input containing multiple segments.
 
-## 9. Medium: implement a valid API 33+ background-location permission flow
+## 9. FIXED (permission removed as unnecessary: the location FGS always starts from a visible activity, so while-in-use suffices): implement a valid API 33+ background-location permission flow
 
 **Prompt:**
 

@@ -43,10 +43,6 @@
     <string name="btn_stop_save">Стоп &amp; сохранить</string>
 
     <string name="perm_denied">Включите доступ к геолокации в Настройках чтобы записывать поездки</string>
-    <string name="perm_bg_title">Запись в фоне</string>
-    <string name="perm_bg_text">Разрешите доступ к геолокации всё время чтобы запись продолжалась при выключенном экране или переходе в другое приложение</string>
-    <string name="perm_bg_allow">Разрешить</string>
-    <string name="perm_bg_skip">Не сейчас</string>
 
     <string name="map_no_ride">Нет активной поездки</string>
     <string name="map_center_route">Центрировать на маршруте</string>

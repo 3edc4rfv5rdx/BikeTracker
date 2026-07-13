@@ -43,10 +43,6 @@
     <string name="btn_stop_save">Стоп &amp; зберегти</string>
 
     <string name="perm_denied">Увімкніть доступ до геолокації в Налаштуваннях щоб записувати поїздки</string>
-    <string name="perm_bg_title">Запис у фоні</string>
-    <string name="perm_bg_text">Дозвольте доступ до геолокації весь час щоб запис тривав коли екран вимкнено або ви перейшли в інший застосунок</string>
-    <string name="perm_bg_allow">Дозволити</string>
-    <string name="perm_bg_skip">Не зараз</string>
 
     <string name="map_no_ride">Немає активної поїздки</string>
     <string name="map_center_route">Центрувати на маршруті</string>

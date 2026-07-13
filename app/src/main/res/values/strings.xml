@@ -43,10 +43,6 @@
     <string name="btn_stop_save">Stop &amp; save</string>
 
     <string name="perm_denied">Enable location permission in Settings to record rides</string>
-    <string name="perm_bg_title">Keep recording in background</string>
-    <string name="perm_bg_text">Allow location all the time so recording continues when the screen is off or you switch to another app</string>
-    <string name="perm_bg_allow">Allow</string>
-    <string name="perm_bg_skip">Not now</string>
 
     <string name="map_no_ride">No active ride</string>
     <string name="map_center_route">Center on route</string>
