@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- The Exit button now refuses to close the app while a ride is recording or paused, explaining that the ride must be saved or discarded first, as SPEC.md always required.
 - Removed the ACCESS_BACKGROUND_LOCATION permission and its dead-end one-shot dialog: the location foreground service is always started from the visible Tracking screen, so while-in-use permission already keeps recording alive in background and with the screen off.
 - Launcher icon: the adaptive foreground artwork is enlarged to 0.78 of the canvas.
 - Removed the obsolete emulator start script.

@@ -67,6 +67,8 @@ import xx.biketracker.map.MapSelection
 import xx.biketracker.settings.AppSettings
 import xx.biketracker.settings.SettingsScreen
 import xx.biketracker.tracking.TrackingScreen
+import xx.biketracker.tracking.TrackingState
+import xx.biketracker.tracking.TrackingStatus
 import xx.biketracker.ui.BikeTrackerTheme
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.NavLabelStyle
@@ -141,6 +143,15 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     // The About button lives only on the Settings tab.
     var showAbout by remember { mutableStateOf(false) }
 
+    // Exit is blocked while a ride is active: the task would disappear yet the foreground
+    // service would keep recording, which reads as either a lost ride or a stuck app.
+    val trackingSnapshot by TrackingState.snapshot.collectAsState()
+    var showExitBlocked by remember { mutableStateOf(false) }
+    val rideActive = trackingSnapshot.status != TrackingStatus.IDLE
+    fun onExitRequested() {
+        if (rideActive) showExitBlocked = true else onExit()
+    }
+
     // Shared by the bottom bar and History's "show on map": switch tabs, keeping their state.
     fun navigateTo(tab: Destination) {
         navController.navigate(tab.route) {
@@ -158,7 +169,7 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                 title = { Text(stringResource(id = (currentTab ?: Destination.Tracking).labelRes())) },
                 navigationIcon = {
                     if (onTrackingTab) {
-                        IconButton(onClick = onExit) {
+                        IconButton(onClick = ::onExitRequested) {
                             Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.action_exit))
                         }
                     }
@@ -227,6 +238,19 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
             }
             composable(Destination.Settings.route) { SettingsScreen() }
         }
+    }
+
+    // Dismissing the dialog never exits: it closes on OK, on tap-outside, and — via rideActive
+    // below — quietly when the ride ends while it is still open.
+    if (showExitBlocked && rideActive) {
+        AlertDialog(
+            onDismissRequest = { showExitBlocked = false },
+            title = { Text(stringResource(id = R.string.exit_blocked_title)) },
+            text = { Text(stringResource(id = R.string.exit_blocked_text) + ".") },
+            confirmButton = {
+                DialogButton(stringResource(id = R.string.action_ok), onClick = { showExitBlocked = false })
+            }
+        )
     }
 
     if (showAbout) {

@@ -76,7 +76,7 @@ Correct the permission UX in `app/src/main/java/xx/biketracker/tracking/Tracking
 
 First decide from current Android foreground-service rules whether this app genuinely needs `ACCESS_BACKGROUND_LOCATION` when a location foreground service is started from a visible activity. If it is unnecessary, remove the permission and misleading flow. If it is required for supported workflows, implement the documented API 33+ educational screen and explicit navigation to app location settings, use the localized system label from `getBackgroundPermissionOptionLabel()`, re-check permission in `onResume`, allow decline, and provide a repeatable Settings entry instead of a one-shot flag. Do not claim background capability that was not granted. Keep English, Ukrainian, and Russian resources synchronized and add permission-state tests.
 
-## 10. Medium: block Exit while a ride is active as required by the product behavior
+## 10. FIXED: block Exit while a ride is active as required by the product behavior
 
 **Prompt:**
 

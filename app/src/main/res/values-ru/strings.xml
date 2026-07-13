@@ -7,6 +7,8 @@
     <string name="nav_history">История</string>
     <string name="nav_settings">Настройки</string>
     <string name="action_exit">Выход</string>
+    <string name="exit_blocked_title">Идёт поездка</string>
+    <string name="exit_blocked_text">Остановите и сохраните или отмените текущую поездку прежде чем выходить</string>
 
     <string name="unit_km">км</string>
     <string name="unit_kmh">км/ч</string>
