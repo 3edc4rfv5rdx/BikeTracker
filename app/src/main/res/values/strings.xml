@@ -55,6 +55,7 @@
     <string name="map_offline_title">Offline map</string>
     <string name="map_offline_hint">The last viewed map area will be downloaded for offline use</string>
     <string name="map_offline_regions">Downloaded areas</string>
+    <string name="map_offline_partial">Incomplete areas</string>
     <string name="map_offline_download">Download</string>
     <string name="map_offline_delete">Delete all</string>
     <string name="map_offline_done">Area downloaded</string>

@@ -92,7 +92,7 @@ Resolve the privacy/configuration mismatch between `README.md`, `app/src/main/An
 
 Choose and document a deliberate policy. Prefer excluding the location database (and MapLibre caches) from cloud backup while optionally retaining appropriate device-to-device transfer and non-sensitive preferences, or disable platform backup entirely if that matches the product promise. Do not accidentally exclude the user's explicit MediaStore ZIP backups, which are outside app-private backup domains. Add a small manifest/resource verification test or CI check and update the README to state the exact behavior rather than an ambiguous "no cloud" claim.
 
-## 12. Medium: make offline-region failure, retry, and dialog lifecycle behavior correct
+## 12. FIXED: make offline-region failure, retry, and dialog lifecycle behavior correct
 
 **Prompt:**
 

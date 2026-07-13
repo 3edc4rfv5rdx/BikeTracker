@@ -55,6 +55,7 @@
     <string name="map_offline_title">Офлайн-карта</string>
     <string name="map_offline_hint">Буде завантажено останню переглянуту область карти</string>
     <string name="map_offline_regions">Завантажено областей</string>
+    <string name="map_offline_partial">Незавершені області</string>
     <string name="map_offline_download">Завантажити</string>
     <string name="map_offline_delete">Видалити всі</string>
     <string name="map_offline_done">Область завантажена</string>

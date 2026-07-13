@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Offline map downloads are now owned by a process-level manager: reopening the dialog reconnects to live progress, retrying resumes the matching incomplete region instead of piling up duplicates, transient network errors are left to MapLibre's own retries with an explicit Cancel instead of a forced failure, Delete-all cancels an active download first, and the dialog reports complete and incomplete areas separately.
 - Platform backup is fully disabled to match the offline privacy promise: allowBackup is off and data-extraction rules exclude every domain from cloud backup and device transfer, so the location database can only leave the device as the user's own ZIP backup; a unit test guards the policy and README states the exact behavior.
 - The Exit button now refuses to close the app while a ride is recording or paused, explaining that the ride must be saved or discarded first, as SPEC.md always required.
 - Removed the ACCESS_BACKGROUND_LOCATION permission and its dead-end one-shot dialog: the location foreground service is always started from the visible Tracking screen, so while-in-use permission already keeps recording alive in background and with the screen off.
