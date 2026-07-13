@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Paused-state orange on the tracking screen (auto-pause banner, Resume button) softened to match the paused map arrow.
+- Map arrow shows ride state by color: orange while paused, red while the GPS signal is lost or weak.
+- Top-bar clock on the Tracking tab enlarged to the stats size.
+- Dialog buttons keep their labels on one line, so "Delete all" and "Download" no longer wrap.
 - About button in Settings is an outlined icon button, matching the History top-bar actions.
 - Ride date on the Map tab moved from a chip over the map into the top bar, in a lighter font.
 - Wall clock moved into the Tracking top bar; altitude takes its wide slot, and a new "Total time" stat (elapsed including pauses) sits in the grid.

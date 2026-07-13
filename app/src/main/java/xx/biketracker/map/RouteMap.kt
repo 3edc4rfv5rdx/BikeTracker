@@ -70,8 +70,15 @@ private const val ROUTE_BOUNDS_PADDING_PX = 64
 // Live-position puck: an arrow at the current fix, rotated to the heading of travel.
 private const val PUCK_SOURCE_ID = "ride-puck"
 private const val PUCK_LAYER_ID = "ride-puck-symbol"
-private const val PUCK_IMAGE_ID = "ride-puck-arrow"
 private const val PUCK_BEARING_KEY = "bearing"
+private const val PUCK_ICON_KEY = "icon"
+
+/** Tint of the live-position arrow: it flags a paused ride and GPS trouble by color. */
+enum class PuckState(internal val imageId: String, internal val drawableRes: Int) {
+    NORMAL("ride-puck-arrow", R.drawable.ic_map_puck),
+    PAUSED("ride-puck-arrow-paused", R.drawable.ic_map_puck_paused),
+    GPS_TROUBLE("ride-puck-arrow-trouble", R.drawable.ic_map_puck_trouble),
+}
 
 /**
  * Reusable MapLibre vector map with one route polyline — the Map tab shows the live ride or a
@@ -87,6 +94,7 @@ fun RouteMap(
     recenterKey: Any? = null,
     position: GeoPoint? = null,
     bearingDegrees: Float? = null,
+    puckState: PuckState = PuckState.NORMAL,
 ) {
     val context = LocalContext.current
 
@@ -151,12 +159,15 @@ fun RouteMap(
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 )
             )
-            // Puck on top of the track: an arrow image rotated per-feature to the heading.
-            puckBitmap(context)?.let { style.addImage(PUCK_IMAGE_ID, it) }
+            // Puck on top of the track: an arrow image rotated per-feature to the heading, with
+            // one registered image per tint; the feature picks its image by state.
+            PuckState.entries.forEach { state ->
+                puckBitmap(context, state.drawableRes)?.let { style.addImage(state.imageId, it) }
+            }
             style.addSource(GeoJsonSource(PUCK_SOURCE_ID))
             style.addLayer(
                 SymbolLayer(PUCK_LAYER_ID, PUCK_SOURCE_ID).withProperties(
-                    PropertyFactory.iconImage(PUCK_IMAGE_ID),
+                    PropertyFactory.iconImage(Expression.get(PUCK_ICON_KEY)),
                     PropertyFactory.iconRotate(Expression.get(PUCK_BEARING_KEY)),
                     PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                     PropertyFactory.iconAllowOverlap(true),
@@ -202,7 +213,7 @@ fun RouteMap(
     }
 
     // Move the puck to the current fix (empty when there is no live position).
-    LaunchedEffect(position, bearingDegrees, styleEpoch) {
+    LaunchedEffect(position, bearingDegrees, puckState, styleEpoch) {
         val map = mapInstance ?: return@LaunchedEffect
         val source = map.style?.getSourceAs<GeoJsonSource>(PUCK_SOURCE_ID) ?: return@LaunchedEffect
         if (position == null) {
@@ -210,6 +221,7 @@ fun RouteMap(
         } else {
             val feature = Feature.fromGeometry(Point.fromLngLat(position.lon, position.lat))
             feature.addNumberProperty(PUCK_BEARING_KEY, bearingDegrees ?: 0f)
+            feature.addStringProperty(PUCK_ICON_KEY, puckState.imageId)
             source.setGeoJson(feature)
             // Keep the arrow on screen: a fix outside the viewed area shifts the map to it at
             // the current zoom. A hand-panned map is left alone while the arrow stays visible.
@@ -248,9 +260,9 @@ fun RouteMap(
     }
 }
 
-/** Rasterize the puck vector drawable into a bitmap the MapLibre style can register as an image. */
-private fun puckBitmap(context: android.content.Context): Bitmap? {
-    val drawable = ContextCompat.getDrawable(context, R.drawable.ic_map_puck) ?: return null
+/** Rasterize a puck vector drawable into a bitmap the MapLibre style can register as an image. */
+private fun puckBitmap(context: android.content.Context, drawableRes: Int): Bitmap? {
+    val drawable = ContextCompat.getDrawable(context, drawableRes) ?: return null
     val bitmap = Bitmap.createBitmap(
         drawable.intrinsicWidth,
         drawable.intrinsicHeight,

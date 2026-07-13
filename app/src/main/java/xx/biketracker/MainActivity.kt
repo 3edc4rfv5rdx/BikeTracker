@@ -236,8 +236,8 @@ private fun TopBarClock() {
     val seconds = full.substringAfterLast(':')
     Text(
         text = buildAnnotatedString {
-            withStyle(SpanStyle(fontSize = 24.sp)) { append(hoursMinutes) }
-            withStyle(SpanStyle(fontSize = 16.sp)) { append(":$seconds") }
+            withStyle(SpanStyle(fontSize = 42.sp)) { append(hoursMinutes) }
+            withStyle(SpanStyle(fontSize = 26.sp)) { append(":$seconds") }
         },
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(end = 16.dp),

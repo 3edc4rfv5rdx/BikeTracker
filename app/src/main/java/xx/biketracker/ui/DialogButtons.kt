@@ -29,7 +29,7 @@ fun DialogButton(
         } else {
             ButtonDefaults.buttonColors()
         },
-    ) { Text(text) }
+    ) { Text(text, maxLines = 1, softWrap = false) }
 }
 
 /**

@@ -36,9 +36,9 @@ import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
-import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.KeepScreenOnWhile
+import xx.biketracker.ui.PausedOrange
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import xx.biketracker.ACCURACY_THRESHOLD_M
 import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.PREFS_NAME
 import xx.biketracker.R
@@ -164,8 +163,7 @@ fun TrackingScreen() {
     // GPS trouble: fixes rejected by the accuracy filter, or none arriving at all.
     val gpsAccuracy = snapshot.gpsAccuracyMeters
     val gpsStale = nowMillis - snapshot.updatedAtWall > GPS_STALE_MS
-    val gpsTrouble = snapshot.status != TrackingStatus.IDLE &&
-        (gpsStale || gpsAccuracy == null || gpsAccuracy > ACCURACY_THRESHOLD_M)
+    val gpsTrouble = snapshot.hasGpsTrouble(nowMillis)
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -221,7 +219,7 @@ fun TrackingScreen() {
             if (snapshot.status == TrackingStatus.PAUSED && snapshot.pausedAutomatically) {
                 StatusBanner(
                     stringResource(R.string.track_auto_paused),
-                    AccentOrange,
+                    PausedOrange,
                     Color.Black,
                     Modifier.padding(horizontal = 16.dp),
                 )
@@ -421,7 +419,7 @@ private fun Controls(
             onClick = primaryAction,
             modifier = Modifier.weight(1f),
             // Paused is easy to miss otherwise — flag it with the accent color.
-            containerColor = if (status == TrackingStatus.PAUSED) AccentOrange else null,
+            containerColor = if (status == TrackingStatus.PAUSED) PausedOrange else null,
         )
         // Tap saves; a long-press stops without saving. The transparent overlay carries both
         // gestures so the tonal button keeps its Material look and shaped ripple.

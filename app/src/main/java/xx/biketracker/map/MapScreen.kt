@@ -18,11 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
 import xx.biketracker.data.AppDatabase
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
+import xx.biketracker.tracking.hasGpsTrouble
 import xx.biketracker.ui.KeepScreenOnWhile
 
 /**
@@ -53,6 +55,21 @@ fun MapScreen() {
     val live = selected == null && snapshot.status != TrackingStatus.IDLE
     val puckPosition = if (live) snapshot.route.lastOrNull() else null
 
+    // GPS staleness must surface even when no fixes arrive to recompose us, so tick locally.
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(live) {
+        while (live) {
+            nowMillis = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val puckState = when {
+        !live -> PuckState.NORMAL
+        snapshot.hasGpsTrouble(nowMillis) -> PuckState.GPS_TROUBLE
+        snapshot.status == TrackingStatus.PAUSED -> PuckState.PAUSED
+        else -> PuckState.NORMAL
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         RouteMap(
             route = route,
@@ -60,6 +77,7 @@ fun MapScreen() {
             recenterKey = selected?.id,
             position = puckPosition,
             bearingDegrees = if (live) snapshot.bearingDegrees else null,
+            puckState = puckState,
         )
 
         if (selected == null && snapshot.route.isEmpty()) {

@@ -1,5 +1,7 @@
 package xx.biketracker.tracking
 
+import xx.biketracker.ACCURACY_THRESHOLD_M
+import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +27,13 @@ data class TrackingSnapshot(
     val updatedAtWall: Long = 0L, // System wall clock when this snapshot was published
     val route: List<GeoPoint> = emptyList(),
 )
+
+/** True while a ride is active but the fixes are stale, missing, or too inaccurate to trust. */
+fun TrackingSnapshot.hasGpsTrouble(nowMillis: Long): Boolean =
+    status != TrackingStatus.IDLE &&
+        (nowMillis - updatedAtWall > GPS_STALE_MS ||
+            gpsAccuracyMeters == null ||
+            gpsAccuracyMeters > ACCURACY_THRESHOLD_M)
 
 /**
  * Process-wide holder so the UI can observe tracking state without binding to the
