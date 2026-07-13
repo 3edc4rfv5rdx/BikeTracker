@@ -94,28 +94,46 @@ private fun backupFileName(now: Long = System.currentTimeMillis()): String =
  * Must run off the main thread.
  */
 suspend fun backupDatabase(context: Context): String = withContext(Dispatchers.IO) {
-    AppDatabase.get(context).checkpoint()
-    val source = AppDatabase.databaseFile(context)
+    DatabaseMaintenance.withMaintenance(DatabaseMaintenanceOperation.BACKUP) {
+        AppDatabase.get(context).checkpoint()
+        val source = AppDatabase.databaseFile(context)
 
-    val name = backupFileName()
-    val values = ContentValues().apply {
-        put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-        put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
-        put(MediaStore.MediaColumns.RELATIVE_PATH, BACKUP_DIR)
-    }
-    val resolver = context.contentResolver
-    val target = resolver.insert(MediaStore.Files.getContentUri("external"), values)
-        ?: error("Cannot create backup file")
-
-    resolver.openOutputStream(target)?.use { out ->
-        ZipOutputStream(out).use { zip ->
-            zip.putNextEntry(ZipEntry(DB_ENTRY_NAME))
-            source.inputStream().use { it.copyTo(zip) }
-            zip.closeEntry()
+        val name = backupFileName()
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, BACKUP_DIR)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
-    } ?: error("Cannot open output stream")
+        val resolver = context.contentResolver
+        var target: Uri? = null
+        try {
+            target = resolver.insert(MediaStore.Files.getContentUri("external"), values)
+                ?: error("Cannot create backup file")
+            resolver.openOutputStream(target)?.use { out ->
+                ZipOutputStream(out).use { zip ->
+                    zip.putNextEntry(ZipEntry(DB_ENTRY_NAME))
+                    source.inputStream().use { input ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            zip.write(buffer, 0, count)
+                        }
+                    }
+                    zip.closeEntry()
+                }
+            } ?: error("Cannot open output stream")
+            val published = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            check(resolver.update(target, published, null, null) == 1) { "Cannot publish backup file" }
+        } catch (failure: Throwable) {
+            target?.let { resolver.delete(it, null, null) }
+            throw failure
+        }
 
-    "$BACKUP_DIR/$name"
+        "$BACKUP_DIR/$name"
+    }
 }
 
 /**
@@ -124,27 +142,29 @@ suspend fun backupDatabase(context: Context): String = withContext(Dispatchers.I
  * caller must recreate its UI (the Room instance was reopened fresh).
  */
 suspend fun restoreDatabase(context: Context, source: Uri): Unit = withContext(Dispatchers.IO) {
-    val databaseDir = AppDatabase.databaseFile(context).parentFile
-        ?: error("Database directory is unavailable")
-    check(databaseDir.mkdirs() || databaseDir.isDirectory) { "Cannot create database directory" }
-    // Same directory means both commit renames remain on one filesystem and can be atomic.
-    val staged = File.createTempFile(".restore-candidate-", ".db", databaseDir)
-    try {
-        extractDatabase(context, source, staged)
-        validateAndMigrateStagedDatabase(context, staged)
+    // Join before taking the maintenance mutex: recovery performs writes through the same gate.
+    recoveryJob?.join()
+    DatabaseMaintenance.withMaintenance(DatabaseMaintenanceOperation.RESTORE) {
+        val databaseDir = AppDatabase.databaseFile(context).parentFile
+            ?: error("Database directory is unavailable")
+        check(databaseDir.mkdirs() || databaseDir.isDirectory) { "Cannot create database directory" }
+        // Same directory means both commit renames remain on one filesystem and can be atomic.
+        val staged = File.createTempFile(".restore-candidate-", ".db", databaseDir)
+        try {
+            extractDatabase(context, source, staged)
+            validateAndMigrateStagedDatabase(context, staged)
 
-        // The launch-time recovery pass may still be querying; closing under it would crash.
-        recoveryJob?.join()
-        require(xx.biketracker.tracking.TrackingState.snapshot.value.status ==
-            xx.biketracker.tracking.TrackingStatus.IDLE) { "Ride is active" }
+            require(xx.biketracker.tracking.TrackingState.snapshot.value.status ==
+                xx.biketracker.tracking.TrackingStatus.IDLE) { "Ride is active" }
 
-        // Once the live database is closed, cancellation must not strand a truncated/missing file.
-        withContext(NonCancellable) {
-            commitStagedDatabase(context, staged)
+            // Once the live database is closed, cancellation must not strand a truncated/missing file.
+            withContext(NonCancellable) {
+                commitStagedDatabase(context, staged)
+            }
+        } finally {
+            staged.delete()
+            AppDatabase.deleteSidecars(staged)
         }
-    } finally {
-        staged.delete()
-        AppDatabase.deleteSidecars(staged)
     }
 }
 

@@ -78,10 +78,12 @@
     <string name="restore_confirm_title">Замінити всі дані</string>
     <string name="restore_confirm_text">Відновлення замінить усі поточні поїздки</string>
     <string name="backup_saved">Резервну копію збережено</string>
+    <string name="backup_in_progress">Створення резервної копії</string>
     <string name="backup_restored">Резервну копію відновлено</string>
     <string name="restore_in_progress">Відновлення даних</string>
     <string name="backup_failed">Не вдалося виконати</string>
     <string name="backup_ride_active">Спочатку зупиніть поїздку</string>
+    <string name="database_busy">Триває операція з даними</string>
 
     <string name="history_empty">Поїздок ще немає</string>
     <string name="history_today">Сьогодні</string>

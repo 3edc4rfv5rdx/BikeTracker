@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Database backup/restore now uses one maintenance gate shared with ride drafts, recovery, final saves, discards, and history deletion; backups copy a checkpointed write-frozen snapshot, partial MediaStore files are removed on failure/cancellation, and ride starts or stale destructive actions cannot race maintenance.
 - Database restore is now cancellation-safe and atomic: backups are size/integrity/schema checked and migrated before use, the previous database is retained until Room opens the replacement, interrupted swaps roll back on the next launch, and leaving Settings no longer cancels an in-progress restore.
 - Stop button: discard long-press slowed to 1.5 s, label is "Stop & save" centered on two lines, and the fill is a lighter grey in the dark theme.
 - Tracking screen: the km/h unit joined the Speed caption above the digits, and the altitude block sits right under the stats with the same gap as between the stat rows.

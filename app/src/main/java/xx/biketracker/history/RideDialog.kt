@@ -25,9 +25,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import android.widget.Toast
 import xx.biketracker.R
 import xx.biketracker.avgSpeedMps
 import xx.biketracker.data.AppDatabase
+import xx.biketracker.data.DatabaseMaintenance
 import xx.biketracker.data.Trip
 import xx.biketracker.formatClock
 import xx.biketracker.formatDate
@@ -47,9 +49,9 @@ import kotlin.math.roundToInt
 @Composable
 fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
     val context = LocalContext.current
-    val dao = remember { AppDatabase.get(context).tripDao() }
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
+    val databaseBusyMessage = stringResource(R.string.database_busy)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -112,9 +114,15 @@ fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
                     onClick = {
                         confirmDelete = false
                         scope.launch {
-                            dao.deleteTrip(trip)
-                            MapSelection.clearIf(trip.id) // the Map tab must not keep a deleted ride
-                            onDeleted()
+                            val deleted = DatabaseMaintenance.tryWrite {
+                                AppDatabase.get(context).tripDao().deleteTrip(trip)
+                            }
+                            if (deleted) {
+                                MapSelection.clearIf(trip.id) // the Map tab must not keep a deleted ride
+                                onDeleted()
+                            } else {
+                                Toast.makeText(context, databaseBusyMessage, Toast.LENGTH_LONG).show()
+                            }
                         }
                     },
                 )

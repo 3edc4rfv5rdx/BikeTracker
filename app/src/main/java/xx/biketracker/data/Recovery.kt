@@ -23,22 +23,24 @@ var recoveryJob: Job? = null
 suspend fun finalizeAbandonedTrips(context: Context, startedBefore: Long) {
     // A live service in this process owns its draft; never touch it.
     if (TrackingState.snapshot.value.status != TrackingStatus.IDLE) return
-    val dao = AppDatabase.get(context).tripDao()
-    for (trip in dao.getUnfinishedTrips()) {
-        if (trip.startTime >= startedBefore) continue
-        val points = dao.getPoints(trip.id)
-        if (points.size >= 2 && trip.distanceMeters > 0) {
-            val altitudes = points.map { it.altitudeMeters }
-            dao.updateTrip(
-                trip.copy(
-                    endTime = points.last().time,
-                    avgGpsSpeedMps = points.map { it.speedMps.toDouble() }.average(),
-                    elevationGainMeters = if (altitudes.any { it != null }) elevationGainMeters(altitudes) else null,
-                    finished = true,
+    DatabaseMaintenance.withWrite {
+        val dao = AppDatabase.get(context).tripDao()
+        for (trip in dao.getUnfinishedTrips()) {
+            if (trip.startTime >= startedBefore) continue
+            val points = dao.getPoints(trip.id)
+            if (points.size >= 2 && trip.distanceMeters > 0) {
+                val altitudes = points.map { it.altitudeMeters }
+                dao.updateTrip(
+                    trip.copy(
+                        endTime = points.last().time,
+                        avgGpsSpeedMps = points.map { it.speedMps.toDouble() }.average(),
+                        elevationGainMeters = if (altitudes.any { it != null }) elevationGainMeters(altitudes) else null,
+                        finished = true,
+                    )
                 )
-            )
-        } else {
-            dao.deleteTripById(trip.id) // cascade removes any flushed points
+            } else {
+                dao.deleteTripById(trip.id) // cascade removes any flushed points
+            }
         }
     }
 }

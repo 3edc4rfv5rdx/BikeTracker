@@ -37,6 +37,8 @@ import kotlinx.coroutines.launch
 import xx.biketracker.R
 import xx.biketracker.data.backupDatabase
 import xx.biketracker.data.DatabaseRestoreCoordinator
+import xx.biketracker.data.DatabaseMaintenance
+import xx.biketracker.data.DatabaseMaintenanceOperation
 import xx.biketracker.data.RestoreOperationState
 import xx.biketracker.map.OfflineMapDialog
 import xx.biketracker.tracking.TrackingState
@@ -56,6 +58,8 @@ fun SettingsScreen() {
     val tracking by TrackingState.snapshot.collectAsState()
     val restoreState by DatabaseRestoreCoordinator.state.collectAsState()
     val restoreRunning = restoreState == RestoreOperationState.Running
+    val maintenanceOperation by DatabaseMaintenance.operation.collectAsState()
+    val maintenanceRunning = maintenanceOperation != DatabaseMaintenanceOperation.NONE
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
 
@@ -102,8 +106,12 @@ fun SettingsScreen() {
 
         SectionHeader(stringResource(R.string.settings_data_section))
         NavRow(
-            label = stringResource(R.string.btn_backup),
-            enabled = !restoreRunning,
+            label = if (maintenanceOperation == DatabaseMaintenanceOperation.BACKUP) {
+                stringResource(R.string.backup_in_progress)
+            } else {
+                stringResource(R.string.btn_backup)
+            },
+            enabled = !restoreRunning && !maintenanceRunning,
             onClick = {
                 if (!refuseIfRideActive()) scope.launch {
                     runCatching { backupDatabase(context) }
@@ -118,7 +126,7 @@ fun SettingsScreen() {
             } else {
                 stringResource(R.string.btn_restore)
             },
-            enabled = !restoreRunning,
+            enabled = !restoreRunning && !maintenanceRunning,
             onClick = { if (!refuseIfRideActive()) showRestoreConfirm = true },
         )
     }

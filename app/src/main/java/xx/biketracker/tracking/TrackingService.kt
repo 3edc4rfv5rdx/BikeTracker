@@ -52,6 +52,7 @@ import xx.biketracker.haversineMeters
 import xx.biketracker.MainActivity
 import xx.biketracker.R
 import xx.biketracker.data.AppDatabase
+import xx.biketracker.data.DatabaseMaintenance
 import xx.biketracker.data.DatabaseRestoreCoordinator
 import xx.biketracker.data.RestoreOperationState
 import xx.biketracker.data.TrackPoint
@@ -99,6 +100,7 @@ class TrackingService : Service() {
     // Guards stopAndSave so a manual Stop racing with the pause auto-save (on
     // different threads) can't persist the same ride twice.
     private val stopping = AtomicBoolean(false)
+    private var ownsRideReservation = false
 
     // Incremental persistence: a draft Trip row is created at start, and recorded points plus
     // running aggregates are flushed into it in batches, so a process death loses at most the
@@ -142,7 +144,13 @@ class TrackingService : Service() {
             stopSelf()
             return
         }
+        if (!DatabaseMaintenance.reserveRide()) {
+            stopSelf()
+            return
+        }
+        ownsRideReservation = true
         if (!hasLocationPermission()) {
+            releaseRideReservation()
             stopSelf()
             return
         }
@@ -155,16 +163,18 @@ class TrackingService : Service() {
         status = TrackingStatus.RECORDING
         startTime = System.currentTimeMillis()
         draftTrip = scope.async {
-            AppDatabase.get(applicationContext).tripDao().insertTrip(
-                Trip(
-                    startTime = startTime,
-                    endTime = startTime,
-                    distanceMeters = 0.0,
-                    movingTimeMillis = 0L,
-                    maxSpeedMps = 0.0,
-                    finished = false,
+            DatabaseMaintenance.withWrite {
+                AppDatabase.get(applicationContext).tripDao().insertTrip(
+                    Trip(
+                        startTime = startTime,
+                        endTime = startTime,
+                        distanceMeters = 0.0,
+                        movingTimeMillis = 0L,
+                        maxSpeedMps = 0.0,
+                        finished = false,
+                    )
                 )
-            )
+            }
         }
         requestUpdates()
         publish()
@@ -338,19 +348,21 @@ class TrackingService : Service() {
             prev?.join()
             val id = draft.await()
             val db = AppDatabase.get(applicationContext)
-            db.withTransaction {
-                db.tripDao().insertPoints(slice.map { it.copy(tripId = id) })
-                db.tripDao().updateTrip(
-                    Trip(
-                        id = id,
-                        startTime = tripStart,
-                        endTime = tripEnd,
-                        distanceMeters = tripDistance,
-                        movingTimeMillis = tripMovingTime,
-                        maxSpeedMps = tripMaxSpeed,
-                        finished = false,
+            DatabaseMaintenance.withWrite {
+                db.withTransaction {
+                    db.tripDao().insertPoints(slice.map { it.copy(tripId = id) })
+                    db.tripDao().updateTrip(
+                        Trip(
+                            id = id,
+                            startTime = tripStart,
+                            endTime = tripEnd,
+                            distanceMeters = tripDistance,
+                            movingTimeMillis = tripMovingTime,
+                            maxSpeedMps = tripMaxSpeed,
+                            finished = false,
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -374,7 +386,9 @@ class TrackingService : Service() {
                         val id = draft?.await()
                         if (id != null) {
                             prevFlush?.join()
-                            AppDatabase.get(applicationContext).tripDao().deleteTripById(id)
+                            DatabaseMaintenance.withWrite {
+                                AppDatabase.get(applicationContext).tripDao().deleteTripById(id)
+                            }
                         }
                     } finally {
                         withContext(Dispatchers.Main) { finishService() }
@@ -407,24 +421,26 @@ class TrackingService : Service() {
                     if (id != null) {
                         prevFlush?.join() // pending flushes must not overtake the final write
                         val db = AppDatabase.get(applicationContext)
-                        db.withTransaction {
-                            if (recorded.size >= 2 && tripDistance > 0) {
-                                db.tripDao().insertPoints(unflushed.map { it.copy(tripId = id) })
-                                db.tripDao().updateTrip(
-                                    Trip(
-                                        id = id,
-                                        startTime = tripStart,
-                                        endTime = tripEnd,
-                                        distanceMeters = tripDistance,
-                                        movingTimeMillis = tripMovingTime,
-                                        maxSpeedMps = tripMaxSpeed,
-                                        avgGpsSpeedMps = tripAvgGps,
-                                        elevationGainMeters = tripElevationGain,
-                                        finished = true,
+                        DatabaseMaintenance.withWrite {
+                            db.withTransaction {
+                                if (recorded.size >= 2 && tripDistance > 0) {
+                                    db.tripDao().insertPoints(unflushed.map { it.copy(tripId = id) })
+                                    db.tripDao().updateTrip(
+                                        Trip(
+                                            id = id,
+                                            startTime = tripStart,
+                                            endTime = tripEnd,
+                                            distanceMeters = tripDistance,
+                                            movingTimeMillis = tripMovingTime,
+                                            maxSpeedMps = tripMaxSpeed,
+                                            avgGpsSpeedMps = tripAvgGps,
+                                            elevationGainMeters = tripElevationGain,
+                                            finished = true,
+                                        )
                                     )
-                                )
-                            } else {
-                                db.tripDao().deleteTripById(id) // cascade removes any flushed points
+                                } else {
+                                    db.tripDao().deleteTripById(id) // cascade removes flushed points
+                                }
                             }
                         }
                     }
@@ -440,6 +456,7 @@ class TrackingService : Service() {
     private fun finishService() {
         TrackingState.reset()
         status = TrackingStatus.IDLE
+        releaseRideReservation()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -551,7 +568,15 @@ class TrackingService : Service() {
             fusedClient.removeLocationUpdates(locationCallback)
         }
         scope.cancel()
+        releaseRideReservation()
         super.onDestroy()
+    }
+
+    private fun releaseRideReservation() {
+        if (ownsRideReservation) {
+            ownsRideReservation = false
+            DatabaseMaintenance.releaseRide()
+        }
     }
 
     private fun hasLocationPermission(): Boolean =
