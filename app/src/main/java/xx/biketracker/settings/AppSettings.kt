@@ -3,6 +3,7 @@ package xx.biketracker.settings
 import android.app.LocaleManager
 import android.content.Context
 import android.os.LocaleList
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,7 +40,7 @@ object AppSettings {
 
     fun setThemeMode(context: Context, mode: ThemeMode) {
         _themeMode.value = mode
-        prefs(context).edit().putString(KEY_THEME, mode.name).apply()
+        prefs(context).edit { putString(KEY_THEME, mode.name) }
     }
 
     /** The language currently applied via per-app locales. */

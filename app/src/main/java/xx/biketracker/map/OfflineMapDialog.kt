@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -29,7 +30,7 @@ import xx.biketracker.ui.DialogButtonRow
 @Composable
 fun OfflineMapDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    var regionCount by remember { mutableStateOf(-1) }
+    var regionCount by remember { mutableIntStateOf(-1) }
     var progress by remember { mutableStateOf<Int?>(null) }
     val deletedMessage = stringResource(R.string.map_offline_deleted)
     val downloadedMessage = stringResource(R.string.map_offline_done)

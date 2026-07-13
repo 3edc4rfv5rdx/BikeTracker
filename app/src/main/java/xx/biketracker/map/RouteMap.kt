@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -25,6 +26,7 @@ import android.graphics.Canvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.createBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -106,7 +108,7 @@ fun RouteMap(
     var gestureInProgress by remember { mutableStateOf(false) }
     // Bumped after every style (re)load — a style swap drops all layers, so the route effect
     // below must re-add its data once the new style is ready.
-    var styleEpoch by remember { mutableStateOf(0) }
+    var styleEpoch by remember { mutableIntStateOf(0) }
 
     // Forward the lifecycle to the MapView (adding the observer replays CREATE..RESUME).
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -285,10 +287,9 @@ fun RouteMap(
 /** Rasterize a puck vector drawable into a bitmap the MapLibre style can register as an image. */
 private fun puckBitmap(context: android.content.Context, drawableRes: Int): Bitmap? {
     val drawable = ContextCompat.getDrawable(context, drawableRes) ?: return null
-    val bitmap = Bitmap.createBitmap(
+    val bitmap = createBitmap(
         drawable.intrinsicWidth,
         drawable.intrinsicHeight,
-        Bitmap.Config.ARGB_8888,
     )
     val canvas = Canvas(bitmap)
     drawable.setBounds(0, 0, canvas.width, canvas.height)

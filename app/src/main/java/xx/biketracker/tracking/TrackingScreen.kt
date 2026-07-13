@@ -3,7 +3,6 @@ package xx.biketracker.tracking
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -62,6 +61,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xx.biketracker.GPS_STALE_MS
@@ -513,14 +513,11 @@ private fun BackgroundPermissionDialog(onAllow: () -> Unit, onSkip: () -> Unit) 
 }
 
 private fun foregroundPermissions(): Array<String> {
-    val perms = mutableListOf(
+    return arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.POST_NOTIFICATIONS,
     )
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        perms += Manifest.permission.POST_NOTIFICATIONS
-    }
-    return perms.toTypedArray()
 }
 
 private fun hasFineLocation(context: Context): Boolean =
@@ -528,8 +525,7 @@ private fun hasFineLocation(context: Context): Boolean =
         PackageManager.PERMISSION_GRANTED
 
 private fun hasBackgroundLocation(context: Context): Boolean =
-    Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
 // We ask for background location at most once; after that the user manages it in system settings.
@@ -541,7 +537,5 @@ private fun hasAskedBackground(context: Context): Boolean =
 
 private fun markAskedBackground(context: Context) {
     context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        .edit()
-        .putBoolean(KEY_ASKED_BACKGROUND, true)
-        .apply()
+        .edit { putBoolean(KEY_ASKED_BACKGROUND, true) }
 }

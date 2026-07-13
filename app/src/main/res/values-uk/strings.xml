@@ -31,13 +31,11 @@
     <string name="stat_time">Час</string>
     <string name="stat_total_time">Загальний час</string>
     <string name="stat_avg_speed">Сер. швидкість</string>
-    <string name="stat_avg_speed_gps">Сер.GPS швидкість</string>
     <string name="stat_max_speed">Макс. швидкість</string>
     <string name="stat_pace">Темп</string>
     <string name="unit_pace">хв/км</string>
     <string name="stat_altitude">Висота</string>
     <string name="stat_elevation_gain">Набір висоти</string>
-    <string name="stat_clock">Годинник</string>
 
     <string name="btn_start">Старт</string>
     <string name="btn_pause">Пауза</string>

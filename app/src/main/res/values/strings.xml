@@ -31,13 +31,11 @@
     <string name="stat_time">Time</string>
     <string name="stat_total_time">Total time</string>
     <string name="stat_avg_speed">Avg speed</string>
-    <string name="stat_avg_speed_gps">Avg GPS speed</string>
     <string name="stat_max_speed">Max speed</string>
     <string name="stat_pace">Pace</string>
     <string name="unit_pace">min/km</string>
     <string name="stat_altitude">Altitude</string>
     <string name="stat_elevation_gain">Elevation gain</string>
-    <string name="stat_clock">Clock</string>
 
     <string name="btn_start">Start</string>
     <string name="btn_pause">Pause</string>
