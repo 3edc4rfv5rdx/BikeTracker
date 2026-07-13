@@ -60,6 +60,7 @@ const val MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 
 // Map-only tuning; the shared tracking/units constants live in Common.kt.
 private const val RIDE_ZOOM = 16.0
+private const val MAX_ZOOM = 19.0
 private const val ROUTE_SOURCE_ID = "ride-route"
 private const val ROUTE_LAYER_ID = "ride-route-line"
 private const val ROUTE_LINE_WIDTH = 4f
@@ -71,7 +72,6 @@ private const val ROUTE_BOUNDS_PADDING_PX = 64
 private const val PUCK_SOURCE_ID = "ride-puck"
 private const val PUCK_LAYER_ID = "ride-puck-symbol"
 private const val PUCK_BEARING_KEY = "bearing"
-private const val PUCK_ICON_KEY = "icon"
 
 /** Tint of the live-position arrow: it flags a paused ride and GPS trouble by color. */
 enum class PuckState(internal val imageId: String, internal val drawableRes: Int) {
@@ -132,6 +132,9 @@ fun RouteMap(
 
     LaunchedEffect(Unit) {
         mapView.getMapAsync { map ->
+            // Hard ceiling for hand zooming: past this the overscale factor over maxzoom-14
+            // vector tiles starts multiplying symbol-layout anchors (see centerOnRoute).
+            map.setMaxZoomPreference(MAX_ZOOM)
             // Remember the viewed area; Settings offers it as the offline download region.
             map.addOnCameraIdleListener {
                 gestureInProgress = false
@@ -160,14 +163,17 @@ fun RouteMap(
                 )
             )
             // Puck on top of the track: an arrow image rotated per-feature to the heading, with
-            // one registered image per tint; the feature picks its image by state.
+            // one registered image per tint. The active image is a plain layer property switched
+            // on state changes — a data-driven iconImage expression made MapLibre re-layout the
+            // symbol every animation frame and leak native memory at ~500 MB/s until the OS
+            // killed the app.
             PuckState.entries.forEach { state ->
                 puckBitmap(context, state.drawableRes)?.let { style.addImage(state.imageId, it) }
             }
             style.addSource(GeoJsonSource(PUCK_SOURCE_ID))
             style.addLayer(
                 SymbolLayer(PUCK_LAYER_ID, PUCK_SOURCE_ID).withProperties(
-                    PropertyFactory.iconImage(Expression.get(PUCK_ICON_KEY)),
+                    PropertyFactory.iconImage(PuckState.NORMAL.imageId),
                     PropertyFactory.iconRotate(Expression.get(PUCK_BEARING_KEY)),
                     PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                     PropertyFactory.iconAllowOverlap(true),
@@ -178,18 +184,29 @@ fun RouteMap(
         }
     }
 
+    // Never zoom in past RIDE_ZOOM when framing a route: a short (young) ride makes
+    // newLatLngBounds pick z20+, where vector tiles (source maxzoom 14) get laid out with a
+    // 2^(zoom-14) overscale factor that divides the symbol spacing — street labels of a dense
+    // tile then explode into millions of anchors, allocating gigabytes of native heap within
+    // seconds (LOW_MEMORY kill on 2 GB devices, minutes of grey unrendered map elsewhere).
     fun centerOnRoute() {
         val map = mapInstance ?: return
         when {
             route.isEmpty() -> return
-            route.size == 1 -> map.animateCamera(
+            route.size == 1 -> map.moveCamera(
                 CameraUpdateFactory.newLatLngZoom(LatLng(route.first().lat, route.first().lon), RIDE_ZOOM)
             )
             else -> {
                 val bounds = LatLngBounds.Builder()
                     .apply { route.forEach { include(LatLng(it.lat, it.lon)) } }
                     .build()
-                map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, ROUTE_BOUNDS_PADDING_PX))
+                val pad = ROUTE_BOUNDS_PADDING_PX
+                val fitted = map.getCameraForLatLngBounds(bounds, intArrayOf(pad, pad, pad, pad))
+                if (fitted == null || fitted.zoom > RIDE_ZOOM) {
+                    map.moveCamera(CameraUpdateFactory.newLatLngZoom(bounds.center, RIDE_ZOOM))
+                } else {
+                    map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, pad))
+                }
             }
         }
     }
@@ -212,8 +229,14 @@ fun RouteMap(
         }
     }
 
+    // Recolor the arrow on state changes by swapping the layer's icon image.
+    LaunchedEffect(puckState, styleEpoch) {
+        val layer = mapInstance?.style?.getLayer(PUCK_LAYER_ID) as? SymbolLayer ?: return@LaunchedEffect
+        layer.setProperties(PropertyFactory.iconImage(puckState.imageId))
+    }
+
     // Move the puck to the current fix (empty when there is no live position).
-    LaunchedEffect(position, bearingDegrees, puckState, styleEpoch) {
+    LaunchedEffect(position, bearingDegrees, styleEpoch) {
         val map = mapInstance ?: return@LaunchedEffect
         val source = map.style?.getSourceAs<GeoJsonSource>(PUCK_SOURCE_ID) ?: return@LaunchedEffect
         if (position == null) {
@@ -221,7 +244,6 @@ fun RouteMap(
         } else {
             val feature = Feature.fromGeometry(Point.fromLngLat(position.lon, position.lat))
             feature.addNumberProperty(PUCK_BEARING_KEY, bearingDegrees ?: 0f)
-            feature.addStringProperty(PUCK_ICON_KEY, puckState.imageId)
             source.setGeoJson(feature)
             // Keep the arrow on screen: a fix outside the viewed area shifts the map to it at
             // the current zoom. A hand-panned map is left alone while the arrow stays visible.

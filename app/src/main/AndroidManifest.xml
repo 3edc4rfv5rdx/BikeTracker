@@ -20,6 +20,9 @@
         android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.BikeTracker">
 
+        <!-- Lets shell tools (heapprofd/perfetto) profile release builds; no effect otherwise. -->
+        <profileable android:shell="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

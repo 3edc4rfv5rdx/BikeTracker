@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed the app being killed by the system when opening the map early in a ride: framing a short route zoomed past the tile source's maxzoom, where MapLibre symbol layout multiplies street-label anchors by the overscale factor and allocates gigabytes; route centering is now capped at z16 and hand zoom at z19.
+- Map arrow recolors via a layer property switch instead of a per-feature expression.
+- MapLibre updated 11.8.1 to 11.13.5.
+- Release builds are profileable by shell tools (heapprofd), for native-memory diagnostics.
 - Paused-state orange on the tracking screen (auto-pause banner, Resume button) softened to match the paused map arrow.
 - Map arrow shows ride state by color: orange while paused, red while the GPS signal is lost or weak.
 - Top-bar clock on the Tracking tab enlarged to the stats size.
