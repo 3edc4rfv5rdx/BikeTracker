@@ -168,6 +168,10 @@ fun TrackingScreen() {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val discardedMessage = stringResource(R.string.track_discarded)
+    val saveFailedMessage = stringResource(R.string.track_save_failed)
+    LaunchedEffect(snapshot.persistenceFailed) {
+        if (snapshot.persistenceFailed) snackbarHostState.showSnackbar(saveFailedMessage)
+    }
 
     // GPS trouble: fixes rejected by the accuracy filter, or none arriving at all.
     val gpsAccuracy = snapshot.gpsAccuracyMeters

@@ -6,8 +6,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * A single GPS sample belonging to a trip. The route polyline is simply a trip's
- * points read back in [time] order. Deleting a trip cascades to its points.
+ * A single GPS sample belonging to a trip. The route polyline uses insertion order,
+ * independent of wall-clock corrections. Deleting a trip cascades to its points.
  */
 @Entity(
     tableName = "track_points",

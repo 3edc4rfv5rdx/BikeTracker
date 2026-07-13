@@ -27,14 +27,13 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import xx.biketracker.ACCURACY_THRESHOLD_M
@@ -195,13 +194,13 @@ class TrackingService : Service() {
     private val stopping = AtomicBoolean(false)
     private var ownsRideReservation = false
 
-    // Incremental persistence: a draft Trip row is created at start, and recorded points plus
-    // running aggregates are flushed into it in batches, so a process death loses at most the
-    // last unflushed batch (finalizeAbandonedTrips rescues the draft at next launch). Flush jobs
-    // are chained through lastFlushJob so writes hit the database in recording order.
-    private var draftTrip: Deferred<Long>? = null
-    private var flushedCount = 0
-    private var lastFlushJob: Job? = null
+    // Every checkpoint is reconciled against the database point count. Failed or ambiguously
+    // committed batches can therefore be retried without skipping or duplicating points.
+    private var draftPersistence: DraftPersistence? = null
+    private var draftStartJob: Job? = null
+    private val flushJobs = mutableListOf<Job>()
+    private var scheduledFlushCount = 0
+    private var persistenceFailed = false
 
     // Fused Location can deliver several fixes at once. Their state transitions must all run, but
     // Compose and NotificationManager only need the final result of the batch.
@@ -276,24 +275,26 @@ class TrackingService : Service() {
         // In the rare case this instance is reused after a stop, allow the new ride to save.
         stopping.set(false)
         kalman.reset()
+        flushJobs.clear()
+        scheduledFlushCount = 0
+        persistenceFailed = false
         lastTrustedFix = null
         lastTrustedFixElapsedRealtime = 0L
         status = TrackingStatus.RECORDING
         startTime = System.currentTimeMillis()
         startElapsedRealtime = SystemClock.elapsedRealtime()
-        draftTrip = scope.async {
-            DatabaseMaintenance.withWrite {
-                AppDatabase.get(applicationContext).tripDao().insertTrip(
-                    Trip(
-                        startTime = startTime,
-                        endTime = startTime,
-                        distanceMeters = 0.0,
-                        movingTimeMillis = 0L,
-                        maxSpeedMps = 0.0,
-                        finished = false,
-                    )
-                )
-            }
+        val initialTrip = Trip(
+            startTime = startTime,
+            endTime = startTime,
+            distanceMeters = 0.0,
+            movingTimeMillis = 0L,
+            maxSpeedMps = 0.0,
+            finished = false,
+        )
+        val persistence = DraftPersistence(initialTrip, roomDraftGateway())
+        draftPersistence = persistence
+        draftStartJob = scope.launch {
+            reportPersistenceResult(persistence.ensureDraft())
         }
         requestUpdates()
         publish()
@@ -388,7 +389,7 @@ class TrackingService : Service() {
         route += smoothed
         lastPoint = point
         lastPointElapsedRealtimeNanos = nowElapsedNanos
-        if (points.size - flushedCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
+        if (points.size - scheduledFlushCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
 
         updateNotification()
         fix.speedMps?.let { evaluateAutoPause(it, nowElapsedMillis) }
@@ -462,39 +463,14 @@ class TrackingService : Service() {
         autoSaveJob = null
     }
 
-    /** Persist the points recorded since the last flush plus the running aggregates.
-     *  Runs on the main thread; the write itself is chained onto the previous flush. */
+    /** Schedule a full checkpoint; the writer reconciles it with durable rows on retry. */
     private fun flushDraft() {
-        val draft = draftTrip ?: return
-        if (points.size == flushedCount) return
-        val slice = points.subList(flushedCount, points.size).toList()
-        flushedCount = points.size
-        val tripStart = startTime
-        val tripEnd = slice.last().time
-        val tripDistance = distanceMeters
-        val tripMovingTime = movingTimeMillis
-        val tripMaxSpeed = maxSpeedMps
-        val prev = lastFlushJob
-        lastFlushJob = scope.launch {
-            prev?.join()
-            val id = draft.await()
-            val db = AppDatabase.get(applicationContext)
-            DatabaseMaintenance.withWrite {
-                db.withTransaction {
-                    db.tripDao().insertPoints(slice.map { it.copy(tripId = id) })
-                    db.tripDao().updateTrip(
-                        Trip(
-                            id = id,
-                            startTime = tripStart,
-                            endTime = tripEnd,
-                            distanceMeters = tripDistance,
-                            movingTimeMillis = tripMovingTime,
-                            maxSpeedMps = tripMaxSpeed,
-                            finished = false,
-                        )
-                    )
-                }
-            }
+        val persistence = draftPersistence ?: return
+        if (points.size == scheduledFlushCount) return
+        val checkpoint = checkpoint(finished = false)
+        scheduledFlushCount = checkpoint.points.size
+        flushJobs += scope.launch {
+            reportPersistenceResult(persistence.persist(checkpoint))
         }
     }
 
@@ -504,82 +480,101 @@ class TrackingService : Service() {
     private fun stop(save: Boolean) {
         if (!stopping.compareAndSet(false, true)) return
         cancelAutoSave()
-        if (::fusedClient.isInitialized) {
-            fusedClient.removeLocationUpdates(locationCallback)
+        if (persistenceFailed) {
+            persistenceFailed = false
+            publish()
         }
-        // Discard: drop the draft row and any flushed points, then stop — nothing persisted.
-        if (!save) {
-            val draft = draftTrip
-            val prevFlush = lastFlushJob
-            scope.launch {
-                withContext(NonCancellable) {
-                    try {
-                        val id = draft?.await()
-                        if (id != null) {
-                            prevFlush?.join()
-                            DatabaseMaintenance.withWrite {
-                                AppDatabase.get(applicationContext).tripDao().deleteTripById(id)
-                            }
-                        }
-                    } finally {
-                        withContext(Dispatchers.Main) { finishService() }
-                    }
-                }
-            }
-            return
+        val persistence = draftPersistence ?: return handleSaveFailure()
+        val pendingJobs = buildList {
+            draftStartJob?.let(::add)
+            addAll(flushJobs)
         }
-        val recorded = points.toList()
-        val unflushed = recorded.subList(flushedCount, recorded.size)
-        flushedCount = recorded.size
-        val tripStart = startTime
-        val tripEnd = recorded.lastOrNull()?.time ?: System.currentTimeMillis()
-        val tripDistance = distanceMeters
-        val tripMovingTime = movingTimeMillis
-        val tripMaxSpeed = maxSpeedMps
-        // Point reductions computed once here, mirroring maxSpeed, so the detail never reloads points.
-        val tripAvgGps = recorded.map { it.speedMps.toDouble() }.average()
-        val altitudes = recorded.map { it.altitudeMeters }
-        val tripElevationGain = if (altitudes.any { it != null }) elevationGainMeters(altitudes) else null
-
-        val draft = draftTrip
-        val prevFlush = lastFlushJob
-        // Finalize under NonCancellable and finish only after the commit, so the stopSelf()
-        // below (which triggers onDestroy → scope.cancel()) cannot abort the write mid-flight.
+        val finalCheckpoint = checkpoint(finished = true)
         scope.launch {
             withContext(NonCancellable) {
-                try {
-                    val id = draft?.await()
-                    if (id != null) {
-                        prevFlush?.join() // pending flushes must not overtake the final write
-                        val db = AppDatabase.get(applicationContext)
-                        DatabaseMaintenance.withWrite {
-                            db.withTransaction {
-                                if (recorded.size >= 2 && tripDistance > 0) {
-                                    db.tripDao().insertPoints(unflushed.map { it.copy(tripId = id) })
-                                    db.tripDao().updateTrip(
-                                        Trip(
-                                            id = id,
-                                            startTime = tripStart,
-                                            endTime = tripEnd,
-                                            distanceMeters = tripDistance,
-                                            movingTimeMillis = tripMovingTime,
-                                            maxSpeedMps = tripMaxSpeed,
-                                            avgGpsSpeedMps = tripAvgGps,
-                                            elevationGainMeters = tripElevationGain,
-                                            finished = true,
-                                        )
-                                    )
-                                } else {
-                                    db.tripDao().deleteTripById(id) // cascade removes flushed points
-                                }
-                            }
-                        }
-                    }
-                } finally {
-                    // Finish on the main thread: status and TrackingState belong to it, so the
-                    // reset serializes with onLocation instead of racing it from Default.
-                    withContext(Dispatchers.Main) { finishService() }
+                pendingJobs.joinAll()
+                val result = if (
+                    !save ||
+                    finalCheckpoint.points.size < 2 ||
+                    finalCheckpoint.trip.distanceMeters <= 0
+                ) {
+                    persistence.discard()
+                } else {
+                    persistence.persist(finalCheckpoint)
                 }
+                withContext(Dispatchers.Main) {
+                    if (result.isSuccess) finishService() else handleSaveFailure()
+                }
+            }
+        }
+    }
+
+    private fun checkpoint(finished: Boolean): DraftCheckpoint {
+        val recorded = points.toList()
+        val altitudes = recorded.map { it.altitudeMeters }
+        return DraftCheckpoint(
+            points = recorded,
+            trip = Trip(
+                startTime = startTime,
+                endTime = recorded.lastOrNull()?.time ?: startTime,
+                distanceMeters = distanceMeters,
+                movingTimeMillis = movingTimeMillis,
+                maxSpeedMps = maxSpeedMps,
+                avgGpsSpeedMps = if (finished && recorded.isNotEmpty()) {
+                    recorded.map { it.speedMps.toDouble() }.average()
+                } else {
+                    null
+                },
+                elevationGainMeters = if (finished && altitudes.any { it != null }) {
+                    elevationGainMeters(altitudes)
+                } else {
+                    null
+                },
+                finished = finished,
+            ),
+        )
+    }
+
+    private suspend fun reportPersistenceResult(result: Result<*>) {
+        withContext(Dispatchers.Main) {
+            val failed = result.isFailure
+            if (persistenceFailed != failed) {
+                persistenceFailed = failed
+                publish()
+            }
+        }
+    }
+
+    private fun handleSaveFailure() {
+        status = TrackingStatus.PAUSED
+        pausedAutomatically = false
+        persistenceFailed = true
+        stopping.set(false)
+        updateNotification()
+        publish()
+    }
+
+    private fun roomDraftGateway(): DraftPersistenceGateway = object : DraftPersistenceGateway {
+        override suspend fun insertDraft(trip: Trip): Long = DatabaseMaintenance.withWrite {
+            AppDatabase.get(applicationContext).tripDao().insertTrip(trip)
+        }
+
+        override suspend fun pointCount(tripId: Long): Int =
+            AppDatabase.get(applicationContext).tripDao().getPointCount(tripId)
+
+        override suspend fun commit(tripId: Long, newPoints: List<TrackPoint>, trip: Trip) {
+            DatabaseMaintenance.withWrite {
+                val db = AppDatabase.get(applicationContext)
+                db.withTransaction {
+                    if (newPoints.isNotEmpty()) db.tripDao().insertPoints(newPoints)
+                    db.tripDao().updateTrip(trip.copy(id = tripId))
+                }
+            }
+        }
+
+        override suspend fun delete(tripId: Long) {
+            DatabaseMaintenance.withWrite {
+                AppDatabase.get(applicationContext).tripDao().deleteTripById(tripId)
             }
         }
     }
@@ -612,6 +607,7 @@ class TrackingService : Service() {
                 startElapsedRealtime = startElapsedRealtime,
                 updatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
                 lastTrustedFixElapsedRealtime = lastTrustedFixElapsedRealtime,
+                persistenceFailed = persistenceFailed,
                 route = route.toList(),
             )
         )
@@ -639,8 +635,9 @@ class TrackingService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val title = when (status) {
-            TrackingStatus.PAUSED -> getString(R.string.notif_paused)
+        val title = when {
+            persistenceFailed -> getString(R.string.notif_save_failed)
+            status == TrackingStatus.PAUSED -> getString(R.string.notif_paused)
             else -> getString(R.string.notif_recording)
         }
         val text = "${formatKm(distanceMeters)} ${getString(R.string.unit_km)} · " +

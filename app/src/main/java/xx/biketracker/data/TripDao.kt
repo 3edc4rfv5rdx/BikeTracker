@@ -40,6 +40,9 @@ interface TripDao {
     @Query("SELECT * FROM track_points WHERE tripId = :tripId ORDER BY id ASC")
     suspend fun getPoints(tripId: Long): List<TrackPoint>
 
+    @Query("SELECT COUNT(*) FROM track_points WHERE tripId = :tripId")
+    suspend fun getPointCount(tripId: Long): Int
+
     /** Total distance and moving time over trips that started at or after [sinceEpochMillis]. */
     @Query(
         "SELECT COALESCE(SUM(distanceMeters), 0) AS distanceMeters, " +
