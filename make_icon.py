@@ -19,7 +19,7 @@ SUPER = 4           # supersampling factor for the disc's antialiased edge
 ART_FRACTION = 0.88 # artwork's share of the legacy disc diameter
 # Adaptive foreground: the launcher mask shows the central ~72 of 108dp. Sized visually — the
 # artwork's diagonal extremes (the pin) may run under the mask edge, which looks fine.
-FG_FRACTION = 0.74
+FG_FRACTION = 0.78
 
 src = Image.open(SOURCE).convert("RGB")
 w, h = src.size
