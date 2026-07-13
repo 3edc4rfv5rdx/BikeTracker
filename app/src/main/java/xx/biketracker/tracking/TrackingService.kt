@@ -52,6 +52,8 @@ import xx.biketracker.haversineMeters
 import xx.biketracker.MainActivity
 import xx.biketracker.R
 import xx.biketracker.data.AppDatabase
+import xx.biketracker.data.DatabaseRestoreCoordinator
+import xx.biketracker.data.RestoreOperationState
 import xx.biketracker.data.TrackPoint
 import xx.biketracker.data.Trip
 import xx.biketracker.formatDuration
@@ -136,6 +138,10 @@ class TrackingService : Service() {
 
     private fun startTracking() {
         if (status != TrackingStatus.IDLE) return
+        if (DatabaseRestoreCoordinator.state.value == RestoreOperationState.Running) {
+            stopSelf()
+            return
+        }
         if (!hasLocationPermission()) {
             stopSelf()
             return

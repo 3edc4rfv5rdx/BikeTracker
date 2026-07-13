@@ -82,6 +82,7 @@
     <string name="restore_confirm_text">Restore replaces all current rides</string>
     <string name="backup_saved">Backup saved</string>
     <string name="backup_restored">Backup restored</string>
+    <string name="restore_in_progress">Restoring data</string>
     <string name="backup_failed">Operation failed</string>
     <string name="backup_ride_active">Stop the ride first</string>
 

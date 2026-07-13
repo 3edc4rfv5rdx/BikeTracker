@@ -1,6 +1,5 @@
 package xx.biketracker.settings
 
-import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,7 +36,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import xx.biketracker.R
 import xx.biketracker.data.backupDatabase
-import xx.biketracker.data.restoreDatabase
+import xx.biketracker.data.DatabaseRestoreCoordinator
+import xx.biketracker.data.RestoreOperationState
 import xx.biketracker.map.OfflineMapDialog
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
@@ -54,6 +54,8 @@ fun SettingsScreen() {
 
     val themeMode by AppSettings.themeMode.collectAsState()
     val tracking by TrackingState.snapshot.collectAsState()
+    val restoreState by DatabaseRestoreCoordinator.state.collectAsState()
+    val restoreRunning = restoreState == RestoreOperationState.Running
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
 
@@ -69,14 +71,8 @@ fun SettingsScreen() {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         // Re-check after the picker: a ride could have started while it was open.
-        if (uri != null && !refuseIfRideActive()) scope.launch {
-            runCatching { restoreDatabase(context, uri) }
-                .onSuccess {
-                    toast(context.getString(R.string.backup_restored))
-                    // Rebuild the UI so every screen re-reads the freshly restored database.
-                    (context as? Activity)?.recreate()
-                }
-                .onFailure { toast(context.getString(R.string.backup_failed)) }
+        if (uri != null && !refuseIfRideActive()) {
+            DatabaseRestoreCoordinator.start(context, uri)
         }
     }
 
@@ -107,6 +103,7 @@ fun SettingsScreen() {
         SectionHeader(stringResource(R.string.settings_data_section))
         NavRow(
             label = stringResource(R.string.btn_backup),
+            enabled = !restoreRunning,
             onClick = {
                 if (!refuseIfRideActive()) scope.launch {
                     runCatching { backupDatabase(context) }
@@ -116,7 +113,12 @@ fun SettingsScreen() {
             },
         )
         NavRow(
-            label = stringResource(R.string.btn_restore),
+            label = if (restoreRunning) {
+                stringResource(R.string.restore_in_progress)
+            } else {
+                stringResource(R.string.btn_restore)
+            },
+            enabled = !restoreRunning,
             onClick = { if (!refuseIfRideActive()) showRestoreConfirm = true },
         )
     }
@@ -202,15 +204,19 @@ private fun SectionHeader(text: String) {
 
 /** A row that opens a dialog/screen: label on the left, trailing chevron. */
 @Composable
-private fun NavRow(label: String, onClick: () -> Unit) {
+private fun NavRow(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, modifier = Modifier.weight(1f))
+        Text(
+            label,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            modifier = Modifier.weight(1f),
+        )
         Icon(
             Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,

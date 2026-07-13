@@ -79,6 +79,7 @@
     <string name="restore_confirm_text">Восстановление заменит все текущие поездки</string>
     <string name="backup_saved">Резервная копия сохранена</string>
     <string name="backup_restored">Резервная копия восстановлена</string>
+    <string name="restore_in_progress">Восстановление данных</string>
     <string name="backup_failed">Не удалось выполнить</string>
     <string name="backup_ride_active">Сначала остановите поездку</string>
 

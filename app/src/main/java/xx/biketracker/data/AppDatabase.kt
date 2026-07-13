@@ -7,10 +7,14 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
+internal const val CURRENT_SCHEMA_VERSION = 4
 
 @Database(
     entities = [Trip::class, TrackPoint::class],
-    version = 4,
+    version = CURRENT_SCHEMA_VERSION,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,7 +25,9 @@ abstract class AppDatabase : RoomDatabase() {
     fun checkpoint() {
         // The cursor must be stepped: SQLite runs the PRAGMA lazily on first read, so closing an
         // unread cursor would skip the checkpoint entirely and leave the WAL unflushed.
-        openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { it.moveToFirst() }
+        openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
+            check(cursor.moveToFirst() && cursor.getInt(0) == 0) { "Database checkpoint is busy" }
+        }
     }
 
     companion object {
@@ -54,20 +60,81 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
-                instance ?: Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    DB_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+                instance ?: run {
+                    recoverInterruptedRestore(context.applicationContext)
+                    build(context.applicationContext, DB_NAME).also { instance = it }
+                }
             }
 
         /** On-disk location of the main database file. */
         fun databaseFile(context: Context): File = context.getDatabasePath(DB_NAME)
 
+        /** Deterministic rollback file left only while an atomic restore is being committed. */
+        internal fun restoreRollbackFile(context: Context): File =
+            context.getDatabasePath("$DB_NAME.restore-rollback")
+
+        /** Open a staged database with the production migrations, without touching the singleton. */
+        internal fun openStaged(context: Context, databaseName: String): AppDatabase =
+            build(context.applicationContext, databaseName)
+
+        /** Open the newly swapped main file while its rollback marker still exists. */
+        internal fun openAfterRestore(context: Context): AppDatabase = synchronized(this) {
+            check(instance == null) { "Database is already open" }
+            val restored = build(context.applicationContext, DB_NAME)
+            try {
+                // Force Room schema validation before publishing the replacement singleton.
+                restored.openHelper.writableDatabase
+                instance = restored
+                restored
+            } catch (failure: Throwable) {
+                restored.close()
+                throw failure
+            }
+        }
+
         /** Close the open database so its file can be replaced by a restore. */
         fun closeAndReset() = synchronized(this) {
             instance?.close()
             instance = null
+        }
+
+        private fun build(context: Context, databaseName: String): AppDatabase =
+            Room.databaseBuilder(
+                context,
+                AppDatabase::class.java,
+                databaseName,
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+
+        /**
+         * A process can die after the old database was moved aside but before the restored one was
+         * verified. The rollback file is therefore the commit marker: normal startup always prefers
+         * it, accepting a lost restore attempt rather than lost existing rides.
+         */
+        private fun recoverInterruptedRestore(context: Context) {
+            val rollback = restoreRollbackFile(context)
+            if (rollback.exists()) {
+                val live = databaseFile(context)
+                deleteSidecars(live)
+                Files.move(
+                    rollback.toPath(),
+                    live.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE,
+                )
+            }
+            // A process death before the commit phase can leave only an inert staged candidate.
+            databaseFile(context).parentFile?.listFiles { file ->
+                file.name.startsWith(".restore-candidate-") && file.name.endsWith(".db")
+            }?.forEach { stale ->
+                stale.delete()
+                deleteSidecars(stale)
+            }
+        }
+
+        internal fun deleteSidecars(database: File) {
+            File("${database.path}-wal").delete()
+            File("${database.path}-shm").delete()
+            File("${database.path}-journal").delete()
         }
     }
 }

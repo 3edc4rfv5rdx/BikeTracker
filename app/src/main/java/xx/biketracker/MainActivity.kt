@@ -1,6 +1,7 @@
 package xx.biketracker
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -56,6 +57,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xx.biketracker.data.finalizeAbandonedTrips
 import xx.biketracker.data.recoveryJob
+import xx.biketracker.data.DatabaseRestoreCoordinator
+import xx.biketracker.data.RestoreOperationState
 import xx.biketracker.history.HistoryCommands
 import xx.biketracker.history.HistoryScreen
 import xx.biketracker.map.MapScreen
@@ -87,6 +90,30 @@ class MainActivity : ComponentActivity() {
         setContent {
             // Observing the theme here re-colors the whole app the moment it changes.
             val themeMode by AppSettings.themeMode.collectAsState()
+            val restoreState by DatabaseRestoreCoordinator.state.collectAsState()
+            LaunchedEffect(restoreState) {
+                when (restoreState) {
+                    RestoreOperationState.Succeeded -> {
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.backup_restored),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        DatabaseRestoreCoordinator.acknowledgeResult()
+                        recreate()
+                    }
+                    RestoreOperationState.Failed -> {
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.backup_failed),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        DatabaseRestoreCoordinator.acknowledgeResult()
+                    }
+                    RestoreOperationState.Idle,
+                    RestoreOperationState.Running -> Unit
+                }
+            }
             BikeTrackerTheme(themeMode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     BikeTrackerApp(onExit = { finishAndRemoveTask() })
