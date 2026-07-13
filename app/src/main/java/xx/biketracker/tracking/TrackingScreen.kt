@@ -188,7 +188,7 @@ fun TrackingScreen() {
                 )
             } else {
                 Text(
-                    text = stringResource(R.string.stat_speed),
+                    text = withUnit(R.string.stat_speed, R.string.unit_kmh),
                     style = MaterialTheme.typography.titleMedium.merge(NO_FONT_PADDING),
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
@@ -207,9 +207,8 @@ fun TrackingScreen() {
                 .cropToGlyphs(120.sp),
         )
 
-        // Bottom empty field: fixed height. Holds the "km/h" caption (pinned right under the digits)
-        // by default, replaced in place by the auto-pause banner while auto-paused — same slot, so
-        // nothing moves.
+        // Bottom empty field: fixed height, empty by default (the unit lives in the caption
+        // above the digits); the auto-pause banner appears here without shifting the layout.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -222,12 +221,6 @@ fun TrackingScreen() {
                     PausedOrange,
                     Color.Black,
                     Modifier.padding(horizontal = 16.dp),
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.unit_kmh),
-                    style = MaterialTheme.typography.titleMedium.merge(NO_FONT_PADDING),
-                    modifier = Modifier.padding(top = 12.dp),
                 )
             }
         }
@@ -252,9 +245,9 @@ fun TrackingScreen() {
                 right = Stat(stringResource(R.string.stat_total_time), formatDuration(liveTotalMs)),
             )
 
-            Spacer(Modifier.height(24.dp))
-
-            // Altitude in the wide slot the wall clock used to occupy; the clock moved to the top bar.
+            // Altitude in the wide slot the wall clock used to occupy; the clock moved to the
+            // top bar. The 2dp top padding matches the stat rows' own vertical padding, so the
+            // gap above equals the gap between the two stat rows.
             StatCell(
                 Stat(
                     withUnit(R.string.stat_altitude, R.string.unit_m),
@@ -262,7 +255,7 @@ fun TrackingScreen() {
                 ),
                 Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    .padding(top = 2.dp, bottom = 8.dp),
             )
         }
 
