@@ -31,10 +31,11 @@ class MonotonicTimeTest {
         val snapshot = TrackingSnapshot(
             status = TrackingStatus.RECORDING,
             gpsAccuracyMeters = 5f,
-            updatedAtElapsedRealtime = updatedAt,
+            lastTrustedFixElapsedRealtime = updatedAt,
         )
 
         assertFalse(snapshot.hasGpsTrouble(updatedAt + GPS_STALE_MS))
         assertTrue(snapshot.hasGpsTrouble(updatedAt + GPS_STALE_MS + 1))
+        assertTrue(snapshot.hasGpsTrouble(updatedAt - 1)) // defensive reboot/clock-domain guard
     }
 }

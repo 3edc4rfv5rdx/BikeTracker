@@ -86,6 +86,71 @@ internal fun elapsedMillisBetween(previousNanos: Long, currentNanos: Long): Long
     return deltaMillis.takeIf { it > 0 }
 }
 
+internal data class LocationFixCandidate(
+    val lat: Double,
+    val lon: Double,
+    val wallTimeMillis: Long,
+    val elapsedRealtimeNanos: Long,
+    val accuracyMeters: Float?,
+    val speedMps: Double?,
+    val altitudeMeters: Double?,
+    val bearingDegrees: Float?,
+)
+
+internal data class ValidatedLocationFix(
+    val lat: Double,
+    val lon: Double,
+    val wallTimeMillis: Long,
+    val elapsedRealtimeNanos: Long,
+    val accuracyMeters: Float,
+    val speedMps: Double?,
+    val altitudeMeters: Double?,
+    val bearingDegrees: Float?,
+)
+
+/** Validate a fix completely before it can mutate tracking state. */
+internal fun validateLocationFix(
+    candidate: LocationFixCandidate,
+    previous: ValidatedLocationFix?,
+): ValidatedLocationFix? {
+    if (!candidate.lat.isFinite() || candidate.lat !in -90.0..90.0) return null
+    if (!candidate.lon.isFinite() || candidate.lon !in -180.0..180.0) return null
+    if (candidate.wallTimeMillis <= 0 || candidate.elapsedRealtimeNanos <= 0) return null
+
+    val accuracy = candidate.accuracyMeters ?: return null
+    if (!accuracy.isFinite() || accuracy < 0f || accuracy > ACCURACY_THRESHOLD_M) return null
+
+    val speed = candidate.speedMps
+    if (speed != null && (!speed.isFinite() || speed < 0.0 || speed > MAX_PLAUSIBLE_SPEED_MPS)) return null
+    if (candidate.altitudeMeters?.isFinite() == false) return null
+    if (candidate.bearingDegrees?.let { !it.isFinite() || it < 0f || it >= 360f } == true) return null
+
+    if (previous != null) {
+        val dtMillis = elapsedMillisBetween(
+            previousNanos = previous.elapsedRealtimeNanos,
+            currentNanos = candidate.elapsedRealtimeNanos,
+        ) ?: return null
+        val coordinateSpeed = haversineMeters(
+            previous.lat,
+            previous.lon,
+            candidate.lat,
+            candidate.lon,
+        ) / (dtMillis / 1000.0)
+        if (!coordinateSpeed.isFinite() || coordinateSpeed > MAX_PLAUSIBLE_SPEED_MPS) return null
+    }
+
+    return ValidatedLocationFix(
+        lat = candidate.lat,
+        lon = candidate.lon,
+        wallTimeMillis = candidate.wallTimeMillis,
+        elapsedRealtimeNanos = candidate.elapsedRealtimeNanos,
+        accuracyMeters = accuracy,
+        speedMps = speed,
+        altitudeMeters = candidate.altitudeMeters,
+        bearingDegrees = candidate.bearingDegrees,
+    )
+}
+
 /**
  * Foreground service that records a ride: it pulls GPS fixes from the fused
  * location provider, filters noise, accumulates distance / moving time / peak
@@ -110,6 +175,8 @@ class TrackingService : Service() {
     private var maxSpeedMps = 0.0
     private var lastPoint: TrackPoint? = null
     private var lastPointElapsedRealtimeNanos: Long? = null
+    private var lastTrustedFix: ValidatedLocationFix? = null
+    private var lastTrustedFixElapsedRealtime = 0L
     private val points = mutableListOf<TrackPoint>()
     private val route = mutableListOf<GeoPoint>()
 
@@ -209,6 +276,8 @@ class TrackingService : Service() {
         // In the rare case this instance is reused after a stop, allow the new ride to save.
         stopping.set(false)
         kalman.reset()
+        lastTrustedFix = null
+        lastTrustedFixElapsedRealtime = 0L
         status = TrackingStatus.RECORDING
         startTime = System.currentTimeMillis()
         startElapsedRealtime = SystemClock.elapsedRealtime()
@@ -245,68 +314,75 @@ class TrackingService : Service() {
         // A fix already queued on the main looper can arrive after stopAndSave; processing it
         // would re-post the removed notification and overwrite the TrackingState reset.
         if (stopping.get()) return
-        currentSpeedMps = if (location.hasSpeed()) location.speed.toDouble() else currentSpeedMps
-        altitudeMeters = if (location.hasAltitude()) location.altitude else altitudeMeters
-        gpsAccuracyMeters = if (location.hasAccuracy()) location.accuracy else null
+        if (status == TrackingStatus.IDLE) return
+        val candidate = LocationFixCandidate(
+            lat = location.latitude,
+            lon = location.longitude,
+            wallTimeMillis = location.time,
+            elapsedRealtimeNanos = location.elapsedRealtimeNanos,
+            accuracyMeters = location.accuracy.takeIf { location.hasAccuracy() },
+            speedMps = location.speed.toDouble().takeIf { location.hasSpeed() },
+            altitudeMeters = location.altitude.takeIf { location.hasAltitude() },
+            bearingDegrees = location.bearing.takeIf { location.hasBearing() },
+        )
+        // Rejected fixes do not refresh GPS freshness or overwrite the last trusted telemetry.
+        val fix = validateLocationFix(candidate, lastTrustedFix) ?: return
+        lastTrustedFix = fix
+        lastTrustedFixElapsedRealtime = fix.elapsedRealtimeNanos / 1_000_000L
+
+        fix.speedMps?.let { currentSpeedMps = it }
+        fix.altitudeMeters?.let { altitudeMeters = it }
+        gpsAccuracyMeters = fix.accuracyMeters
         // Bearing is only trustworthy while moving; keep the last heading when the fix omits it,
         // so the puck doesn't spin to north at a standstill.
-        if (location.hasBearing() && location.hasSpeed() && location.speed >= AUTO_PAUSE_SPEED_MPS) {
-            bearingDegrees = location.bearing
+        if (fix.bearingDegrees != null && fix.speedMps != null && fix.speedMps >= AUTO_PAUSE_SPEED_MPS) {
+            bearingDegrees = fix.bearingDegrees
         }
 
         when (status) {
-            TrackingStatus.RECORDING -> recordLocation(location)
-            TrackingStatus.PAUSED -> maybeAutoResume()
+            TrackingStatus.RECORDING -> recordLocation(fix)
+            TrackingStatus.PAUSED -> fix.speedMps?.let(::maybeAutoResume)
             TrackingStatus.IDLE -> return
         }
         publish()
     }
 
-    private fun recordLocation(location: Location) {
-        // Reject fixes that are too imprecise to trust.
-        if (location.hasAccuracy() && location.accuracy > ACCURACY_THRESHOLD_M) return
-
+    private fun recordLocation(fix: ValidatedLocationFix) {
         val prev = lastPoint
-        val nowWall = location.time
-        val nowElapsedNanos = location.elapsedRealtimeNanos
-        if (nowElapsedNanos <= 0) return
+        val nowElapsedNanos = fix.elapsedRealtimeNanos
         val nowElapsedMillis = nowElapsedNanos / 1_000_000L
         var dt = 0L
         if (prev != null) {
             val prevElapsed = lastPointElapsedRealtimeNanos ?: return
             dt = elapsedMillisBetween(prevElapsed, nowElapsedNanos) ?: return
-            // Plausibility-check the raw fix before it can pollute the Kalman filter.
-            val rawSpeed = haversineMeters(prev.lat, prev.lon, location.latitude, location.longitude) / (dt / 1000.0)
-            if (rawSpeed > MAX_PLAUSIBLE_SPEED_MPS) return // GPS jump, skip
         }
         // A long outage (tunnel, indoors) produces no fixes, so auto-pause can't trigger; without
         // this break the first fix after the gap would add the whole outage to the moving time.
         val gapped = prev != null && dt > GPS_STALE_MS
 
-        val speed = if (location.hasSpeed()) location.speed.toDouble() else 0.0
         // Kalman-smooth the fix; the track and the distance both build on filtered points,
         // so standstill jitter neither paints zigzags nor inflates the total.
         val smoothed = kalman.filter(
-            rawLat = location.latitude,
-            rawLon = location.longitude,
-            accuracyM = if (location.hasAccuracy()) location.accuracy else ACCURACY_THRESHOLD_M,
+            rawLat = fix.lat,
+            rawLon = fix.lon,
+            accuracyM = fix.accuracyMeters,
             timeMs = nowElapsedMillis,
-            speedMps = speed,
+            speedMps = fix.speedMps ?: 0.0,
         )
         if (prev != null && !gapped) {
             distanceMeters += haversineMeters(prev.lat, prev.lon, smoothed.lat, smoothed.lon)
             movingTimeMillis += dt
         }
 
-        if (speed <= MAX_PLAUSIBLE_SPEED_MPS) maxSpeedMps = max(maxSpeedMps, speed)
+        fix.speedMps?.let { maxSpeedMps = max(maxSpeedMps, it) }
 
         val point = TrackPoint(
             tripId = 0,
             lat = smoothed.lat,
             lon = smoothed.lon,
-            time = nowWall,
-            speedMps = location.speed,
-            altitudeMeters = if (location.hasAltitude()) location.altitude else null,
+            time = fix.wallTimeMillis,
+            speedMps = fix.speedMps?.toFloat() ?: 0f,
+            altitudeMeters = fix.altitudeMeters,
         )
         points += point
         route += smoothed
@@ -315,7 +391,7 @@ class TrackingService : Service() {
         if (points.size - flushedCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
 
         updateNotification()
-        evaluateAutoPause(speed, nowElapsedMillis)
+        fix.speedMps?.let { evaluateAutoPause(it, nowElapsedMillis) }
     }
 
     private fun evaluateAutoPause(speed: Double, now: Long) {
@@ -331,8 +407,8 @@ class TrackingService : Service() {
     }
 
     // Only an automatic pause resumes by itself; a manual one waits for the button.
-    private fun maybeAutoResume() {
-        if (pausedAutomatically && currentSpeedMps >= AUTO_RESUME_SPEED_MPS) {
+    private fun maybeAutoResume(speedMps: Double) {
+        if (pausedAutomatically && speedMps >= AUTO_RESUME_SPEED_MPS) {
             resumeTracking()
         }
     }
@@ -535,6 +611,7 @@ class TrackingService : Service() {
                 startTime = startTime,
                 startElapsedRealtime = startElapsedRealtime,
                 updatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
+                lastTrustedFixElapsedRealtime = lastTrustedFixElapsedRealtime,
                 route = route.toList(),
             )
         )

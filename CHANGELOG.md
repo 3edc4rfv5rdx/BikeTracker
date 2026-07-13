@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- GPS fixes are now fully validated before they can update live telemetry, the Kalman filter, route data, auto-pause, or auto-resume; invalid accuracy, coordinates, timestamps, reported speed, and coordinate jumps are rejected without disguising a stale GPS signal.
 - Ride intervals, GPS outage detection, auto-pause debounce, live duration, and GPS staleness now use monotonic elapsed realtime, so system clock corrections cannot stall or jump tracking; persisted route order no longer depends on wall-clock timestamps.
 - Batched Fused Location deliveries now process every fix oldest-to-newest instead of dropping all but the newest; UI state and the foreground notification are published once per batch.
 - Database backup/restore now uses one maintenance gate shared with ride drafts, recovery, final saves, discards, and history deletion; backups copy a checkpointed write-frozen snapshot, partial MediaStore files are removed on failure/cancellation, and ride starts or stale destructive actions cannot race maintenance.

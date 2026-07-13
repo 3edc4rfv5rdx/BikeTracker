@@ -171,7 +171,9 @@ fun TrackingScreen() {
 
     // GPS trouble: fixes rejected by the accuracy filter, or none arriving at all.
     val gpsAccuracy = snapshot.gpsAccuracyMeters
-    val gpsStale = nowElapsedRealtime - snapshot.updatedAtElapsedRealtime > GPS_STALE_MS
+    val gpsStale = snapshot.lastTrustedFixElapsedRealtime <= 0L ||
+        nowElapsedRealtime < snapshot.lastTrustedFixElapsedRealtime ||
+        nowElapsedRealtime - snapshot.lastTrustedFixElapsedRealtime > GPS_STALE_MS
     val gpsTrouble = snapshot.hasGpsTrouble(nowElapsedRealtime)
 
     Box(modifier = Modifier.fillMaxSize()) {
