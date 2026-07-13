@@ -172,6 +172,10 @@ fun TrackingScreen() {
     LaunchedEffect(snapshot.persistenceFailed) {
         if (snapshot.persistenceFailed) snackbarHostState.showSnackbar(saveFailedMessage)
     }
+    val startupFailedMessage = stringResource(R.string.track_start_failed)
+    LaunchedEffect(snapshot.startupFailed) {
+        if (snapshot.startupFailed) snackbarHostState.showSnackbar(startupFailedMessage)
+    }
 
     // GPS trouble: fixes rejected by the accuracy filter, or none arriving at all.
     val gpsAccuracy = snapshot.gpsAccuracyMeters

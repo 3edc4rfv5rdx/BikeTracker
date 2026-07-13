@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Tracking startup now becomes RECORDING only after both draft creation and Play Services location registration succeed; synchronous and asynchronous failures share one cleanup path that removes the empty draft, foreground notification, live state, and ride reservation while showing an actionable error.
 - Draft persistence now advances its durable cursor only after a successful transaction, reconciles retries against stored point counts to prevent duplicates, preserves failed batches, and exposes a retry-or-discard error state instead of silently reporting a failed save as complete.
 - GPS fixes are now fully validated before they can update live telemetry, the Kalman filter, route data, auto-pause, or auto-resume; invalid accuracy, coordinates, timestamps, reported speed, and coordinate jumps are rejected without disguising a stale GPS signal.
 - Ride intervals, GPS outage detection, auto-pause debounce, live duration, and GPS staleness now use monotonic elapsed realtime, so system clock corrections cannot stall or jump tracking; persisted route order no longer depends on wall-clock timestamps.

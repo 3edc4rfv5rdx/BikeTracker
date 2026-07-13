@@ -20,6 +20,7 @@
     <string name="track_discarded">Не збережено</string>
     <string name="track_save_failed">Не вдалося зберегти поїздку. Натисніть «Стоп &amp; зберегти», щоб повторити, або утримуйте, щоб видалити.</string>
     <string name="notif_save_failed">Помилка збереження - відкрийте застосунок, щоб повторити</string>
+    <string name="track_start_failed">Не вдалося почати запис. Перевірте доступ до геолокації та спробуйте ще раз.</string>
     <string name="gps_weak">Слабкий сигнал GPS</string>
     <string name="gps_no_signal">Немає сигналу GPS</string>
 

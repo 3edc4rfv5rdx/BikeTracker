@@ -28,6 +28,7 @@ data class TrackingSnapshot(
     val updatedAtElapsedRealtime: Long = 0L, // publication baseline for the live moving timer
     val lastTrustedFixElapsedRealtime: Long = 0L,
     val persistenceFailed: Boolean = false,
+    val startupFailed: Boolean = false,
     val route: List<GeoPoint> = emptyList(),
 )
 

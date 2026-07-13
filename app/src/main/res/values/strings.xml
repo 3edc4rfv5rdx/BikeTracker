@@ -20,6 +20,7 @@
     <string name="track_discarded">Not saved</string>
     <string name="track_save_failed">Ride data could not be saved. Tap Stop &amp; save to retry, or hold it to discard.</string>
     <string name="notif_save_failed">Save failed - open the app to retry</string>
+    <string name="track_start_failed">Tracking could not start. Check location access and try again.</string>
     <string name="gps_weak">Weak GPS signal</string>
     <string name="gps_no_signal">No GPS signal</string>
 

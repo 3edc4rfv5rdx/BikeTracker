@@ -201,6 +201,11 @@ class TrackingService : Service() {
     private val flushJobs = mutableListOf<Job>()
     private var scheduledFlushCount = 0
     private var persistenceFailed = false
+    private var startupPending = false
+    private var registrationReady = false
+    private var draftReady = false
+    private var foregroundStarted = false
+    private var activeStartId = 0
 
     // Fused Location can deliver several fixes at once. Their state transitions must all run, but
     // Compose and NotificationManager only need the final result of the batch.
@@ -238,12 +243,16 @@ class TrackingService : Service() {
         // Resume just as the auto-save finished the previous service). Such an instance must
         // stop immediately: it was started via startForegroundService, and neither calling
         // startForeground nor stopSelf would crash with a foreground-timeout exception.
+        if (startupPending && intent?.action != ACTION_START) {
+            failStartup()
+            return START_NOT_STICKY
+        }
         if (status == TrackingStatus.IDLE && intent?.action != ACTION_START) {
             stopSelf()
             return START_NOT_STICKY
         }
         when (intent?.action) {
-            ACTION_START -> startTracking()
+            ACTION_START -> startTracking(startId)
             ACTION_PAUSE -> pauseTracking(automatic = false)
             ACTION_RESUME -> resumeTracking()
             ACTION_STOP -> stopAndSave()
@@ -253,8 +262,8 @@ class TrackingService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startTracking() {
-        if (status != TrackingStatus.IDLE) return
+    private fun startTracking(startId: Int) {
+        if (status != TrackingStatus.IDLE || startupPending) return
         if (DatabaseRestoreCoordinator.state.value == RestoreOperationState.Running) {
             stopSelf()
             return
@@ -270,7 +279,18 @@ class TrackingService : Service() {
             return
         }
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
-        startForegroundNotification()
+        activeStartId = startId
+        startupPending = true
+        registrationReady = false
+        draftReady = false
+        TrackingState.publish(TrackingSnapshot())
+        try {
+            startForegroundNotification()
+            foregroundStarted = true
+        } catch (_: RuntimeException) {
+            failStartup()
+            return
+        }
 
         // In the rare case this instance is reused after a stop, allow the new ride to save.
         stopping.set(false)
@@ -280,7 +300,6 @@ class TrackingService : Service() {
         persistenceFailed = false
         lastTrustedFix = null
         lastTrustedFixElapsedRealtime = 0L
-        status = TrackingStatus.RECORDING
         startTime = System.currentTimeMillis()
         startElapsedRealtime = SystemClock.elapsedRealtime()
         val initialTrip = Trip(
@@ -294,10 +313,17 @@ class TrackingService : Service() {
         val persistence = DraftPersistence(initialTrip, roomDraftGateway())
         draftPersistence = persistence
         draftStartJob = scope.launch {
-            reportPersistenceResult(persistence.ensureDraft())
+            val result = persistence.ensureDraft()
+            withContext(Dispatchers.Main) {
+                if (result.isSuccess) {
+                    draftReady = true
+                    completeStartupIfReady()
+                } else {
+                    failStartup()
+                }
+            }
         }
         requestUpdates()
-        publish()
     }
 
     private fun requestUpdates() {
@@ -306,8 +332,47 @@ class TrackingService : Service() {
             .build()
         try {
             fusedClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
-        } catch (_: SecurityException) {
-            stopSelf()
+                .addOnSuccessListener {
+                    registrationReady = true
+                    completeStartupIfReady()
+                }
+                .addOnFailureListener { failStartup() }
+        } catch (_: RuntimeException) {
+            failStartup()
+        }
+    }
+
+    private fun completeStartupIfReady() {
+        if (!startupPending || !registrationReady || !draftReady) return
+        startupPending = false
+        status = TrackingStatus.RECORDING
+        publish()
+        updateNotification()
+    }
+
+    private fun failStartup() {
+        if (!startupPending) return
+        startupPending = false
+        stopping.set(true)
+        if (::fusedClient.isInitialized) fusedClient.removeLocationUpdates(locationCallback)
+        val persistence = draftPersistence
+        scope.launch {
+            withContext(NonCancellable) {
+                persistence?.discard()
+                withContext(Dispatchers.Main) {
+                    TrackingState.publish(TrackingSnapshot(startupFailed = true))
+                    status = TrackingStatus.IDLE
+                    releaseRideReservation()
+                    if (foregroundStarted) {
+                        foregroundStarted = false
+                        ServiceCompat.stopForeground(
+                            this@TrackingService,
+                            ServiceCompat.STOP_FOREGROUND_REMOVE,
+                        )
+                    }
+                    stopSelfResult(activeStartId)
+                }
+            }
         }
     }
 
