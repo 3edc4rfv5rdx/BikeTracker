@@ -62,6 +62,21 @@ import xx.biketracker.formatKm
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
+/** Consume an already chronological provider batch until service shutdown begins. */
+internal fun <T> processOrderedBatch(
+    items: List<T>,
+    shouldStop: () -> Boolean,
+    process: (T) -> Unit,
+): Int {
+    var processed = 0
+    for (item in items) {
+        if (shouldStop()) break
+        process(item)
+        processed++
+    }
+    return processed
+}
+
 /**
  * Foreground service that records a ride: it pulls GPS fixes from the fused
  * location provider, filters noise, accumulates distance / moving time / peak
@@ -110,9 +125,32 @@ class TrackingService : Service() {
     private var flushedCount = 0
     private var lastFlushJob: Job? = null
 
+    // Fused Location can deliver several fixes at once. Their state transitions must all run, but
+    // Compose and NotificationManager only need the final result of the batch.
+    private var deferOutputs = false
+    private var publishPending = false
+    private var notificationPending = false
+
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-            result.lastLocation?.let(::onLocation)
+            deferOutputs = true
+            try {
+                processOrderedBatch(
+                    items = result.locations,
+                    shouldStop = stopping::get,
+                    process = ::onLocation,
+                )
+            } finally {
+                deferOutputs = false
+                if (notificationPending) {
+                    notificationPending = false
+                    updateNotification()
+                }
+                if (publishPending) {
+                    publishPending = false
+                    publish()
+                }
+            }
         }
     }
 
@@ -462,6 +500,10 @@ class TrackingService : Service() {
     }
 
     private fun publish() {
+        if (deferOutputs) {
+            publishPending = true
+            return
+        }
         TrackingState.publish(
             TrackingSnapshot(
                 status = status,
@@ -493,6 +535,10 @@ class TrackingService : Service() {
     }
 
     private fun updateNotification() {
+        if (deferOutputs) {
+            notificationPending = true
+            return
+        }
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, buildNotification())
     }
