@@ -44,7 +44,7 @@ fun MapScreen() {
     var selectedRoute by remember { mutableStateOf<List<GeoPoint>>(emptyList()) }
     LaunchedEffect(selected?.id) {
         selectedRoute = selected?.let { trip ->
-            AppDatabase.get(context).tripDao().getPoints(trip.id).map { GeoPoint(it.lat, it.lon) }
+            AppDatabase.get(context).tripDao().getPoints(trip.id).map { GeoPoint(it.lat, it.lon, it.time) }
         } ?: emptyList()
     }
 

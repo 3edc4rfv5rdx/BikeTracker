@@ -50,11 +50,12 @@ import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.LineString
+import org.maplibre.geojson.MultiLineString
 import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
 import xx.biketracker.smoothRoute
+import xx.biketracker.splitRouteSegments
 import xx.biketracker.ui.AccentOrange
 
 /** Keyless vector style (OpenFreeMap), used in both themes — the dark style was unreadable. */
@@ -220,9 +221,16 @@ fun RouteMap(
     LaunchedEffect(route, styleEpoch) {
         val style = mapInstance?.style ?: return@LaunchedEffect
         // Smoothing re-runs over the whole track on every fix; off the main thread so a
-        // multi-hour ride (thousands of points) can't jank the map.
+        // multi-hour ride (thousands of points) can't jank the map. Pause/outage gaps split
+        // the track into segments, each smoothed and drawn on its own — no line is synthesized
+        // across a stretch the tracker never recorded. Single-point segments cannot form a
+        // line and are skipped; the live one is still visible as the puck.
         val line = withContext(Dispatchers.Default) {
-            LineString.fromLngLats(smoothRoute(route).map { Point.fromLngLat(it.lon, it.lat) })
+            MultiLineString.fromLngLats(
+                splitRouteSegments(route)
+                    .map { segment -> smoothRoute(segment).map { Point.fromLngLat(it.lon, it.lat) } }
+                    .filter { it.size >= 2 }
+            )
         }
         style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(line)
         if (!centeredOnce && route.isNotEmpty()) {

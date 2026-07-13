@@ -459,7 +459,8 @@ class TrackingService : Service() {
             altitudeMeters = fix.altitudeMeters,
         )
         points += point
-        route += smoothed
+        // The wall time lets the map split the drawn line at pause/outage gaps.
+        route += smoothed.copy(timeMillis = fix.wallTimeMillis)
         lastPoint = point
         lastPointElapsedRealtimeNanos = nowElapsedNanos
         if (points.size - scheduledFlushCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()

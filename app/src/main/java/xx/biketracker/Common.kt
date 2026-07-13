@@ -71,8 +71,10 @@ const val DAY_MS = 24L * 60L * 60L * 1000L
 /** Single SharedPreferences file for all app settings. */
 const val PREFS_NAME = "biketracker_prefs"
 
-/** A latitude/longitude pair; the live route and stored track are ordered lists of these. */
-data class GeoPoint(val lat: Double, val lon: Double)
+/** A latitude/longitude pair; the live route and stored track are ordered lists of these.
+ *  [timeMillis] is the recording wall time (epoch), 0 when unknown — it only marks segment
+ *  boundaries for display ([splitRouteSegments]) and is never persisted itself. */
+data class GeoPoint(val lat: Double, val lon: Double, val timeMillis: Long = 0L)
 
 fun mpsToKmh(mps: Double): Double = mps * MPS_TO_KMH
 
@@ -92,6 +94,26 @@ fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Dou
 /** Average speed in m/s, derived from distance and moving time (0 if no time elapsed). */
 fun avgSpeedMps(distanceMeters: Double, movingTimeMillis: Long): Double =
     if (movingTimeMillis > 0) distanceMeters / (movingTimeMillis / 1000.0) else 0.0
+
+/**
+ * Split a route into the segments that were actually recorded: no points are written during a
+ * pause or a GPS outage, so a wall-time gap above [GPS_STALE_MS] between consecutive points is
+ * a recording discontinuity, and drawing across it would show travel the tracker never saw.
+ * Points without a timestamp (old data recorded before times reached the route) never split,
+ * so such routes stay one segment exactly as before.
+ */
+fun splitRouteSegments(route: List<GeoPoint>): List<List<GeoPoint>> {
+    if (route.isEmpty()) return emptyList()
+    val segments = mutableListOf(mutableListOf(route.first()))
+    for (i in 1 until route.size) {
+        val prev = route[i - 1]
+        val point = route[i]
+        val gapped = prev.timeMillis > 0 && point.timeMillis > 0 &&
+            point.timeMillis - prev.timeMillis > GPS_STALE_MS
+        if (gapped) segments += mutableListOf(point) else segments.last() += point
+    }
+    return segments
+}
 
 /**
  * Display-only track smoothing: a centered moving average irons out per-fix GPS scatter,

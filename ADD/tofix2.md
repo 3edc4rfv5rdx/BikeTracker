@@ -60,7 +60,7 @@ Fix startup failure handling in `app/src/main/java/xx/biketracker/tracking/Track
 
 Treat service startup as a state transition that commits only after all required steps succeed. Observe both synchronous exceptions and asynchronous `requestLocationUpdates` task failure. Route every partial-start failure through one idempotent main-thread cleanup path that removes updates/foreground notification, resets live state, removes any empty draft after its insert resolves, and stops the correct service start. Surface a localized actionable error to the UI. Add tests for failure before foreground promotion, synchronous registration failure, asynchronous task failure, cancellation during draft creation, and a successful start.
 
-## 8. Medium: preserve route segment boundaries across pauses and GPS outages
+## 8. FIXED (without migration: segments are derived from stored point-time gaps at display time): preserve route segment boundaries across pauses and GPS outages
 
 **Prompt:**
 

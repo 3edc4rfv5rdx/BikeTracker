@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- The map no longer draws a straight line across pauses or GPS outages: a track is split into recorded segments at time gaps, each segment is smoothed and drawn independently, and old rides get the same fix from their stored point times without any schema change.
 - Android lint warnings and Compose hints are resolved across SDK guards, preferences, bitmap creation, state primitives, resources, adaptive icons, and the intentional portrait-only activity; dependency-update notices are isolated from the source-quality gate for separate migrations.
 - Android lint errors are fixed at their source: Compose callbacks use configuration-aware resources, invariant app/language names are marked non-translatable, and location registration performs an immediate permission check with explicit security-failure handling.
 - Tracking startup now becomes RECORDING only after both draft creation and Play Services location registration succeed; synchronous and asynchronous failures share one cleanup path that removes the empty draft, foreground notification, live state, and ride reservation while showing an actionable error.
