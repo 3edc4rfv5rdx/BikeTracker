@@ -108,7 +108,7 @@ Fix one-time centering in `app/src/main/java/xx/biketracker/map/MapScreen.kt` an
 
 Give every live ride a stable identity (for example, a service-generated ride/session ID in `TrackingSnapshot`) and use it as the recenter key. Do not use route size or every GPS update as the key, because that would fight user panning. Preserve selected-history-trip behavior. Add Compose/state tests for two consecutive live rides, stop/start before the first fix, switching between a stored trip and the active ride, and manual panning during one ride.
 
-## 14. Low: keep rolling history summaries current in long-lived UI sessions
+## 14. FIXED (definition: rolling 7/30/365-day windows, re-anchored at local midnight): keep rolling history summaries current in long-lived UI sessions
 
 **Prompt:**
 

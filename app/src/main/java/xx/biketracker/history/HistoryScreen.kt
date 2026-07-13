@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,8 +41,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import xx.biketracker.DAY_MS
 import xx.biketracker.R
+import xx.biketracker.millisUntilNextMidnight
 import xx.biketracker.avgSpeedMps
 import xx.biketracker.data.AppDatabase
 import xx.biketracker.data.RideTotals
@@ -66,12 +69,22 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
     // just dismisses the dialog). The Trip already carries every figure the dialog shows.
     var selectedTrip by remember { mutableStateOf<Trip?>(null) }
 
-    // Rolling windows anchored at first composition; recomputing per frame is pointless.
-    val now = remember { System.currentTimeMillis() }
+    // Rolling 7/30/365-day windows (the labels name the exact spans). The anchor re-arms at
+    // every local midnight so trips age out even when this screen stays alive across a day
+    // boundary; day granularity keeps the Room flows from being recreated more often than the
+    // windows can actually change. A timezone change is picked up at the next rollover (or by
+    // recomposition when the tab is revisited).
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(millisUntilNextMidnight(System.currentTimeMillis()))
+            now = System.currentTimeMillis()
+        }
+    }
     val empty = RideTotals(0.0, 0, 0)
-    val week by remember { dao.observeTotals(now - 7 * DAY_MS) }.collectAsState(initial = empty)
-    val month by remember { dao.observeTotals(now - 30 * DAY_MS) }.collectAsState(initial = empty)
-    val year by remember { dao.observeTotals(now - 365 * DAY_MS) }.collectAsState(initial = empty)
+    val week by remember(now) { dao.observeTotals(now - 7 * DAY_MS) }.collectAsState(initial = empty)
+    val month by remember(now) { dao.observeTotals(now - 30 * DAY_MS) }.collectAsState(initial = empty)
+    val year by remember(now) { dao.observeTotals(now - 365 * DAY_MS) }.collectAsState(initial = empty)
     val all by remember { dao.observeTotals(0L) }.collectAsState(initial = empty)
 
     // Which year/month/day nodes are currently expanded, keyed by their stable node key.

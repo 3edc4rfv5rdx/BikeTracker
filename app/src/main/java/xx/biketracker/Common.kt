@@ -2,8 +2,10 @@ package xx.biketracker
 
 import java.text.DateFormat
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -66,6 +68,23 @@ private const val METERS_PER_DEGREE = 111_320.0
 
 // --- Time windows ---
 const val DAY_MS = 24L * 60L * 60L * 1000L
+
+/**
+ * Milliseconds from [nowMillis] to the next local midnight in [timeZone] — the boundary at
+ * which day-granular UI (rolling history windows) re-anchors itself. Calendar-based, so DST
+ * days of 23/25 hours land on the true midnight; always at least 1 ms to keep timer loops safe.
+ */
+fun millisUntilNextMidnight(nowMillis: Long, timeZone: TimeZone = TimeZone.getDefault()): Long {
+    val calendar = Calendar.getInstance(timeZone).apply {
+        timeInMillis = nowMillis
+        add(Calendar.DAY_OF_YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return (calendar.timeInMillis - nowMillis).coerceAtLeast(1L)
+}
 
 // --- Preferences ---
 /** Single SharedPreferences file for all app settings. */

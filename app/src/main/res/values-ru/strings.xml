@@ -88,9 +88,9 @@
     <string name="history_empty">Поездок пока нет</string>
     <string name="history_today">Сегодня</string>
     <string name="history_collapse_all">Свернуть все</string>
-    <string name="summary_week">Неделя</string>
-    <string name="summary_month">Месяц</string>
-    <string name="summary_year">Год</string>
+    <string name="summary_week">7 дней</string>
+    <string name="summary_month">30 дней</string>
+    <string name="summary_year">365 дней</string>
     <string name="summary_all">Всего</string>
 
     <string name="about_title">О приложении</string>

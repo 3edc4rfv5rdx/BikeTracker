@@ -88,9 +88,9 @@
     <string name="history_empty">Поїздок ще немає</string>
     <string name="history_today">Сьогодні</string>
     <string name="history_collapse_all">Згорнути все</string>
-    <string name="summary_week">Тиждень</string>
-    <string name="summary_month">Місяць</string>
-    <string name="summary_year">Рік</string>
+    <string name="summary_week">7 днів</string>
+    <string name="summary_month">30 днів</string>
+    <string name="summary_year">365 днів</string>
     <string name="summary_all">Усього</string>
 
     <string name="about_title">Про застосунок</string>

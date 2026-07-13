@@ -91,9 +91,9 @@
     <string name="history_empty">No rides yet</string>
     <string name="history_today">Today</string>
     <string name="history_collapse_all">Collapse all</string>
-    <string name="summary_week">Week</string>
-    <string name="summary_month">Month</string>
-    <string name="summary_year">Year</string>
+    <string name="summary_week">7 days</string>
+    <string name="summary_month">30 days</string>
+    <string name="summary_year">365 days</string>
     <string name="summary_all">Total</string>
 
     <string name="about_title">About</string>
