@@ -19,6 +19,10 @@ val PausedOrange = Color(0xFFFF9800)
 val WindowLight = Color(0xFFF1F2F4)
 val ContainerLight = Color.White
 
+// Tonal button (Stop) fill in the dark theme: the stock tonal container is nearly invisible
+// on the near-black window, so it gets a clearly lighter grey.
+val TonalButtonDark = Color(0xFF4A4A4A)
+
 // Dark theme: near-black window with progressively lighter elevated containers.
 val WindowDark = Color(0xFF121212)
 val ContainerDarkLowest = Color(0xFF1A1A1A)

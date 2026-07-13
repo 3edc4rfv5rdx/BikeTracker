@@ -39,7 +39,7 @@
     <string name="btn_start">Старт</string>
     <string name="btn_pause">Пауза</string>
     <string name="btn_resume">Їдемо</string>
-    <string name="btn_stop_save">Стоп і зберегти</string>
+    <string name="btn_stop_save">Стоп &amp; зберегти</string>
 
     <string name="perm_denied">Увімкніть доступ до геолокації в Налаштуваннях щоб записувати поїздки</string>
     <string name="perm_bg_title">Запис у фоні</string>

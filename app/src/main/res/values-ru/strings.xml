@@ -39,7 +39,7 @@
     <string name="btn_start">Старт</string>
     <string name="btn_pause">Пауза</string>
     <string name="btn_resume">Едем</string>
-    <string name="btn_stop_save">Стоп и сохранить</string>
+    <string name="btn_stop_save">Стоп &amp; сохранить</string>
 
     <string name="perm_denied">Включите доступ к геолокации в Настройках чтобы записывать поездки</string>
     <string name="perm_bg_title">Запись в фоне</string>

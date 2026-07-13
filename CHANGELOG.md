@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Stop button: discard long-press slowed to 1.5 s, label is "Stop & save" centered on two lines, and the fill is a lighter grey in the dark theme.
 - Tracking screen: the km/h unit joined the Speed caption above the digits, and the altitude block sits right under the stats with the same gap as between the stat rows.
 - Fixed the app being killed by the system when opening the map early in a ride: framing a short route zoomed past the tile source's maxzoom, where MapLibre symbol layout multiplies street-label anchors by the overscale factor and allocates gigabytes; route centering is now capped at z16 and hand zoom at z19.
 - Map arrow recolors via a layer property switch instead of a per-feature expression.

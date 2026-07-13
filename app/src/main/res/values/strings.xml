@@ -39,7 +39,7 @@
     <string name="btn_start">Start</string>
     <string name="btn_pause">Pause</string>
     <string name="btn_resume">Resume</string>
-    <string name="btn_stop_save">Stop and save</string>
+    <string name="btn_stop_save">Stop &amp; save</string>
 
     <string name="perm_denied">Enable location permission in Settings to record rides</string>
     <string name="perm_bg_title">Keep recording in background</string>

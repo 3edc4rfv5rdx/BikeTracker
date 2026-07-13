@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import xx.biketracker.settings.ThemeMode
 
 // Window background is a distinct tone from the container roles, so dialogs and menus (which use
@@ -27,6 +28,9 @@ private val DarkColors = darkColorScheme(
     surfaceContainer = ContainerDark,
     surfaceContainerHigh = ContainerDarkHigh,
     surfaceContainerHighest = ContainerDarkHighest,
+    // Tonal buttons (the Stop button) need to read clearly against the near-black window.
+    secondaryContainer = TonalButtonDark,
+    onSecondaryContainer = Color.White,
 )
 
 /** True when the app renders dark for the given theme choice; shared by the theme and the map. */

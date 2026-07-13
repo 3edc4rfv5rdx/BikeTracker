@@ -40,6 +40,7 @@ import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.KeepScreenOnWhile
 import xx.biketracker.ui.PausedOrange
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -50,6 +51,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,6 +75,10 @@ import kotlin.math.roundToInt
  *  6dp padding top and bottom) with 2dp of slack above and below. Fixed so swapping the content
  *  inside (banner ↔ km/h) never shifts the layout. */
 private val BANNER_FIELD_HEIGHT = 44.dp
+
+/** Long-press needed to stop WITHOUT saving — much slower than the stock ~400 ms long-press,
+ *  so a sluggish tap can't discard a ride. */
+private const val STOP_DISCARD_PRESS_MS = 1500L
 
 /** Disables the extra font padding Android reserves above/below the glyphs. */
 private val NO_FONT_PADDING = TextStyle(
@@ -415,7 +422,9 @@ private fun Controls(
             containerColor = if (status == TrackingStatus.PAUSED) PausedOrange else null,
         )
         // Tap saves; a long-press stops without saving. The transparent overlay carries both
-        // gestures so the tonal button keeps its Material look and shaped ripple.
+        // gestures so the tonal button keeps its Material look and shaped ripple. The discard
+        // long-press is deliberately slow (STOP_DISCARD_PRESS_MS) so a sluggish gloved tap
+        // can't throw a ride away.
         Box(modifier = Modifier.weight(1f)) {
             BigButton(
                 text = stringResource(R.string.btn_stop_save),
@@ -425,12 +434,20 @@ private fun Controls(
                 enabled = status != TrackingStatus.IDLE,
             )
             if (status != TrackingStatus.IDLE) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(ButtonDefaults.filledTonalShape)
-                        .combinedClickable(onClick = onStopSave, onLongClick = onStopDiscard),
-                )
+                val config = LocalViewConfiguration.current
+                val slowLongPress = remember(config) {
+                    object : ViewConfiguration by config {
+                        override val longPressTimeoutMillis: Long get() = STOP_DISCARD_PRESS_MS
+                    }
+                }
+                CompositionLocalProvider(LocalViewConfiguration provides slowLongPress) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(ButtonDefaults.filledTonalShape)
+                            .combinedClickable(onClick = onStopSave, onLongClick = onStopDiscard),
+                    )
+                }
             }
         }
     }
@@ -447,7 +464,7 @@ private fun BigButton(
     containerColor: Color? = null,
 ) {
     val label: @Composable () -> Unit = {
-        Text(text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(text, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
     if (tonal) {
         // The tonal fill is close to the background; an outline makes the button read as one.
