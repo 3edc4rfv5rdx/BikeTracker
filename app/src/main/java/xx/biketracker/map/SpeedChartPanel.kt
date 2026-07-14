@@ -201,17 +201,39 @@ fun SpeedChartPanel(
                 )
             }
             if (expanded) {
-                // Readout line, with the ⋮ trigger at its right end (off the plot).
+                // Readout line: figures, then the fold-out controls unfolding in-line to the
+                // left of the ⋮ trigger, so they share this row and never cover the plot.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 12.dp, end = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ScrubReadout(
                         sample = scrubIndex?.let { samples.getOrNull(it) },
                         modifier = Modifier.weight(1f),
                     )
+                    if (menuOpen) {
+                        ChartMenuButton(
+                            icon = Icons.Filled.Straighten,
+                            label = stringResource(R.string.stat_distance),
+                            active = axisDistance,
+                        ) { axisDistance = true }
+                        ChartMenuButton(
+                            icon = Icons.Filled.Schedule,
+                            label = stringResource(R.string.stat_time),
+                            active = !axisDistance,
+                        ) { axisDistance = false }
+                        ChartMenuButton(
+                            icon = Icons.Filled.Add,
+                            label = stringResource(R.string.map_zoom_in),
+                        ) { applyZoom(BUTTON_ZOOM_STEP) }
+                        ChartMenuButton(
+                            icon = Icons.Filled.Remove,
+                            label = stringResource(R.string.map_zoom_out),
+                        ) { applyZoom(1f / BUTTON_ZOOM_STEP) }
+                    }
                     ChartMenuButton(
                         icon = Icons.Filled.MoreVert,
                         label = stringResource(R.string.chart_menu),
@@ -229,7 +251,8 @@ fun SpeedChartPanel(
                         axisDistance = axisDistance,
                         scrubIndex = scrubIndex,
                         onScrub = onScrub,
-                        onInteract = { menuOpen = false }, // touching the plot dismisses the strip
+                        // Scrubbing collapses the strip, so the readout regains the full row.
+                        onInteract = { menuOpen = false },
                         viewStart = viewStart,
                         viewWidth = viewWidth,
                         onViewChange = { start, width ->
@@ -238,35 +261,6 @@ fun SpeedChartPanel(
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
-                    // Fold-out strip: axis pick and stepwise zoom (for when pinching is awkward),
-                    // dropping over the plot from under the ⋮ button.
-                    if (menuOpen) {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(end = 6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            ChartMenuButton(
-                                icon = Icons.Filled.Straighten,
-                                label = stringResource(R.string.stat_distance),
-                                active = axisDistance,
-                            ) { axisDistance = true }
-                            ChartMenuButton(
-                                icon = Icons.Filled.Schedule,
-                                label = stringResource(R.string.stat_time),
-                                active = !axisDistance,
-                            ) { axisDistance = false }
-                            ChartMenuButton(
-                                icon = Icons.Filled.Add,
-                                label = stringResource(R.string.map_zoom_in),
-                            ) { applyZoom(BUTTON_ZOOM_STEP) }
-                            ChartMenuButton(
-                                icon = Icons.Filled.Remove,
-                                label = stringResource(R.string.map_zoom_out),
-                            ) { applyZoom(1f / BUTTON_ZOOM_STEP) }
-                        }
-                    }
                 }
             }
         }
