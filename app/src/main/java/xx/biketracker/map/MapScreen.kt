@@ -111,6 +111,7 @@ fun MapScreen() {
                 bearingDegrees = if (live) snapshot.bearingDegrees else null,
                 puckState = puckState,
                 marker = scrubIndex?.let { route.getOrNull(it) },
+                onTrackTap = { scrubIndex = it },
             )
 
             if (selected == null && snapshot.route.isEmpty()) {

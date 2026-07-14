@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ import android.graphics.Canvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.compose.ui.res.stringResource
@@ -62,6 +64,7 @@ import org.maplibre.geojson.MultiLineString
 import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
+import xx.biketracker.haversineMeters
 import xx.biketracker.smoothRoute
 import xx.biketracker.splitRouteSegments
 import xx.biketracker.ui.AccentOrange
@@ -90,6 +93,8 @@ private const val MARKER_SOURCE_ID = "ride-marker"
 private const val MARKER_LAYER_ID = "ride-marker-circle"
 private const val MARKER_RADIUS = 7f
 private const val MARKER_STROKE_WIDTH = 2f
+// A map tap within this finger-sized distance of the track selects the nearest track point.
+private const val TRACK_TAP_SLOP_DP = 24f
 
 /** Tint of the live-position arrow: it flags a paused ride and GPS trouble by color. */
 enum class PuckState(internal val imageId: String, internal val drawableRes: Int) {
@@ -114,6 +119,7 @@ fun RouteMap(
     bearingDegrees: Float? = null,
     puckState: PuckState = PuckState.NORMAL,
     marker: GeoPoint? = null,
+    onTrackTap: ((Int) -> Unit)? = null,
 ) {
     val context = LocalContext.current
 
@@ -155,6 +161,11 @@ fun RouteMap(
         }
     }
 
+    // The tap listener is registered once but must see the current route and callback.
+    val currentRoute by rememberUpdatedState(route)
+    val currentOnTrackTap by rememberUpdatedState(onTrackTap)
+    val tapSlopPx = with(LocalDensity.current) { TRACK_TAP_SLOP_DP.dp.toPx() }
+
     LaunchedEffect(Unit) {
         mapView.getMapAsync { map ->
             // Hard ceiling for hand zooming: past this the overscale factor over maxzoom-14
@@ -168,6 +179,21 @@ fun RouteMap(
             map.addOnCameraMoveStartedListener { reason ->
                 if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                     gestureInProgress = true
+                }
+            }
+            // A tap close enough to the track selects the nearest track point (mirrored onto
+            // the speed chart); farther taps fall through to plain map interaction.
+            map.addOnMapClickListener { latLng ->
+                val handler = currentOnTrackTap ?: return@addOnMapClickListener false
+                val (index, distanceMeters) =
+                    nearestRoutePoint(currentRoute, latLng.latitude, latLng.longitude)
+                        ?: return@addOnMapClickListener false
+                val slopMeters = tapSlopPx * map.projection.getMetersPerPixelAtLatitude(latLng.latitude)
+                if (distanceMeters <= slopMeters) {
+                    handler(index)
+                    true
+                } else {
+                    false
                 }
             }
             mapInstance = map
@@ -274,11 +300,19 @@ fun RouteMap(
 
     // Scrub marker from the speed chart: pin a dot to the chosen track point (empty when none).
     LaunchedEffect(marker, styleEpoch) {
-        val source = mapInstance?.style?.getSourceAs<GeoJsonSource>(MARKER_SOURCE_ID) ?: return@LaunchedEffect
+        val map = mapInstance ?: return@LaunchedEffect
+        val source = map.style?.getSourceAs<GeoJsonSource>(MARKER_SOURCE_ID) ?: return@LaunchedEffect
         if (marker == null) {
             source.setGeoJson(FeatureCollection.fromFeatures(listOf<Feature>()))
         } else {
             source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(marker.lon, marker.lat)))
+            // Keep the dot on screen while scrubbing (same rule as the live puck): pan to it
+            // at the current zoom, unless the user is dragging the map right now. A marker set
+            // by a map tap is on screen already, so this never fights that gesture.
+            val latLng = LatLng(marker.lat, marker.lon)
+            if (!gestureInProgress && !map.projection.visibleRegion.latLngBounds.contains(latLng)) {
+                map.animateCamera(CameraUpdateFactory.newLatLng(latLng))
+            }
         }
     }
 
@@ -368,6 +402,23 @@ fun RouteMap(
             }
         }
     }
+}
+
+/** Index of the route point nearest to (lat, lon) with its distance in meters, or null when
+ *  the route is empty. Linear haversine scan: even multi-hour tracks take well under a
+ *  millisecond, and it only runs on a tap. */
+private fun nearestRoutePoint(route: List<GeoPoint>, lat: Double, lon: Double): Pair<Int, Double>? {
+    if (route.isEmpty()) return null
+    var bestIndex = 0
+    var bestMeters = Double.MAX_VALUE
+    for (i in route.indices) {
+        val d = haversineMeters(lat, lon, route[i].lat, route[i].lon)
+        if (d < bestMeters) {
+            bestMeters = d
+            bestIndex = i
+        }
+    }
+    return bestIndex to bestMeters
 }
 
 /** Rasterize a puck vector drawable into a bitmap the MapLibre style can register as an image. */
