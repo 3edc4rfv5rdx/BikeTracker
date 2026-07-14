@@ -13,20 +13,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,9 +49,11 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
 import xx.biketracker.MPS_TO_KMH
@@ -81,8 +87,10 @@ import kotlin.math.min
 private const val SPEED_SMOOTH_WINDOW = 7
 /** The expanded panel (handle included) is the screen height divided by this. */
 private const val PANEL_SCREEN_DIVISOR = 3
-/** Hard ceiling for pinch-zooming the X axis. */
+/** Hard ceiling for zooming the X axis (pinch or buttons). */
 private const val CHART_MAX_ZOOM = 10f
+/** X-zoom factor of one +/- button tap, around the window center. */
+private const val BUTTON_ZOOM_STEP = 1.5f
 /** Horizontal plot inset: the line's start and end stay off the screen edges. */
 private val PLOT_H_PAD = 12.dp
 /** X-axis tick ladders (1-2-5-ish) and the most ticks a window may get. */
@@ -132,9 +140,10 @@ private fun isRecordingGap(prevTimeMillis: Long, timeMillis: Long): Boolean =
 
 /**
  * Bottom panel of the Map tab: the ride's speed over distance or time. The handle strip
- * toggles the chart between hidden and a fixed third of the screen. One finger scrubs: the
- * picked point is reported as a route index so the map can mark it, and its figures show
- * above the plot. Two fingers pinch-zoom the X axis and pan the zoomed window. Works
+ * toggles the chart between hidden and a fixed third of the screen. One finger scrubs (the
+ * picked point is reported as a route index so the map can mark it), a long-press hands the
+ * finger over to panning the zoomed window, and two fingers pinch-zoom the X axis. The ⋮
+ * button in the corner unfolds a strip with the axis pick and +/- zoom buttons. Works
  * identically for the live ride and a stored one.
  */
 @Composable
@@ -153,6 +162,7 @@ fun SpeedChartPanel(
     }
 
     var axisDistance by rememberSaveable { mutableStateOf(true) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     // Pinch-zoom window over the X domain, as fractions of the whole ride. Keyed to the
     // track's identity (its first fix time), so another ride never inherits a stale zoom;
@@ -160,6 +170,11 @@ fun SpeedChartPanel(
     val trackKey = route.firstOrNull()?.timeMillis
     var viewStart by remember(trackKey) { mutableFloatStateOf(0f) }
     var viewWidth by remember(trackKey) { mutableFloatStateOf(1f) }
+    fun applyZoom(factor: Float) {
+        val (start, width) = zoomedView(viewStart, viewWidth, factor, focus = 0.5f, panFraction = 0f)
+        viewStart = start
+        viewWidth = width
+    }
 
     val panelHeight = (LocalConfiguration.current.screenHeightDp / PANEL_SCREEN_DIVISOR).dp
     val chartLabel = stringResource(R.string.map_speed_chart)
@@ -186,12 +201,23 @@ fun SpeedChartPanel(
                 )
             }
             if (expanded) {
-                ScrubReadout(
-                    sample = scrubIndex?.let { samples.getOrNull(it) },
+                // Readout line, with the ⋮ trigger at its right end (off the plot).
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                )
+                        .padding(start = 12.dp, end = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ScrubReadout(
+                        sample = scrubIndex?.let { samples.getOrNull(it) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    ChartMenuButton(
+                        icon = Icons.Filled.MoreVert,
+                        label = stringResource(R.string.chart_menu),
+                        active = menuOpen,
+                    ) { menuOpen = !menuOpen }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -203,6 +229,7 @@ fun SpeedChartPanel(
                         axisDistance = axisDistance,
                         scrubIndex = scrubIndex,
                         onScrub = onScrub,
+                        onInteract = { menuOpen = false }, // touching the plot dismisses the strip
                         viewStart = viewStart,
                         viewWidth = viewWidth,
                         onViewChange = { start, width ->
@@ -211,23 +238,34 @@ fun SpeedChartPanel(
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
-                    // Axis pick as round buttons stacked at the right edge, map-FAB style.
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        AxisButton(
-                            icon = Icons.Filled.Straighten,
-                            label = stringResource(R.string.stat_distance),
-                            active = axisDistance,
-                        ) { axisDistance = true }
-                        AxisButton(
-                            icon = Icons.Filled.Schedule,
-                            label = stringResource(R.string.stat_time),
-                            active = !axisDistance,
-                        ) { axisDistance = false }
+                    // Fold-out strip: axis pick and stepwise zoom (for when pinching is awkward),
+                    // dropping over the plot from under the ⋮ button.
+                    if (menuOpen) {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(end = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            ChartMenuButton(
+                                icon = Icons.Filled.Straighten,
+                                label = stringResource(R.string.stat_distance),
+                                active = axisDistance,
+                            ) { axisDistance = true }
+                            ChartMenuButton(
+                                icon = Icons.Filled.Schedule,
+                                label = stringResource(R.string.stat_time),
+                                active = !axisDistance,
+                            ) { axisDistance = false }
+                            ChartMenuButton(
+                                icon = Icons.Filled.Add,
+                                label = stringResource(R.string.map_zoom_in),
+                            ) { applyZoom(BUTTON_ZOOM_STEP) }
+                            ChartMenuButton(
+                                icon = Icons.Filled.Remove,
+                                label = stringResource(R.string.map_zoom_out),
+                            ) { applyZoom(1f / BUTTON_ZOOM_STEP) }
+                        }
                     }
                 }
             }
@@ -252,18 +290,30 @@ private fun ScrubReadout(sample: SpeedSample?, modifier: Modifier) {
     )
 }
 
-/** One circular axis-mode button; the active mode gets the filled tint (like the follow FAB). */
+/**
+ * One round button of the chart's controls. Colors avoid the theme's low-contrast purple:
+ * an inactive button is a high-contrast neutral disc (near-white on dark, near-black on
+ * light) that stays readable in sunlight; the active axis is filled with the app's orange
+ * accent instead.
+ */
 @Composable
-private fun AxisButton(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
-    val container = if (active) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.primaryContainer
-    SmallFloatingActionButton(
+private fun ChartMenuButton(
+    icon: ImageVector,
+    label: String,
+    active: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val container = if (active) AccentOrange else MaterialTheme.colorScheme.onSurface
+    val content = if (active) Color.White else MaterialTheme.colorScheme.surface
+    FilledIconButton(
         onClick = onClick,
-        shape = CircleShape,
-        containerColor = container,
-        contentColor = contentColorFor(container),
+        modifier = Modifier.size(40.dp),
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = container,
+            contentColor = content,
+        ),
     ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
     }
 }
 
@@ -277,12 +327,16 @@ private class ChartStyle(
     val axisColor: Color,
 )
 
+/** What the current chart gesture is; decided once per gesture and never downgraded. */
+private enum class ChartGesture { UNDECIDED, SCRUB, PAN, PINCH }
+
 @Composable
 private fun SpeedChart(
     samples: List<SpeedSample>,
     axisDistance: Boolean,
     scrubIndex: Int?,
     onScrub: (Int) -> Unit,
+    onInteract: () -> Unit,
     viewStart: Float,
     viewWidth: Float,
     onViewChange: (Float, Float) -> Unit,
@@ -297,60 +351,109 @@ private fun SpeedChart(
         dotColor = ScrubBlue,
         axisColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    val haptics = LocalHapticFeedback.current
 
     // Gestures read the freshest data without restarting: a live fix every 1.5 s must not
-    // cancel a scrub or pinch in progress.
+    // cancel a scrub, pan, or pinch in progress.
     val currentSamples by rememberUpdatedState(samples)
     val currentAxis by rememberUpdatedState(axisDistance)
     val currentViewStart by rememberUpdatedState(viewStart)
     val currentViewWidth by rememberUpdatedState(viewWidth)
+    val currentOnInteract by rememberUpdatedState(onInteract)
     Canvas(
         modifier = modifier.pointerInput(Unit) {
             val hPad = PLOT_H_PAD.toPx()
+            fun plotWidth() = size.width - 2 * hPad
             fun scrubAt(x: Float) {
-                val plotWidth = size.width - 2 * hPad
                 scrubTo(
                     currentSamples, currentAxis, currentViewStart, currentViewWidth,
-                    x - hPad, plotWidth, onScrub,
+                    x - hPad, plotWidth(), onScrub,
                 )
             }
-            // One pointer scrubs (drag or plain tap); a second pointer switches the whole
-            // gesture to pinch-zoom/pan of the X window and stays there until fingers lift,
-            // so losing one finger mid-pinch doesn't fling the scrub marker around.
+            fun panBy(pixels: Float) {
+                val (start, width) = zoomedView(
+                    currentViewStart, currentViewWidth,
+                    zoom = 1f, focus = 0.5f, panFraction = pixels / plotWidth(),
+                )
+                onViewChange(start, width)
+            }
+
+            // One finger scrubs; holding the first finger still past the long-press timeout
+            // hands it over to panning the zoomed window instead (with a haptic tick). A
+            // second pointer at any point turns the whole gesture into pinch-zoom/pan and
+            // keeps it there, so losing one finger mid-pinch doesn't fling the scrub marker.
             awaitEachGesture {
                 val down = awaitFirstDown()
-                var pinched = false
-                var scrubbed = false
+                currentOnInteract() // any touch on the plot dismisses the fold-out strip
+                var mode = ChartGesture.UNDECIDED
                 var lastSingle = down.position
+
+                // Decide the gesture within the long-press timeout.
+                val decided = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    while (mode == ChartGesture.UNDECIDED) {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        when {
+                            pressed.size >= 2 -> mode = ChartGesture.PINCH
+                            pressed.isEmpty() -> return@withTimeoutOrNull // quick tap
+                            else -> {
+                                val change = pressed.first()
+                                lastSingle = change.position
+                                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                                    mode = ChartGesture.SCRUB
+                                    scrubAt(change.position.x)
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
+                }
+                if (decided == null) {
+                    mode = ChartGesture.PAN
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+                if (mode == ChartGesture.UNDECIDED) {
+                    scrubAt(lastSingle.x) // plain tap
+                    return@awaitEachGesture
+                }
+
+                // Run the decided gesture until all fingers lift.
                 while (true) {
                     val event = awaitPointerEvent()
                     val pressed = event.changes.filter { it.pressed }
-                    if (pressed.size >= 2) {
-                        pinched = true
-                        val zoom = event.calculateZoom()
-                        val pan = event.calculatePan()
-                        if (zoom != 1f || pan.x != 0f) {
-                            val focus = ((event.calculateCentroid().x - hPad) / (size.width - 2 * hPad))
-                                .coerceIn(0f, 1f)
-                            val (start, width) = zoomedView(
-                                currentViewStart, currentViewWidth,
-                                zoom, focus, pan.x / (size.width - 2 * hPad),
-                            )
-                            onViewChange(start, width)
+                    if (pressed.size >= 2) mode = ChartGesture.PINCH
+                    when {
+                        mode == ChartGesture.PINCH && pressed.size >= 2 -> {
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            if (zoom != 1f || pan.x != 0f) {
+                                val focus = ((event.calculateCentroid().x - hPad) / plotWidth())
+                                    .coerceIn(0f, 1f)
+                                val (start, width) = zoomedView(
+                                    currentViewStart, currentViewWidth,
+                                    zoom, focus, pan.x / plotWidth(),
+                                )
+                                onViewChange(start, width)
+                            }
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
                         }
-                        event.changes.forEach { if (it.positionChanged()) it.consume() }
-                    } else if (pressed.size == 1 && !pinched) {
-                        val change = pressed.first()
-                        if (change.positionChanged()) {
-                            scrubbed = true
-                            scrubAt(change.position.x)
-                            change.consume()
+                        mode == ChartGesture.SCRUB && pressed.size == 1 -> {
+                            val change = pressed.first()
+                            if (change.positionChanged()) {
+                                scrubAt(change.position.x)
+                                change.consume()
+                            }
                         }
-                        lastSingle = change.position
+                        mode == ChartGesture.PAN && pressed.size == 1 -> {
+                            val change = pressed.first()
+                            if (change.positionChanged()) {
+                                panBy(change.position.x - change.previousPosition.x)
+                                change.consume()
+                            }
+                        }
                     }
                     if (event.changes.none { it.pressed }) break
                 }
-                if (!pinched && !scrubbed) scrubAt(lastSingle.x) // plain tap
             }
         },
     ) {

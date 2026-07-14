@@ -53,6 +53,7 @@
     <string name="map_zoom_out">Отдалить</string>
     <string name="map_follow_heading">Поворачивать карту по направлению движения</string>
     <string name="map_speed_chart">График скорости</string>
+    <string name="chart_menu">Меню графика</string>
     <string name="settings_map_section">Карта</string>
     <string name="map_offline_title">Офлайн-карта</string>
     <string name="map_offline_hint">Будет скачана последняя просмотренная область карты</string>

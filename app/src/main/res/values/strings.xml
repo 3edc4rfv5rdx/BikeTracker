@@ -53,6 +53,7 @@
     <string name="map_zoom_out">Zoom out</string>
     <string name="map_follow_heading">Rotate map with direction of travel</string>
     <string name="map_speed_chart">Speed chart</string>
+    <string name="chart_menu">Chart menu</string>
     <string name="settings_map_section">Map</string>
     <string name="map_offline_title">Offline map</string>
     <string name="map_offline_hint">The last viewed map area will be downloaded for offline use</string>
