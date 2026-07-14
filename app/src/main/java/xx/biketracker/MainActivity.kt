@@ -7,7 +7,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -75,6 +79,9 @@ import xx.biketracker.tracking.liveMovingTimeMillis
 import xx.biketracker.ui.BikeTrackerTheme
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.NavLabelStyle
+
+/** Bottom tab bar height without the system inset (the Material default of 80 dp is a lot). */
+private val NAV_BAR_HEIGHT = 64.dp
 
 private sealed class Destination(val route: String) {
     data object Tracking : Destination("tracking")
@@ -215,7 +222,11 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
             )
         },
         bottomBar = {
-            NavigationBar {
+            // Trimmed below the stock 80 dp so the content (map + speed chart) gets the space
+            // back; the system inset is re-added on top, as the fixed height replaces the
+            // bar's own inset handling.
+            val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            NavigationBar(modifier = Modifier.height(NAV_BAR_HEIGHT + bottomInset)) {
                 tabs.forEach { tab ->
                     val selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true
                     NavigationBarItem(

@@ -3,8 +3,11 @@ package xx.biketracker.map
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -41,6 +45,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -74,6 +79,10 @@ import kotlin.math.min
 private const val SPEED_SMOOTH_WINDOW = 7
 /** The expanded panel (handle included) is the screen height divided by this. */
 private const val PANEL_SCREEN_DIVISOR = 3
+/** Hard ceiling for pinch-zooming the X axis. */
+private const val CHART_MAX_ZOOM = 10f
+/** Horizontal plot inset: the line's start and the extent captions stay off the screen edges. */
+private val PLOT_H_PAD = 12.dp
 
 /**
  * One chart sample per route point, so a chart index is also an index into the route —
@@ -111,9 +120,10 @@ private fun isRecordingGap(prevTimeMillis: Long, timeMillis: Long): Boolean =
 
 /**
  * Bottom panel of the Map tab: the ride's speed over distance or time. The handle strip
- * toggles the chart between hidden and a fixed third of the screen. Dragging or tapping the
- * plot scrubs: the picked point is reported as a route index so the map can mark it, and its
- * figures show above the plot. Works identically for the live ride and a stored one.
+ * toggles the chart between hidden and a fixed third of the screen. One finger scrubs: the
+ * picked point is reported as a route index so the map can mark it, and its figures show
+ * above the plot. Two fingers pinch-zoom the X axis and pan the zoomed window. Works
+ * identically for the live ride and a stored one.
  */
 @Composable
 fun SpeedChartPanel(
@@ -131,6 +141,14 @@ fun SpeedChartPanel(
     }
 
     var axisDistance by rememberSaveable { mutableStateOf(true) }
+
+    // Pinch-zoom window over the X domain, as fractions of the whole ride. Keyed to the
+    // track's identity (its first fix time), so another ride never inherits a stale zoom;
+    // held here, not in the chart, so collapsing the panel keeps it.
+    val trackKey = route.firstOrNull()?.timeMillis
+    var viewStart by remember(trackKey) { mutableFloatStateOf(0f) }
+    var viewWidth by remember(trackKey) { mutableFloatStateOf(1f) }
+
     val panelHeight = (LocalConfiguration.current.screenHeightDp / PANEL_SCREEN_DIVISOR).dp
     val chartLabel = stringResource(R.string.map_speed_chart)
 
@@ -170,6 +188,12 @@ fun SpeedChartPanel(
                     axisDistance = axisDistance,
                     scrubIndex = scrubIndex,
                     onScrub = onScrub,
+                    viewStart = viewStart,
+                    viewWidth = viewWidth,
+                    onViewChange = { start, width ->
+                        viewStart = start
+                        viewWidth = width
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -198,7 +222,7 @@ private fun ScrubReadout(sample: SpeedSample?, modifier: Modifier) {
 
 @Composable
 private fun AxisToggle(axisDistance: Boolean, onChange: (Boolean) -> Unit) {
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.height(30.dp)) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.height(34.dp)) {
         SegmentedButton(
             selected = axisDistance,
             onClick = { onChange(true) },
@@ -208,7 +232,8 @@ private fun AxisToggle(axisDistance: Boolean, onChange: (Boolean) -> Unit) {
             Icon(
                 Icons.Filled.Straighten,
                 contentDescription = stringResource(R.string.stat_distance),
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.onSurface,
             )
         }
         SegmentedButton(
@@ -220,11 +245,23 @@ private fun AxisToggle(axisDistance: Boolean, onChange: (Boolean) -> Unit) {
             Icon(
                 Icons.Filled.Schedule,
                 contentDescription = stringResource(R.string.stat_time),
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
 }
+
+/** Colors, text machinery, and localized bits the draw pass needs, bundled to keep it tidy. */
+private class ChartStyle(
+    val textMeasurer: TextMeasurer,
+    val labelStyle: TextStyle,
+    val gridColor: Color,
+    val lineColor: Color,
+    val dotColor: Color,
+    val scrubLineColor: Color,
+    val kmUnit: String,
+)
 
 @Composable
 private fun SpeedChart(
@@ -232,51 +269,109 @@ private fun SpeedChart(
     axisDistance: Boolean,
     scrubIndex: Int?,
     onScrub: (Int) -> Unit,
+    viewStart: Float,
+    viewWidth: Float,
+    onViewChange: (Float, Float) -> Unit,
     modifier: Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val gridColor = MaterialTheme.colorScheme.outlineVariant
-    val scrubLineColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val lineColor = AccentOrange
-    val dotColor = ScrubBlue
-    val kmUnit = stringResource(R.string.unit_km)
+    val style = ChartStyle(
+        textMeasurer = textMeasurer,
+        labelStyle = TextStyle(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+        gridColor = MaterialTheme.colorScheme.outlineVariant,
+        lineColor = AccentOrange,
+        dotColor = ScrubBlue,
+        scrubLineColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        kmUnit = stringResource(R.string.unit_km),
+    )
 
     // Gestures read the freshest data without restarting: a live fix every 1.5 s must not
-    // cancel a scrub drag in progress.
+    // cancel a scrub or pinch in progress.
     val currentSamples by rememberUpdatedState(samples)
     val currentAxis by rememberUpdatedState(axisDistance)
+    val currentViewStart by rememberUpdatedState(viewStart)
+    val currentViewWidth by rememberUpdatedState(viewWidth)
     Canvas(
-        modifier = modifier
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    scrubTo(currentSamples, currentAxis, offset.x, size.width.toFloat(), onScrub)
-                }
+        modifier = modifier.pointerInput(Unit) {
+            val hPad = PLOT_H_PAD.toPx()
+            fun scrubAt(x: Float) {
+                val plotWidth = size.width - 2 * hPad
+                scrubTo(
+                    currentSamples, currentAxis, currentViewStart, currentViewWidth,
+                    x - hPad, plotWidth, onScrub,
+                )
             }
-            .pointerInput(Unit) {
-                detectDragGestures { change, _ ->
-                    change.consume()
-                    scrubTo(currentSamples, currentAxis, change.position.x, size.width.toFloat(), onScrub)
+            // One pointer scrubs (drag or plain tap); a second pointer switches the whole
+            // gesture to pinch-zoom/pan of the X window and stays there until fingers lift,
+            // so losing one finger mid-pinch doesn't fling the scrub marker around.
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                var pinched = false
+                var scrubbed = false
+                var lastSingle = down.position
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val pressed = event.changes.filter { it.pressed }
+                    if (pressed.size >= 2) {
+                        pinched = true
+                        val zoom = event.calculateZoom()
+                        val pan = event.calculatePan()
+                        if (zoom != 1f || pan.x != 0f) {
+                            val focus = ((event.calculateCentroid().x - hPad) / (size.width - 2 * hPad))
+                                .coerceIn(0f, 1f)
+                            val (start, width) = zoomedView(
+                                currentViewStart, currentViewWidth,
+                                zoom, focus, pan.x / (size.width - 2 * hPad),
+                            )
+                            onViewChange(start, width)
+                        }
+                        event.changes.forEach { if (it.positionChanged()) it.consume() }
+                    } else if (pressed.size == 1 && !pinched) {
+                        val change = pressed.first()
+                        if (change.positionChanged()) {
+                            scrubbed = true
+                            scrubAt(change.position.x)
+                            change.consume()
+                        }
+                        lastSingle = change.position
+                    }
+                    if (event.changes.none { it.pressed }) break
                 }
-            },
+                if (!pinched && !scrubbed) scrubAt(lastSingle.x) // plain tap
+            }
+        },
     ) {
         if (samples.size < 2) return@Canvas
-        drawSpeedChart(
-            samples, axisDistance, scrubIndex,
-            textMeasurer, labelStyle, gridColor, lineColor, dotColor, scrubLineColor, kmUnit,
-        )
+        drawSpeedChart(samples, axisDistance, scrubIndex, viewStart, viewWidth, style)
     }
 }
 
+/**
+ * New (start, width) fractions of the X window after zooming by [zoom] around the screen
+ * fraction [focus] and panning by [panFraction] (a plot-width fraction; dragging right
+ * moves the window towards the ride's start).
+ */
+private fun zoomedView(start: Float, width: Float, zoom: Float, focus: Float, panFraction: Float): Pair<Float, Float> {
+    val newWidth = (width / zoom).coerceIn(1f / CHART_MAX_ZOOM, 1f)
+    val anchor = start + focus * width // domain fraction under the fingers stays under them
+    val newStart = (anchor - focus * newWidth - panFraction * newWidth)
+        .coerceIn(0f, 1f - newWidth)
+    return newStart to newWidth
+}
+
+/** Map a plot-relative x (pixels) to the nearest sample of the visible window and report it. */
 private fun scrubTo(
     samples: List<SpeedSample>,
     axisDistance: Boolean,
-    x: Float,
-    width: Float,
+    viewStart: Float,
+    viewWidth: Float,
+    plotX: Float,
+    plotWidth: Float,
     onScrub: (Int) -> Unit,
 ) {
-    if (samples.size < 2 || width <= 0f) return
-    val fraction = (x / width).coerceIn(0f, 1f).toDouble()
+    if (samples.size < 2 || plotWidth <= 0f) return
+    val windowFraction = (plotX / plotWidth).coerceIn(0f, 1f)
+    val fraction = (viewStart + windowFraction * viewWidth).toDouble()
     val index = if (axisDistance) {
         nearestSampleIndex(samples, samples.last().distanceMeters * fraction) { it.distanceMeters }
     } else {
@@ -314,30 +409,31 @@ private fun DrawScope.drawSpeedChart(
     samples: List<SpeedSample>,
     axisDistance: Boolean,
     scrubIndex: Int?,
-    textMeasurer: TextMeasurer,
-    labelStyle: TextStyle,
-    gridColor: Color,
-    lineColor: Color,
-    dotColor: Color,
-    scrubLineColor: Color,
-    kmUnit: String,
+    viewStart: Float,
+    viewWidth: Float,
+    style: ChartStyle,
 ) {
     val w = size.width
     val h = size.height
+    val hPad = PLOT_H_PAD.toPx()
+    val plotWidth = w - 2 * hPad
     val topPad = 6.dp.toPx() // keeps the line's peak off the panel's controls
     val labelPad = 3.dp.toPx()
 
+    // Y scale stays that of the whole ride, so pinch-zooming never rescales the curve.
     val maxKmh = samples.maxOf { it.speedMps } * MPS_TO_KMH
     val step = gridStepKmh(maxKmh)
     val yMaxKmh = max(ceil(max(maxKmh, 1.0) / step) * step, step)
 
-    // X mapping for the current axis; both domains are non-decreasing over the samples.
+    // Visible X window in domain units; both domains are non-decreasing over the samples.
     val t0 = samples.first().timeMillis
     val xDomain = if (axisDistance) samples.last().distanceMeters else (samples.last().timeMillis - t0).toDouble()
-    fun xOf(s: SpeedSample): Float {
-        val v = if (axisDistance) s.distanceMeters else (s.timeMillis - t0).toDouble()
-        return if (xDomain > 0) (v / xDomain * w).toFloat() else 0f
-    }
+    val windowStart = viewStart * xDomain
+    val windowSpan = (viewWidth * xDomain).coerceAtLeast(1e-9)
+    fun domainOf(s: SpeedSample): Double =
+        if (axisDistance) s.distanceMeters else (s.timeMillis - t0).toDouble()
+    fun xOf(s: SpeedSample): Float =
+        hPad + ((domainOf(s) - windowStart) / windowSpan * plotWidth).toFloat()
     fun yOf(speedMps: Float): Float =
         (h - (speedMps * MPS_TO_KMH / yMaxKmh) * (h - topPad)).toFloat()
 
@@ -345,15 +441,16 @@ private fun DrawScope.drawSpeedChart(
     var grid = step
     while (grid <= yMaxKmh) {
         val y = yOf((grid / MPS_TO_KMH).toFloat())
-        drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
-        val label = textMeasurer.measure(AnnotatedString(grid.toInt().toString()), labelStyle)
+        drawLine(style.gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
+        val label = style.textMeasurer.measure(AnnotatedString(grid.toInt().toString()), style.labelStyle)
         drawText(label, topLeft = Offset(labelPad, y - label.size.height - 1f))
         grid += step
     }
 
-    // The speed line, broken at recording gaps. Vertices are thinned to roughly one per pixel
-    // column, but every consecutive pair is still checked so no gap is skipped over.
-    val vertexStride = max(1, samples.size / max(1, w.toInt()))
+    // The speed line, broken at recording gaps. Vertices are thinned to roughly one per
+    // visible pixel column, but every consecutive pair is still checked so no gap is
+    // skipped over; points outside the zoom window fall off the canvas edge harmlessly.
+    val vertexStride = max(1, (samples.size * viewWidth / max(1f, plotWidth)).toInt())
     val path = Path()
     var started = false
     var gapSinceLastVertex = false
@@ -371,27 +468,34 @@ private fun DrawScope.drawSpeedChart(
         lastVertex = i
     }
     drawPath(
-        path, lineColor,
+        path, style.lineColor,
         style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
 
-    // X extent caption in the bottom-right corner: total distance or total wall-clock span.
-    val extent = if (axisDistance) {
-        "${formatKm(samples.last().distanceMeters)} $kmUnit"
+    // Captions of the visible window's ends in the bottom corners, aligned to the plot edges.
+    fun caption(fraction: Double): String = if (axisDistance) {
+        "${formatKm(xDomain * fraction)} ${style.kmUnit}"
     } else {
-        formatDuration(samples.last().timeMillis - t0)
+        formatDuration((xDomain * fraction).toLong())
     }
-    val extentLabel = textMeasurer.measure(AnnotatedString(extent), labelStyle)
+    val startLabel = style.textMeasurer.measure(
+        AnnotatedString(caption(viewStart.toDouble())), style.labelStyle,
+    )
+    drawText(startLabel, topLeft = Offset(hPad, h - startLabel.size.height - labelPad))
+    val endLabel = style.textMeasurer.measure(
+        AnnotatedString(caption((viewStart + viewWidth).toDouble())), style.labelStyle,
+    )
     drawText(
-        extentLabel,
-        topLeft = Offset(w - extentLabel.size.width - labelPad, h - extentLabel.size.height - labelPad),
+        endLabel,
+        topLeft = Offset(w - hPad - endLabel.size.width, h - endLabel.size.height - labelPad),
     )
 
     // Scrub cursor: a vertical hairline with a dot on the curve, twinned with the map marker.
     val scrub = scrubIndex?.let { samples.getOrNull(it) } ?: return
     val x = xOf(scrub)
-    drawLine(scrubLineColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1.dp.toPx())
+    if (x < hPad || x > w - hPad) return // scrubbed point currently outside the zoom window
+    drawLine(style.scrubLineColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1.dp.toPx())
     val center = Offset(x, yOf(scrub.speedMps))
-    drawCircle(dotColor, radius = 5.dp.toPx(), center = center)
+    drawCircle(style.dotColor, radius = 5.dp.toPx(), center = center)
     drawCircle(Color.White, radius = 5.dp.toPx(), center = center, style = Stroke(width = 1.5f.dp.toPx()))
 }

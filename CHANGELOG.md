@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Speed chart: the plot is inset from the screen edges with the visible window's ends captioned in the corners, the axis-toggle icons are larger and darker, and the X axis pinch-zooms up to 10x with two-finger panning (one finger keeps scrubbing).
+- Bottom tab bar is 64 dp instead of the stock 80, returning the difference to the map and chart.
 - The Map tab gained a speed chart panel, pulled between hidden and a third of the screen by its handle: smoothed GPS speed over distance or time (toggle), where tapping or dragging pins a marker to the track and shows that point's speed, distance, and clock time — for the live ride and rides opened from History alike.
 - Map follow mode: a compass button keeps the camera on the current fix and rotates the map so the direction of travel points up.
 - Live speed and moving time of the active ride are shown in the Map tab's top bar.
