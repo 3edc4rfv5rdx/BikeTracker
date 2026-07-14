@@ -8,24 +8,25 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalConfiguration
@@ -81,17 +83,25 @@ private const val SPEED_SMOOTH_WINDOW = 7
 private const val PANEL_SCREEN_DIVISOR = 3
 /** Hard ceiling for pinch-zooming the X axis. */
 private const val CHART_MAX_ZOOM = 10f
-/** Horizontal plot inset: the line's start and the extent captions stay off the screen edges. */
+/** Horizontal plot inset: the line's start and end stay off the screen edges. */
 private val PLOT_H_PAD = 12.dp
+/** X-axis tick ladders (1-2-5-ish) and the most ticks a window may get. */
+private val DISTANCE_TICK_STEPS_KM =
+    doubleArrayOf(0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
+private val TIME_TICK_STEPS_MIN =
+    doubleArrayOf(0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 240.0)
+private const val MAX_X_TICKS = 6
 
 /**
  * One chart sample per route point, so a chart index is also an index into the route —
- * the scrub selection travels to the map as that index. [distanceMeters] is cumulative
- * along the recorded track; like the trip totals, a pause/outage gap adds nothing.
+ * the scrub selection travels to the map as that index. [distanceMeters] and
+ * [movingTimeMillis] are cumulative along the recorded track; like the trip totals, a
+ * pause/outage gap adds nothing to either.
  */
 internal class SpeedSample(
     val distanceMeters: Double,
     val timeMillis: Long,
+    val movingTimeMillis: Long,
     val speedMps: Float, // smoothed for display
 )
 
@@ -100,15 +110,17 @@ internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
     val half = SPEED_SMOOTH_WINDOW / 2
     val samples = ArrayList<SpeedSample>(route.size)
     var distance = 0.0
+    var movingMillis = 0L
     for (i in route.indices) {
         if (i > 0 && !isRecordingGap(route[i - 1].timeMillis, route[i].timeMillis)) {
             distance += haversineMeters(route[i - 1].lat, route[i - 1].lon, route[i].lat, route[i].lon)
+            movingMillis += (route[i].timeMillis - route[i - 1].timeMillis).coerceAtLeast(0L)
         }
         val from = max(0, i - half)
         val to = min(route.lastIndex, i + half)
         var sum = 0f
         for (j in from..to) sum += route[j].speedMps
-        samples += SpeedSample(distance, route[i].timeMillis, sum / (to - from + 1))
+        samples += SpeedSample(distance, route[i].timeMillis, movingMillis, sum / (to - from + 1))
     }
     return samples
 }
@@ -174,42 +186,62 @@ fun SpeedChartPanel(
                 )
             }
             if (expanded) {
-                Row(
+                ScrubReadout(
+                    sample = scrubIndex?.let { samples.getOrNull(it) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ScrubReadout(scrubIndex?.let { samples.getOrNull(it) }, Modifier.weight(1f))
-                    AxisToggle(axisDistance) { axisDistance = it }
-                }
-                SpeedChart(
-                    samples = samples,
-                    axisDistance = axisDistance,
-                    scrubIndex = scrubIndex,
-                    onScrub = onScrub,
-                    viewStart = viewStart,
-                    viewWidth = viewWidth,
-                    onViewChange = { start, width ->
-                        viewStart = start
-                        viewWidth = width
-                    },
+                )
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
                         .padding(top = 4.dp),
-                )
+                ) {
+                    SpeedChart(
+                        samples = samples,
+                        axisDistance = axisDistance,
+                        scrubIndex = scrubIndex,
+                        onScrub = onScrub,
+                        viewStart = viewStart,
+                        viewWidth = viewWidth,
+                        onViewChange = { start, width ->
+                            viewStart = start
+                            viewWidth = width
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    // Axis pick as round buttons stacked at the right edge, map-FAB style.
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        AxisButton(
+                            icon = Icons.Filled.Straighten,
+                            label = stringResource(R.string.stat_distance),
+                            active = axisDistance,
+                        ) { axisDistance = true }
+                        AxisButton(
+                            icon = Icons.Filled.Schedule,
+                            label = stringResource(R.string.stat_time),
+                            active = !axisDistance,
+                        ) { axisDistance = false }
+                    }
+                }
             }
         }
     }
 }
 
-/** Figures of the scrubbed point: "18.4 km/h · 5.2 km · 10:45". */
+/** Figures of the scrubbed point: "18.4 km/h · 5.2 km · 42:15 · 10:45" (riding time, clock). */
 @Composable
 private fun ScrubReadout(sample: SpeedSample?, modifier: Modifier) {
     val text = if (sample == null) "" else {
         "${formatSpeedKmh(sample.speedMps.toDouble())} ${stringResource(R.string.unit_kmh)} · " +
             "${formatKm(sample.distanceMeters)} ${stringResource(R.string.unit_km)} · " +
+            "${formatDuration(sample.movingTimeMillis)} · " +
             formatClock(sample.timeMillis)
     }
     Text(
@@ -220,35 +252,18 @@ private fun ScrubReadout(sample: SpeedSample?, modifier: Modifier) {
     )
 }
 
+/** One circular axis-mode button; the active mode gets the filled tint (like the follow FAB). */
 @Composable
-private fun AxisToggle(axisDistance: Boolean, onChange: (Boolean) -> Unit) {
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.height(34.dp)) {
-        SegmentedButton(
-            selected = axisDistance,
-            onClick = { onChange(true) },
-            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-            icon = {},
-        ) {
-            Icon(
-                Icons.Filled.Straighten,
-                contentDescription = stringResource(R.string.stat_distance),
-                modifier = Modifier.size(22.dp),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        SegmentedButton(
-            selected = !axisDistance,
-            onClick = { onChange(false) },
-            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-            icon = {},
-        ) {
-            Icon(
-                Icons.Filled.Schedule,
-                contentDescription = stringResource(R.string.stat_time),
-                modifier = Modifier.size(22.dp),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
+private fun AxisButton(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
+    val container = if (active) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.primaryContainer
+    SmallFloatingActionButton(
+        onClick = onClick,
+        shape = CircleShape,
+        containerColor = container,
+        contentColor = contentColorFor(container),
+    ) {
+        Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -259,8 +274,7 @@ private class ChartStyle(
     val gridColor: Color,
     val lineColor: Color,
     val dotColor: Color,
-    val scrubLineColor: Color,
-    val kmUnit: String,
+    val axisColor: Color,
 )
 
 @Composable
@@ -281,8 +295,7 @@ private fun SpeedChart(
         gridColor = MaterialTheme.colorScheme.outlineVariant,
         lineColor = AccentOrange,
         dotColor = ScrubBlue,
-        scrubLineColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        kmUnit = stringResource(R.string.unit_km),
+        axisColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
     // Gestures read the freshest data without restarting: a live fix every 1.5 s must not
@@ -405,6 +418,20 @@ private fun gridStepKmh(maxKmh: Double): Double = when {
     else -> 50.0
 }
 
+/** X tick step in domain units (meters or millis) for the visible span: the largest ladder
+ *  step is taken only when even it would overflow [MAX_X_TICKS]. */
+private fun xTickStep(axisDistance: Boolean, windowSpan: Double): Double {
+    return if (axisDistance) {
+        val spanKm = windowSpan / 1000.0
+        (DISTANCE_TICK_STEPS_KM.firstOrNull { spanKm / it <= MAX_X_TICKS }
+            ?: DISTANCE_TICK_STEPS_KM.last()) * 1000.0
+    } else {
+        val spanMin = windowSpan / 60_000.0
+        (TIME_TICK_STEPS_MIN.firstOrNull { spanMin / it <= MAX_X_TICKS }
+            ?: TIME_TICK_STEPS_MIN.last()) * 60_000.0
+    }
+}
+
 private fun DrawScope.drawSpeedChart(
     samples: List<SpeedSample>,
     axisDistance: Boolean,
@@ -419,6 +446,11 @@ private fun DrawScope.drawSpeedChart(
     val plotWidth = w - 2 * hPad
     val topPad = 6.dp.toPx() // keeps the line's peak off the panel's controls
     val labelPad = 3.dp.toPx()
+
+    // The X axis sits above a bottom band tall enough for a tick mark plus its label.
+    val tickLen = 3.dp.toPx()
+    val labelHeight = style.textMeasurer.measure(AnnotatedString("0"), style.labelStyle).size.height
+    val axisY = h - (tickLen + labelHeight + 2f)
 
     // Y scale stays that of the whole ride, so pinch-zooming never rescales the curve.
     val maxKmh = samples.maxOf { it.speedMps } * MPS_TO_KMH
@@ -435,7 +467,7 @@ private fun DrawScope.drawSpeedChart(
     fun xOf(s: SpeedSample): Float =
         hPad + ((domainOf(s) - windowStart) / windowSpan * plotWidth).toFloat()
     fun yOf(speedMps: Float): Float =
-        (h - (speedMps * MPS_TO_KMH / yMaxKmh) * (h - topPad)).toFloat()
+        (axisY - (speedMps * MPS_TO_KMH / yMaxKmh) * (axisY - topPad)).toFloat()
 
     // Gridlines with their km/h value sitting just above each line.
     var grid = step
@@ -445,6 +477,24 @@ private fun DrawScope.drawSpeedChart(
         val label = style.textMeasurer.measure(AnnotatedString(grid.toInt().toString()), style.labelStyle)
         drawText(label, topLeft = Offset(labelPad, y - label.size.height - 1f))
         grid += step
+    }
+
+    // X axis with distance/time ticks at round steps of the visible window.
+    drawLine(style.axisColor, Offset(0f, axisY), Offset(w, axisY), strokeWidth = 1.dp.toPx())
+    val tickStep = xTickStep(axisDistance, windowSpan)
+    var tick = ceil(windowStart / tickStep) * tickStep
+    while (tick <= windowStart + windowSpan) {
+        val x = hPad + ((tick - windowStart) / windowSpan * plotWidth).toFloat()
+        drawLine(style.axisColor, Offset(x, axisY), Offset(x, axisY + tickLen), strokeWidth = 1.dp.toPx())
+        val text = if (axisDistance) {
+            formatKm(tick, decimals = if (tickStep < 1000.0) 1 else 0)
+        } else {
+            formatDuration(tick.toLong())
+        }
+        val label = style.textMeasurer.measure(AnnotatedString(text), style.labelStyle)
+        val labelX = (x - label.size.width / 2f).coerceIn(0f, w - label.size.width)
+        drawText(label, topLeft = Offset(labelX, axisY + tickLen + 1f))
+        tick += tickStep
     }
 
     // The speed line, broken at recording gaps. Vertices are thinned to roughly one per
@@ -472,29 +522,11 @@ private fun DrawScope.drawSpeedChart(
         style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
 
-    // Captions of the visible window's ends in the bottom corners, aligned to the plot edges.
-    fun caption(fraction: Double): String = if (axisDistance) {
-        "${formatKm(xDomain * fraction)} ${style.kmUnit}"
-    } else {
-        formatDuration((xDomain * fraction).toLong())
-    }
-    val startLabel = style.textMeasurer.measure(
-        AnnotatedString(caption(viewStart.toDouble())), style.labelStyle,
-    )
-    drawText(startLabel, topLeft = Offset(hPad, h - startLabel.size.height - labelPad))
-    val endLabel = style.textMeasurer.measure(
-        AnnotatedString(caption((viewStart + viewWidth).toDouble())), style.labelStyle,
-    )
-    drawText(
-        endLabel,
-        topLeft = Offset(w - hPad - endLabel.size.width, h - endLabel.size.height - labelPad),
-    )
-
     // Scrub cursor: a vertical hairline with a dot on the curve, twinned with the map marker.
     val scrub = scrubIndex?.let { samples.getOrNull(it) } ?: return
     val x = xOf(scrub)
     if (x < hPad || x > w - hPad) return // scrubbed point currently outside the zoom window
-    drawLine(style.scrubLineColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1.dp.toPx())
+    drawLine(style.axisColor, Offset(x, 0f), Offset(x, axisY), strokeWidth = 1.dp.toPx())
     val center = Offset(x, yOf(scrub.speedMps))
     drawCircle(style.dotColor, radius = 5.dp.toPx(), center = center)
     drawCircle(Color.White, radius = 5.dp.toPx(), center = center, style = Stroke(width = 1.5f.dp.toPx()))

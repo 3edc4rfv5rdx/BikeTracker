@@ -37,6 +37,10 @@ class SpeedSamplesTest {
         assertTrue(step > 0)
         assertEquals(samples[1].distanceMeters, samples[2].distanceMeters, 1e-9)
         assertEquals(step, samples[3].distanceMeters - samples[2].distanceMeters, 1e-6)
+        // Moving time follows the same rule: the pause gap contributes nothing.
+        assertEquals(GPS_INTERVAL_MS, samples[1].movingTimeMillis)
+        assertEquals(GPS_INTERVAL_MS, samples[2].movingTimeMillis)
+        assertEquals(2 * GPS_INTERVAL_MS, samples[3].movingTimeMillis)
     }
 
     @Test

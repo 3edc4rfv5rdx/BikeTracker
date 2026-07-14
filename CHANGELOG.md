@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Speed chart: the X axis is raised off the bottom and carries round-step distance/time tick marks that adapt to the zoom window, the scrub readout adds the riding time at the point, and the axis toggle is two round buttons stacked at the chart's right edge.
 - Tapping the map near the track selects the nearest track point: the marker lands on the track and the speed chart shows that point's cursor and figures.
 - While scrubbing the chart, the map pans to keep the marker dot on screen (never while the map is being dragged by hand).
 - Speed chart: the plot is inset from the screen edges with the visible window's ends captioned in the corners, the axis-toggle icons are larger and darker, and the X axis pinch-zooms up to 10x with two-finger panning (one finger keeps scrubbing).
