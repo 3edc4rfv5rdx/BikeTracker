@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.4.20260714+103
 
 - Speed chart controls moved into a fold-out menu behind a button on the readout line: it unfolds the distance/time axis pick and stepwise zoom buttons in-line along that row so they never cover the plot, closes when the plot is touched, and drops the low-contrast purple for high-contrast discs readable in sunlight; the chart also pans by one finger after a long-press.
 - Speed chart: the X axis is raised off the bottom and carries round-step distance/time tick marks that adapt to the zoom window, the scrub readout adds the riding time at the point, and the axis toggle is two round buttons stacked at the chart's right edge.
