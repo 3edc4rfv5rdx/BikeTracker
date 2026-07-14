@@ -36,6 +36,8 @@ class MonotonicTimeTest {
 
         assertFalse(snapshot.hasGpsTrouble(updatedAt + GPS_STALE_MS))
         assertTrue(snapshot.hasGpsTrouble(updatedAt + GPS_STALE_MS + 1))
-        assertTrue(snapshot.hasGpsTrouble(updatedAt - 1)) // defensive reboot/clock-domain guard
+        // A fix newer than the UI's coarsely sampled clock is fresh, not trouble; treating it
+        // as stale made the banner flash on every fix.
+        assertFalse(snapshot.hasGpsTrouble(updatedAt - 1))
     }
 }

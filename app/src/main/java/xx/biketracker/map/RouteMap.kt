@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,16 +21,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -36,6 +42,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.maplibre.android.MapLibre
+import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -43,6 +50,7 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -57,6 +65,7 @@ import xx.biketracker.R
 import xx.biketracker.smoothRoute
 import xx.biketracker.splitRouteSegments
 import xx.biketracker.ui.AccentOrange
+import xx.biketracker.ui.ScrubBlue
 
 /** Keyless vector style (OpenFreeMap), used in both themes — the dark style was unreadable. */
 const val MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
@@ -75,6 +84,12 @@ private const val ROUTE_BOUNDS_PADDING_PX = 64
 private const val PUCK_SOURCE_ID = "ride-puck"
 private const val PUCK_LAYER_ID = "ride-puck-symbol"
 private const val PUCK_BEARING_KEY = "bearing"
+
+// Scrub marker: a dot on the track at the point picked on the speed chart.
+private const val MARKER_SOURCE_ID = "ride-marker"
+private const val MARKER_LAYER_ID = "ride-marker-circle"
+private const val MARKER_RADIUS = 7f
+private const val MARKER_STROKE_WIDTH = 2f
 
 /** Tint of the live-position arrow: it flags a paused ride and GPS trouble by color. */
 enum class PuckState(internal val imageId: String, internal val drawableRes: Int) {
@@ -98,6 +113,7 @@ fun RouteMap(
     position: GeoPoint? = null,
     bearingDegrees: Float? = null,
     puckState: PuckState = PuckState.NORMAL,
+    marker: GeoPoint? = null,
 ) {
     val context = LocalContext.current
 
@@ -107,9 +123,15 @@ fun RouteMap(
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     // True while the user is dragging the map; the arrow-follow logic must not fight the gesture.
     var gestureInProgress by remember { mutableStateOf(false) }
+    // Follow mode: the camera tracks the fix and rotates so the direction of travel points up.
+    // Saveable so a tab switch mid-ride doesn't silently snap the map back to north-up.
+    var followHeading by rememberSaveable { mutableStateOf(false) }
     // Bumped after every style (re)load — a style swap drops all layers, so the route effect
     // below must re-add its data once the new style is ready.
     var styleEpoch by remember { mutableIntStateOf(0) }
+    // Composable size of the map area; a change means the visible viewport grew or shrank
+    // (speed-chart panel toggled, rotation) and the shown track should be re-fitted to it.
+    var mapSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Forward the lifecycle to the MapView (adding the observer replays CREATE..RESUME).
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -165,6 +187,16 @@ fun RouteMap(
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 )
             )
+            // Scrub marker above the track but under the puck.
+            style.addSource(GeoJsonSource(MARKER_SOURCE_ID))
+            style.addLayer(
+                CircleLayer(MARKER_LAYER_ID, MARKER_SOURCE_ID).withProperties(
+                    PropertyFactory.circleRadius(MARKER_RADIUS),
+                    PropertyFactory.circleColor(ScrubBlue.toArgb()),
+                    PropertyFactory.circleStrokeColor(android.graphics.Color.WHITE),
+                    PropertyFactory.circleStrokeWidth(MARKER_STROKE_WIDTH),
+                )
+            )
             // Puck on top of the track: an arrow image rotated per-feature to the heading, with
             // one registered image per tint. The active image is a plain layer property switched
             // on state changes — a data-driven iconImage expression made MapLibre re-layout the
@@ -216,9 +248,10 @@ fun RouteMap(
 
     // Redraw the track on every route change; center only the first time a route shows up so
     // the user can pan and zoom without the map snapping back every update. A recenterKey
-    // change (another ride selected) re-arms the one-time centering.
-    var centeredOnce by remember(recenterKey) { mutableStateOf(false) }
-    LaunchedEffect(route, styleEpoch) {
+    // change (another ride selected) re-arms the one-time centering, and a viewport size
+    // change (speed-chart panel toggled, rotation) re-fits the track to the new visible area.
+    var centeredSize by remember(recenterKey) { mutableStateOf<IntSize?>(null) }
+    LaunchedEffect(route, styleEpoch, mapSize) {
         val style = mapInstance?.style ?: return@LaunchedEffect
         // Smoothing re-runs over the whole track on every fix; off the main thread so a
         // multi-hour ride (thousands of points) can't jank the map. Pause/outage gaps split
@@ -233,9 +266,19 @@ fun RouteMap(
             )
         }
         style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(line)
-        if (!centeredOnce && route.isNotEmpty()) {
-            centeredOnce = true
+        if (route.isNotEmpty() && mapSize.height > 0 && centeredSize != mapSize) {
+            centeredSize = mapSize
             centerOnRoute()
+        }
+    }
+
+    // Scrub marker from the speed chart: pin a dot to the chosen track point (empty when none).
+    LaunchedEffect(marker, styleEpoch) {
+        val source = mapInstance?.style?.getSourceAs<GeoJsonSource>(MARKER_SOURCE_ID) ?: return@LaunchedEffect
+        if (marker == null) {
+            source.setGeoJson(FeatureCollection.fromFeatures(listOf<Feature>()))
+        } else {
+            source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(marker.lon, marker.lat)))
         }
     }
 
@@ -246,7 +289,7 @@ fun RouteMap(
     }
 
     // Move the puck to the current fix (empty when there is no live position).
-    LaunchedEffect(position, bearingDegrees, styleEpoch) {
+    LaunchedEffect(position, bearingDegrees, followHeading, styleEpoch) {
         val map = mapInstance ?: return@LaunchedEffect
         val source = map.style?.getSourceAs<GeoJsonSource>(PUCK_SOURCE_ID) ?: return@LaunchedEffect
         if (position == null) {
@@ -255,16 +298,32 @@ fun RouteMap(
             val feature = Feature.fromGeometry(Point.fromLngLat(position.lon, position.lat))
             feature.addNumberProperty(PUCK_BEARING_KEY, bearingDegrees ?: 0f)
             source.setGeoJson(feature)
-            // Keep the arrow on screen: a fix outside the viewed area shifts the map to it at
-            // the current zoom. A hand-panned map is left alone while the arrow stays visible.
             val latLng = LatLng(position.lat, position.lon)
-            if (!gestureInProgress && !map.projection.visibleRegion.latLngBounds.contains(latLng)) {
+            if (gestureInProgress) return@LaunchedEffect
+            if (followHeading) {
+                // Follow mode: center on the fix and turn the heading up. Zoom and tilt are
+                // restated explicitly — an unset builder field is -1, which the camera would
+                // take literally, not as "keep current".
+                val current = map.cameraPosition
+                map.animateCamera(
+                    CameraUpdateFactory.newCameraPosition(
+                        CameraPosition.Builder()
+                            .target(latLng)
+                            .zoom(current.zoom)
+                            .tilt(current.tilt)
+                            .bearing(bearingDegrees?.toDouble() ?: current.bearing)
+                            .build()
+                    )
+                )
+            } else if (!map.projection.visibleRegion.latLngBounds.contains(latLng)) {
+                // Keep the arrow on screen: a fix outside the viewed area shifts the map to it at
+                // the current zoom. A hand-panned map is left alone while the arrow stays visible.
                 map.animateCamera(CameraUpdateFactory.newLatLng(latLng))
             }
         }
     }
 
-    Box(modifier = modifier) {
+    Box(modifier = modifier.onSizeChanged { mapSize = it }) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
         // Zoom buttons: pinch works on device, but the emulator (and gloves) want plain taps.
@@ -274,6 +333,25 @@ fun RouteMap(
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (position != null) {
+                // Follow-heading toggle, live rides only; filled tint marks it active.
+                val followContainer = if (followHeading) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.primaryContainer
+                SmallFloatingActionButton(
+                    onClick = {
+                        followHeading = !followHeading
+                        // Leaving follow mode turns the map back to north-up right away.
+                        if (!followHeading) mapInstance?.animateCamera(CameraUpdateFactory.bearingTo(0.0))
+                    },
+                    containerColor = followContainer,
+                    contentColor = contentColorFor(followContainer),
+                ) {
+                    Icon(
+                        Icons.Default.Navigation,
+                        contentDescription = stringResource(R.string.map_follow_heading),
+                    )
+                }
+            }
             SmallFloatingActionButton(onClick = { mapInstance?.animateCamera(CameraUpdateFactory.zoomBy(1.0)) }) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.map_zoom_in))
             }

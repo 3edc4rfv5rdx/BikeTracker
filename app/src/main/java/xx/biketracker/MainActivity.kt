@@ -1,6 +1,7 @@
 package xx.biketracker
 
 import android.os.Bundle
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -67,8 +68,10 @@ import xx.biketracker.map.MapSelection
 import xx.biketracker.settings.AppSettings
 import xx.biketracker.settings.SettingsScreen
 import xx.biketracker.tracking.TrackingScreen
+import xx.biketracker.tracking.TrackingSnapshot
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
+import xx.biketracker.tracking.liveMovingTimeMillis
 import xx.biketracker.ui.BikeTrackerTheme
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.NavLabelStyle
@@ -190,6 +193,10 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                                 Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.map_close_ride))
                             }
                         }
+                        // Live ride stats belong to the top bar, not to an overlay on the map.
+                        if (selectedTrip == null && rideActive) {
+                            MapLiveStats(trackingSnapshot)
+                        }
                     }
                     if (currentTab == Destination.History) {
                         TopBarButton(Icons.Default.Today, stringResource(id = R.string.history_today)) {
@@ -271,6 +278,27 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
             }
         )
     }
+}
+
+/** Live speed and moving time of the active ride, shown in the Map tab's top bar. */
+@Composable
+private fun MapLiveStats(snapshot: TrackingSnapshot) {
+    // Local one-second tick so the moving time advances between the ~1.5 s GPS updates.
+    var nowElapsedRealtime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowElapsedRealtime = SystemClock.elapsedRealtime()
+            delay(1000)
+        }
+    }
+    Text(
+        text = "${formatSpeedKmh(snapshot.currentSpeedMps)} ${stringResource(id = R.string.unit_kmh)} · " +
+            formatDuration(snapshot.liveMovingTimeMillis(nowElapsedRealtime)),
+        fontSize = 26.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        modifier = Modifier.padding(end = 16.dp),
+    )
 }
 
 /** Ticking wall clock in the top bar; HH:mm large, the trailing seconds smaller. */

@@ -4,6 +4,14 @@ Newest entries on top.
 
 ## Unreleased
 
+- The Map tab gained a speed chart panel, pulled between hidden and a third of the screen by its handle: smoothed GPS speed over distance or time (toggle), where tapping or dragging pins a marker to the track and shows that point's speed, distance, and clock time — for the live ride and rides opened from History alike.
+- Map follow mode: a compass button keeps the camera on the current fix and rotates the map so the direction of travel points up.
+- Live speed and moving time of the active ride are shown in the Map tab's top bar.
+- Starting a new ride clears a History ride from the Map tab, so the live track is visible right away.
+- The GPS-trouble banner no longer flashes when a fix's timestamp is slightly ahead of the UI's coarser clock.
+- History summary labels are Week/Month/Year again (the windows stay rolling 7/30/365 days), and a full-contrast rule separates them from the all-time total.
+- Room schema migrations are covered by instrumentation tests that run the real migration path over the exported schema JSONs; README documents the pre-release verification workflow.
+- Tracking screen: the average-speed label drops its unit so the RU/UK captions fit on one line.
 - History summaries are defined as rolling 7/30/365-day windows, re-anchor themselves at every local midnight (DST-aware) so trips age out even when the screen stays open across days, and the labels now name the exact spans instead of Week/Month/Year.
 - The map centers on every new live ride again: centering identity is now the ride's start timestamp instead of a once-per-composition flag, so a second ride no longer starts off-screen after the first one was viewed.
 - Offline map downloads are now owned by a process-level manager: reopening the dialog reconnects to live progress, retrying resumes the matching incomplete region instead of piling up duplicates, transient network errors are left to MapLibre's own retries with an explicit Cancel instead of a forced failure, Delete-all cancels an active download first, and the dialog reports complete and incomplete areas separately.

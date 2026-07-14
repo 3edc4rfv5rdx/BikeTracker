@@ -55,6 +55,9 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Full migration path; internal so the instrumentation tests validate the same objects. */
+        internal val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -103,7 +106,7 @@ abstract class AppDatabase : RoomDatabase() {
                 context,
                 AppDatabase::class.java,
                 databaseName,
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+            ).addMigrations(*MIGRATIONS).build()
 
         /**
          * A process can die after the old database was moved aside but before the restored one was

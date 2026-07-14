@@ -32,14 +32,26 @@ data class TrackingSnapshot(
     val route: List<GeoPoint> = emptyList(),
 )
 
-/** True while a ride is active but the fixes are stale, missing, or too inaccurate to trust. */
+/**
+ * True while a ride is active but the fixes are stale, missing, or too inaccurate to trust.
+ * A fix timestamped after [nowElapsedRealtime] is fresh, not trouble: the UI samples its
+ * clock at a coarser cadence than fixes arrive, so a negative age is routine.
+ */
 fun TrackingSnapshot.hasGpsTrouble(nowElapsedRealtime: Long): Boolean =
     status != TrackingStatus.IDLE &&
         (lastTrustedFixElapsedRealtime <= 0L ||
-            nowElapsedRealtime < lastTrustedFixElapsedRealtime ||
             nowElapsedRealtime - lastTrustedFixElapsedRealtime > GPS_STALE_MS ||
             gpsAccuracyMeters == null ||
             gpsAccuracyMeters > ACCURACY_THRESHOLD_M)
+
+/** Moving time ticking locally between GPS updates; frozen while paused or idle. */
+fun TrackingSnapshot.liveMovingTimeMillis(nowElapsedRealtime: Long): Long =
+    movingTimeMillis +
+        if (status == TrackingStatus.RECORDING) {
+            (nowElapsedRealtime - updatedAtElapsedRealtime).coerceAtLeast(0L)
+        } else {
+            0L
+        }
 
 /**
  * Process-wide holder so the UI can observe tracking state without binding to the

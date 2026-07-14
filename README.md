@@ -16,9 +16,10 @@ are the timestamped ZIP backups you create yourself in Settings
 - **Live screen** — large, sunlight-readable speed, distance, time, average speed,
   altitude, and clock. GPS warnings (weak / no signal) and an auto-pause banner appear in
   fixed slots so the layout never shifts.
-- **Map** — MapLibre vector tiles (OpenFreeMap), dark style that follows the app theme, a
-  live position puck that rotates to the heading, and offline download of the last viewed
-  area for use without internet.
+- **Map** — MapLibre vector tiles (OpenFreeMap; one light style in both themes), a live
+  position puck that rotates to the heading, an optional follow mode that rotates the map
+  so the direction of travel points up, live speed and ride time in the top bar, tap-to-zoom
+  buttons, and offline download of the last viewed area for use without internet.
 - **History** — rides browsed through an expandable year → month → day tree, with
   week/month/year/total summaries and per-ride details (distance, time, pace, average and
   max speed, elevation gain). Each ride opens its track on the Map tab.
@@ -59,6 +60,14 @@ Standard Gradle Android build. Helper scripts at the repo root wrap the common f
 - `05-MakeDebug.sh` — build a debug APK
 - `10-MakeRelease.sh` — build a signed release (needs a keystore config)
 - `20-MakeTag.sh` / `21-PushTag.sh` — version tagging
+
+### Verification
+
+Before a release, run:
+
+- `./gradlew :app:lintDebug` — must pass with zero errors
+- `./gradlew :app:testDebugUnitTest` — JVM tests (GPS math, state, persistence, backup policy)
+- `./gradlew :app:connectedDebugAndroidTest` — Room schema migration tests (needs a device/emulator)
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 

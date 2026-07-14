@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -398,10 +399,19 @@ private fun SummaryCard(week: RideTotals, month: RideTotals, year: RideTotals, a
                 SummaryCell(R.string.summary_month, month, Modifier.weight(1f))
                 SummaryCell(R.string.summary_year, year, Modifier.weight(1f))
             }
+            // Rule separating the period columns from the all-time total; full-contrast
+            // (black on light, white on dark) — the default hairline tint was invisible.
+            HorizontalDivider(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 5.dp),
+                thickness = 2.dp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp),
+                    .padding(top = 5.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {

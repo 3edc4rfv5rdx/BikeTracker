@@ -32,7 +32,7 @@
     <string name="stat_distance">Расстояние</string>
     <string name="stat_time">Время</string>
     <string name="stat_total_time">Общее время</string>
-    <string name="stat_avg_speed">Ср. скорость</string>
+    <string name="stat_avg_speed">Ср.скорость</string>
     <string name="stat_max_speed">Макс. скорость</string>
     <string name="stat_pace">Темп</string>
     <string name="unit_pace">мин/км</string>
@@ -51,6 +51,8 @@
     <string name="map_close_ride">Вернуться к текущей поездке</string>
     <string name="map_zoom_in">Приблизить</string>
     <string name="map_zoom_out">Отдалить</string>
+    <string name="map_follow_heading">Поворачивать карту по направлению движения</string>
+    <string name="map_speed_chart">График скорости</string>
     <string name="settings_map_section">Карта</string>
     <string name="map_offline_title">Офлайн-карта</string>
     <string name="map_offline_hint">Будет скачана последняя просмотренная область карты</string>
@@ -88,16 +90,15 @@
     <string name="history_empty">Поездок пока нет</string>
     <string name="history_today">Сегодня</string>
     <string name="history_collapse_all">Свернуть все</string>
-    <string name="summary_week">7 дней</string>
-    <string name="summary_month">30 дней</string>
-    <string name="summary_year">365 дней</string>
+    <string name="summary_week">Неделя</string>
+    <string name="summary_month">Месяц</string>
+    <string name="summary_year">Год</string>
     <string name="summary_all">Всего</string>
 
     <string name="about_title">О приложении</string>
     <string name="about_version">Версия</string>
     <string name="about_build">Сборка</string>
 
-    <string name="action_ok">ОК</string>
     <string name="action_delete">Удалить</string>
     <string name="action_cancel">Отмена</string>
     <string name="delete_title">Удалить поездку</string>

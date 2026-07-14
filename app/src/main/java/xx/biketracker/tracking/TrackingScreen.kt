@@ -143,12 +143,7 @@ fun TrackingScreen() {
     KeepScreenOnWhile(snapshot.status != TrackingStatus.IDLE)
 
     // Ride time ticks every second locally between the ~1.5 s GPS updates.
-    val liveMovingMs = snapshot.movingTimeMillis +
-        if (snapshot.status == TrackingStatus.RECORDING) {
-            (nowElapsedRealtime - snapshot.updatedAtElapsedRealtime).coerceAtLeast(0L)
-        } else {
-            0L
-        }
+    val liveMovingMs = snapshot.liveMovingTimeMillis(nowElapsedRealtime)
 
     // Total ride time including pauses: wall clock elapsed since the start.
     val liveTotalMs = if (snapshot.status != TrackingStatus.IDLE) {
@@ -172,7 +167,6 @@ fun TrackingScreen() {
     // GPS trouble: fixes rejected by the accuracy filter, or none arriving at all.
     val gpsAccuracy = snapshot.gpsAccuracyMeters
     val gpsStale = snapshot.lastTrustedFixElapsedRealtime <= 0L ||
-        nowElapsedRealtime < snapshot.lastTrustedFixElapsedRealtime ||
         nowElapsedRealtime - snapshot.lastTrustedFixElapsedRealtime > GPS_STALE_MS
     val gpsTrouble = snapshot.hasGpsTrouble(nowElapsedRealtime)
 
@@ -249,8 +243,10 @@ fun TrackingScreen() {
                 right = Stat(stringResource(R.string.stat_time), formatDuration(liveMovingMs)),
             )
             StatRow(
+                // No unit on the label: the RU/UK captions don't fit with it, and the unit is
+                // already stated by the big speed caption above.
                 left = Stat(
-                    withUnit(R.string.stat_avg_speed, R.string.unit_kmh),
+                    stringResource(R.string.stat_avg_speed),
                     formatSpeedKmh(avgSpeedMps(snapshot.distanceMeters, snapshot.movingTimeMillis)),
                 ),
                 right = Stat(stringResource(R.string.stat_total_time), formatDuration(liveTotalMs)),

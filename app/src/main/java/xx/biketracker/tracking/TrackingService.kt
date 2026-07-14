@@ -59,6 +59,7 @@ import xx.biketracker.data.TrackPoint
 import xx.biketracker.data.Trip
 import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
+import xx.biketracker.map.MapSelection
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
@@ -354,6 +355,8 @@ class TrackingService : Service() {
         if (!startupPending || !registrationReady || !draftReady) return
         startupPending = false
         status = TrackingStatus.RECORDING
+        // A ride opened from History would otherwise keep hiding the live track on the Map tab.
+        MapSelection.clear()
         publish()
         updateNotification()
     }
@@ -459,8 +462,9 @@ class TrackingService : Service() {
             altitudeMeters = fix.altitudeMeters,
         )
         points += point
-        // The wall time lets the map split the drawn line at pause/outage gaps.
-        route += smoothed.copy(timeMillis = fix.wallTimeMillis)
+        // The wall time lets the map split the drawn line at pause/outage gaps; the speed
+        // feeds the live speed chart.
+        route += smoothed.copy(timeMillis = fix.wallTimeMillis, speedMps = fix.speedMps?.toFloat() ?: 0f)
         lastPoint = point
         lastPointElapsedRealtimeNanos = nowElapsedNanos
         if (points.size - scheduledFlushCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()

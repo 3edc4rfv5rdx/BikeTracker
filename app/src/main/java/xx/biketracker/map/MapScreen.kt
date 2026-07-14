@@ -2,7 +2,9 @@ package xx.biketracker.map
 
 import android.os.SystemClock
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,11 +54,13 @@ fun MapScreen() {
     val snapshot by TrackingState.snapshot.collectAsState()
     val selected by MapSelection.trip.collectAsState()
 
-    // Stored track of the selected ride, loaded when the selection changes.
+    // Stored track of the selected ride, loaded when the selection changes. The GPS speed
+    // rides along so the chart panel can plot stored rides exactly like the live one.
     var selectedRoute by remember { mutableStateOf<List<GeoPoint>>(emptyList()) }
     LaunchedEffect(selected?.id) {
         selectedRoute = selected?.let { trip ->
-            AppDatabase.get(context).tripDao().getPoints(trip.id).map { GeoPoint(it.lat, it.lon, it.time) }
+            AppDatabase.get(context).tripDao().getPoints(trip.id)
+                .map { GeoPoint(it.lat, it.lon, it.time, it.speedMps) }
         } ?: emptyList()
     }
 
@@ -83,28 +88,54 @@ fun MapScreen() {
         else -> PuckState.NORMAL
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        RouteMap(
-            route = route,
-            modifier = Modifier.fillMaxSize(),
-            recenterKey = mapRecenterKey(selected?.id, snapshot.startElapsedRealtime),
-            position = puckPosition,
-            bearingDegrees = if (live) snapshot.bearingDegrees else null,
-            puckState = puckState,
-        )
+    val recenterKey = mapRecenterKey(selected?.id, snapshot.startElapsedRealtime)
+    // Scrub selection from the chart, as an index into the route (samples are one per point).
+    // Keyed to the shown track's identity, so another ride never inherits a stale marker.
+    var scrubIndex by remember(recenterKey) { mutableStateOf<Int?>(null) }
+    // Chart visibility survives tab switches; the panel's handle strip toggles it.
+    var chartExpanded by rememberSaveable { mutableStateOf(true) }
 
-        if (selected == null && snapshot.route.isEmpty()) {
-            Card(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 16.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.map_no_ride),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                )
+    // The chart panel takes its slice from the map, never overlays it: a scrubbed marker (or
+    // the live puck) must stay visible on the remaining map area.
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        ) {
+            RouteMap(
+                route = route,
+                modifier = Modifier.fillMaxSize(),
+                recenterKey = recenterKey,
+                position = puckPosition,
+                bearingDegrees = if (live) snapshot.bearingDegrees else null,
+                puckState = puckState,
+                marker = scrubIndex?.let { route.getOrNull(it) },
+            )
+
+            if (selected == null && snapshot.route.isEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.map_no_ride),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
             }
+        }
+
+        if (route.size >= 2) {
+            SpeedChartPanel(
+                route = route,
+                expanded = chartExpanded,
+                onToggle = { chartExpanded = !chartExpanded },
+                scrubIndex = scrubIndex,
+                onScrub = { scrubIndex = it },
+            )
         }
     }
 }

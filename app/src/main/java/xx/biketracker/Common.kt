@@ -92,8 +92,10 @@ const val PREFS_NAME = "biketracker_prefs"
 
 /** A latitude/longitude pair; the live route and stored track are ordered lists of these.
  *  [timeMillis] is the recording wall time (epoch), 0 when unknown — it only marks segment
- *  boundaries for display ([splitRouteSegments]) and is never persisted itself. */
-data class GeoPoint(val lat: Double, val lon: Double, val timeMillis: Long = 0L)
+ *  boundaries for display ([splitRouteSegments]) and is never persisted itself. [speedMps]
+ *  is the GPS speed of the fix (0 when the fix had none), carried so the speed chart can
+ *  plot live and stored tracks alike. */
+data class GeoPoint(val lat: Double, val lon: Double, val timeMillis: Long = 0L, val speedMps: Float = 0f)
 
 fun mpsToKmh(mps: Double): Double = mps * MPS_TO_KMH
 

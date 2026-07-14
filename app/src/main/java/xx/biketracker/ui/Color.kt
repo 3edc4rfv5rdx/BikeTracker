@@ -15,6 +15,10 @@ val AccentOrange = Color(0xFFFF3D00)
 // yellower than AccentOrange so it never reads as the red GPS-trouble tint.
 val PausedOrange = Color(0xFFFF9800)
 
+// Scrub-marker blue, shared by the speed chart's dot and the matching marker on the map
+// track: must stand out against the orange track line and both map styles.
+val ScrubBlue = Color(0xFF1E88E5)
+
 // Light theme: a faint grey window with pure-white containers.
 val WindowLight = Color(0xFFF1F2F4)
 val ContainerLight = Color.White

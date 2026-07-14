@@ -42,6 +42,12 @@ android {
         targetSdk = 36
         versionCode = releaseVersionCode
         versionName = releaseVersionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    sourceSets {
+        // Exported Room schema JSONs double as androidTest assets for MigrationTestHelper.
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 
     signingConfigs {
@@ -166,5 +172,9 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.maplibre.android)
     testImplementation(libs.junit)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
