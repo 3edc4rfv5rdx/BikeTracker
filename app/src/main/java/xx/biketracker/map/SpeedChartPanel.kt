@@ -49,11 +49,9 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -66,7 +64,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
 import xx.biketracker.MPS_TO_KMH
@@ -78,6 +75,8 @@ import xx.biketracker.formatSpeedKmh
 import xx.biketracker.haversineMeters
 import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.ScrubBlue
+import xx.biketracker.ui.gestureBuzz
+import xx.biketracker.ui.rememberVibrator
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -93,6 +92,8 @@ private const val CHART_MAX_ZOOM = 10f
 private const val BUTTON_ZOOM_STEP = 1.5f
 /** Horizontal plot inset: the line's start and end stay off the screen edges. */
 private val PLOT_H_PAD = 12.dp
+/** Gap between the round chart controls on the readout row; they must not read as one blob. */
+private val CONTROL_SPACING = 12.dp
 /** X-axis tick ladders (1-2-5-ish) and the most ticks a window may get. */
 private val DISTANCE_TICK_STEPS_KM =
     doubleArrayOf(0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
@@ -207,7 +208,7 @@ fun SpeedChartPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 12.dp, end = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(CONTROL_SPACING),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ScrubReadout(
@@ -345,7 +346,7 @@ private fun SpeedChart(
         dotColor = ScrubBlue,
         axisColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    val haptics = LocalHapticFeedback.current
+    val vibrator = rememberVibrator()
 
     // Gestures read the freshest data without restarting: a live fix every 1.5 s must not
     // cancel a scrub, pan, or pinch in progress.
@@ -404,7 +405,7 @@ private fun SpeedChart(
                 }
                 if (decided == null) {
                     mode = ChartGesture.PAN
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    vibrator.gestureBuzz()
                 }
                 if (mode == ChartGesture.UNDECIDED) {
                     scrubAt(lastSingle.x) // plain tap

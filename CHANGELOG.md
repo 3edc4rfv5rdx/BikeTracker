@@ -3,6 +3,10 @@
 Newest entries on top.
 
 ## Unreleased
+
+- The speed chart's long-press hand-over to pan mode buzzes through the vibrator at full strength, so it is unmistakable and works on phones with the system's touch-feedback setting turned off.
+- Speed chart controls sit further apart on the readout row, so the round buttons no longer crowd each other.
+
 ## v0.4.20260714+103
 
 - Speed chart controls moved into a fold-out menu behind a button on the readout line: it unfolds the distance/time axis pick and stepwise zoom buttons in-line along that row so they never cover the plot, closes when the plot is touched, and drops the low-contrast purple for high-contrast discs readable in sunlight; the chart also pans by one finger after a long-press.
