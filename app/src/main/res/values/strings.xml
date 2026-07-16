@@ -74,6 +74,7 @@
     <string name="map_offline_deleted">Downloaded areas deleted</string>
     <string name="history_show_on_map">Show on map</string>
     <string name="history_stats">Statistics</string>
+    <string name="history_actions">Actions</string>
     <string name="gpx_export">Export GPX</string>
     <string name="gpx_export_failed">Could not export ride</string>
 
@@ -112,6 +113,14 @@
     <string name="summary_month">Month</string>
     <string name="summary_year">Year</string>
     <string name="summary_all">Total</string>
+
+    <string name="history_records">Records</string>
+    <string name="record_longest_distance">Longest ride</string>
+    <string name="record_longest_time">Longest by time</string>
+    <string name="record_fastest_avg">Fastest average</string>
+    <string name="record_top_speed">Top speed</string>
+    <string name="record_biggest_climb">Biggest climb</string>
+    <string name="record_best_day">Best day</string>
 
     <!-- Weekday abbreviations for the history tree, Sunday-first to match Calendar.DAY_OF_WEEK. -->
     <string-array name="weekday_short">

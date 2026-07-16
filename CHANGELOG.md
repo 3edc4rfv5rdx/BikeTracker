@@ -4,7 +4,9 @@ Newest entries on top.
 
 ## Unreleased
 
-- Ride details can export the ride to a GPX file, opened straight into the system share sheet (Strava, Komoot, email, …) and kept under Documents/BikeTracker/GPX-export; pauses split it into separate track segments.
+- A Records button in History's top bar shows personal bests — longest ride, longest by time, fastest average, top speed, biggest climb, and best single day — each dated by the ride that set it.
+- Each History ride gained a ⋮ actions menu holding Statistics and Export GPX (the map keeps its own button next to it).
+- Export GPX writes the ride's track to a GPX file, opened straight into the system share sheet (Strava, Komoot, email, …) and kept under Documents/BikeTracker/GPX-export; pauses split it into separate track segments.
 
 - A chart button on each History ride opens a full-screen extended-statistics screen: an elevation profile with a km axis, a histogram of time spent in each speed band, and figures for descent, min/max altitude, stops, and estimated calories — all computed from the ride's track points; switching tabs or Back closes it.
 - Settings gained a "Your weight" field, used for the ride's MET-based calorie estimate (defaults to 73 kg).

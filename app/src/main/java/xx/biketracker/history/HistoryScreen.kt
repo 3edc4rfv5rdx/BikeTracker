@@ -17,8 +17,12 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +36,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -64,6 +69,9 @@ import java.util.Calendar
 fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Unit) {
     val context = LocalContext.current
     val dao = remember { AppDatabase.get(context).tripDao() }
+    val scope = rememberCoroutineScope()
+    val gpxShareTitle = stringResource(R.string.gpx_export)
+    val gpxFailedMessage = stringResource(R.string.gpx_export_failed)
 
     // Read once per context (i.e. re-read after a locale change recreates the activity), so the
     // grouping isn't invalidated by the fresh array getStringArray hands back each recomposition.
@@ -78,6 +86,9 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     // Tapping a ride opens its details as a dialog over this screen (no navigation, so Back
     // just dismisses the dialog). The Trip already carries every figure the dialog shows.
     var selectedTrip by remember { mutableStateOf<Trip?>(null) }
+
+    // The Records top-bar button (in the activity) toggles this; the dialog reduces over `trips`.
+    var showRecords by remember { mutableStateOf(false) }
 
     // Rolling 7/30/365-day windows (the labels name the exact spans). The anchor re-arms at
     // every local midnight so trips age out even when this screen stays alive across a day
@@ -135,6 +146,7 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
                     expanded.addAll(it)
                 }
                 HistoryCommands.Command.COLLAPSE_ALL -> expanded.clear()
+                HistoryCommands.Command.SHOW_RECORDS -> showRecords = true
             }
         }
     }
@@ -206,6 +218,9 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
                                         onMap = trip.id == mappedTrip?.id,
                                         onClick = { selectedTrip = trip },
                                         onShowStats = { onShowRideStats(trip) },
+                                        onExport = {
+                                            launchGpxShare(context, scope, trip, gpxShareTitle, gpxFailedMessage)
+                                        },
                                         onShowOnMap = { onShowRideOnMap(trip) },
                                     )
                                 }
@@ -223,6 +238,10 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
             onDismiss = { selectedTrip = null },
             onDeleted = { selectedTrip = null },
         )
+    }
+
+    if (showRecords) {
+        RecordsDialog(trips = trips, onDismiss = { showRecords = false })
     }
 }
 
@@ -351,17 +370,18 @@ private fun TreeRow(
     }
 }
 
-/** A selectable ride under an expanded day: start time plus the trip's summary line, and two
- *  buttons at the right edge — extended statistics and this ride's track on the Map tab. Indented
- *  to the day row's level (not the deeper text) and tinted so it reads as a button. The ride
- *  currently shown on the Map tab inverts to near-black on light / near-white on dark, so it
- *  stands out from the identically tinted rows around it. */
+/** A selectable ride under an expanded day: start time plus the trip's summary line, a map button
+ *  and an overflow (⋮) menu with the rest of the ride's actions at the right edge. Indented to the
+ *  day row's level (not the deeper text) and tinted so it reads as a button. The ride currently
+ *  shown on the Map tab inverts to near-black on light / near-white on dark, so it stands out from
+ *  the identically tinted rows around it. */
 @Composable
 private fun RideRow(
     trip: Trip,
     onMap: Boolean,
     onClick: () -> Unit,
     onShowStats: () -> Unit,
+    onExport: () -> Unit,
     onShowOnMap: () -> Unit,
 ) {
     Card(
@@ -389,18 +409,46 @@ private fun RideRow(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            IconButton(onClick = onShowStats) {
-                Icon(
-                    imageVector = Icons.Filled.BarChart,
-                    contentDescription = stringResource(R.string.history_stats),
-                )
-            }
-            IconButton(onClick = onShowOnMap, modifier = Modifier.padding(end = 4.dp)) {
+            IconButton(onClick = onShowOnMap) {
                 Icon(
                     imageVector = Icons.Filled.Map,
                     contentDescription = stringResource(R.string.history_show_on_map),
                 )
             }
+            RideActionsMenu(onShowStats = onShowStats, onExport = onExport)
+        }
+    }
+}
+
+/** Overflow menu at the right edge of a ride row: statistics and GPX export (map has its own
+ *  button; more actions land here as they arrive). */
+@Composable
+private fun RideActionsMenu(onShowStats: () -> Unit, onExport: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.padding(end = 4.dp)) {
+        IconButton(onClick = { open = true }) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = stringResource(R.string.history_actions),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.history_stats)) },
+                leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onShowStats()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.gpx_export)) },
+                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onExport()
+                },
+            )
         }
     }
 }

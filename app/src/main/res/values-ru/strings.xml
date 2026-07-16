@@ -74,6 +74,7 @@
     <string name="map_offline_deleted">Скачанные области удалены</string>
     <string name="history_show_on_map">Показать на карте</string>
     <string name="history_stats">Статистика</string>
+    <string name="history_actions">Действия</string>
     <string name="gpx_export">Экспорт GPX</string>
     <string name="gpx_export_failed">Не удалось экспортировать поездку</string>
 
@@ -109,6 +110,14 @@
     <string name="summary_month">Месяц</string>
     <string name="summary_year">Год</string>
     <string name="summary_all">Всего</string>
+
+    <string name="history_records">Рекорды</string>
+    <string name="record_longest_distance">Самая длинная</string>
+    <string name="record_longest_time">Самая долгая</string>
+    <string name="record_fastest_avg">Лучшая средняя</string>
+    <string name="record_top_speed">Макс. скорость</string>
+    <string name="record_biggest_climb">Больший набор</string>
+    <string name="record_best_day">Лучший день</string>
 
     <string name="about_title">О приложении</string>
     <string name="about_version">Версия</string>

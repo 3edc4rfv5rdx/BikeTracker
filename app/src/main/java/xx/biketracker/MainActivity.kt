@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
@@ -240,6 +241,9 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                         }
                     }
                     if (currentTab == Destination.History) {
+                        TopBarButton(Icons.Default.EmojiEvents, stringResource(id = R.string.history_records)) {
+                            HistoryCommands.send(HistoryCommands.Command.SHOW_RECORDS)
+                        }
                         TopBarButton(Icons.Default.Today, stringResource(id = R.string.history_today)) {
                             HistoryCommands.send(HistoryCommands.Command.OPEN_TODAY)
                         }

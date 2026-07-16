@@ -74,6 +74,7 @@
     <string name="map_offline_deleted">Завантажені області видалено</string>
     <string name="history_show_on_map">Показати на карті</string>
     <string name="history_stats">Статистика</string>
+    <string name="history_actions">Дії</string>
     <string name="gpx_export">Експорт GPX</string>
     <string name="gpx_export_failed">Не вдалося експортувати поїздку</string>
 
@@ -109,6 +110,14 @@
     <string name="summary_month">Місяць</string>
     <string name="summary_year">Рік</string>
     <string name="summary_all">Усього</string>
+
+    <string name="history_records">Рекорди</string>
+    <string name="record_longest_distance">Найдовша</string>
+    <string name="record_longest_time">Найтриваліша</string>
+    <string name="record_fastest_avg">Краща середня</string>
+    <string name="record_top_speed">Макс. швидкість</string>
+    <string name="record_biggest_climb">Більший набір</string>
+    <string name="record_best_day">Кращий день</string>
 
     <string name="about_title">Про застосунок</string>
     <string name="about_version">Версія</string>

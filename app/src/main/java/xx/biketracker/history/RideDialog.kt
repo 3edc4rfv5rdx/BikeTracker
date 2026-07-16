@@ -2,12 +2,7 @@ package xx.biketracker.history
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,22 +11,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import android.content.Intent
 import android.widget.Toast
 import xx.biketracker.R
 import xx.biketracker.avgSpeedMps
 import xx.biketracker.data.AppDatabase
 import xx.biketracker.data.DatabaseMaintenance
-import xx.biketracker.data.GPX_MIME
 import xx.biketracker.data.Trip
-import xx.biketracker.data.exportRideGpx
 import xx.biketracker.formatClock
 import xx.biketracker.formatDate
 import xx.biketracker.formatDuration
@@ -47,54 +37,25 @@ import kotlin.math.roundToInt
 
 /**
  * Ride details shown as a dialog over the History screen. Every figure comes from the [Trip] row
- * (point reductions are stored at save); the track points are loaded only on demand, when the
- * share button exports the ride to GPX. Back simply dismisses.
+ * (point reductions are stored at save), so nothing is loaded here. Back simply dismisses. The
+ * per-ride actions (statistics, export, map) live on the History row's menu, not in this dialog.
  */
 @Composable
 fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
-    var exporting by remember { mutableStateOf(false) }
     val databaseBusyMessage = stringResource(R.string.database_busy)
-    val exportFailedMessage = stringResource(R.string.gpx_export_failed)
-    val shareTitle = stringResource(R.string.gpx_export)
-
-    fun shareGpx() {
-        exporting = true
-        scope.launch {
-            try {
-                val points = AppDatabase.get(context).tripDao().getPoints(trip.id)
-                check(points.isNotEmpty()) { "Ride has no points" }
-                val uri = exportRideGpx(context, trip, points)
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = GPX_MIME
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                context.startActivity(Intent.createChooser(send, shareTitle))
-            } catch (_: Exception) {
-                Toast.makeText(context, exportFailedMessage, Toast.LENGTH_LONG).show()
-            } finally {
-                exporting = false
-            }
-        }
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(formatDate(trip.startTime), fontWeight = FontWeight.Bold)
-                    Text(
-                        text = "${formatClock(trip.startTime)} – ${formatClock(trip.endTime)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                IconButton(onClick = { shareGpx() }, enabled = !exporting) {
-                    Icon(Icons.Filled.Share, contentDescription = shareTitle)
-                }
+            Column {
+                Text(formatDate(trip.startTime), fontWeight = FontWeight.Bold)
+                Text(
+                    text = "${formatClock(trip.startTime)} – ${formatClock(trip.endTime)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         },
         text = {
