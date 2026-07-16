@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.5.20260716+121
 
 - Each ride can now be given a name and a comment from its ⋮ menu; the name leads the History row and ride details, the comment shows in the details, and both flow into the exported GPX as the track's name and description.
 - Settings gained a Recording section with an Auto-pause dialog: toggle auto-pause and set its speed threshold, hold time, and the auto-save timeout; the tracker applies changes on the next fix, and auto-resume stays 1 km/h above the threshold.
