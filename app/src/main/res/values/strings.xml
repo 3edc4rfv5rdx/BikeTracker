@@ -99,6 +99,17 @@
     <string name="summary_year">Year</string>
     <string name="summary_all">Total</string>
 
+    <!-- Weekday abbreviations for the history tree, Sunday-first to match Calendar.DAY_OF_WEEK. -->
+    <string-array name="weekday_short">
+        <item>Sun</item>
+        <item>Mon</item>
+        <item>Tue</item>
+        <item>Wed</item>
+        <item>Thu</item>
+        <item>Fri</item>
+        <item>Sat</item>
+    </string-array>
+
     <string name="about_title">About</string>
     <string name="about_version">Version</string>
     <string name="about_build">Build</string>

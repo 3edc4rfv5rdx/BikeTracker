@@ -104,4 +104,14 @@
     <string name="action_cancel">Отмена</string>
     <string name="delete_title">Удалить поездку</string>
     <string name="delete_text">Эта поездка будет удалена навсегда</string>
+
+    <string-array name="weekday_short">
+        <item>вск</item>
+        <item>пнд</item>
+        <item>втр</item>
+        <item>срд</item>
+        <item>чтв</item>
+        <item>птн</item>
+        <item>суб</item>
+    </string-array>
 </resources>

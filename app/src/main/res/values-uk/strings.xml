@@ -104,4 +104,14 @@
     <string name="action_cancel">Скасувати</string>
     <string name="delete_title">Видалити поїздку</string>
     <string name="delete_text">Цю поїздку буде видалено назавжди</string>
+
+    <string-array name="weekday_short">
+        <item>нед</item>
+        <item>пнд</item>
+        <item>вів</item>
+        <item>срд</item>
+        <item>чтв</item>
+        <item>птн</item>
+        <item>суб</item>
+    </string-array>
 </resources>

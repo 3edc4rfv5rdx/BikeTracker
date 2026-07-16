@@ -64,8 +64,12 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
     val context = LocalContext.current
     val dao = remember { AppDatabase.get(context).tripDao() }
 
+    // Read once per context (i.e. re-read after a locale change recreates the activity), so the
+    // grouping isn't invalidated by the fresh array getStringArray hands back each recomposition.
+    val weekdayNames = remember(context) { context.resources.getStringArray(R.array.weekday_short).toList() }
+
     val trips by remember { dao.observeTrips() }.collectAsState(initial = emptyList())
-    val years = remember(trips) { groupByDate(trips) }
+    val years = remember(trips, weekdayNames) { groupByDate(trips, weekdayNames) }
 
     // The ride currently shown on the Map tab, so its row can be told apart from the rest.
     val mappedTrip by MapSelection.trip.collectAsState()
@@ -249,7 +253,7 @@ private class DayNode(
  * every level via LinkedHashMap insertion order. Each node carries the summed distance and
  * moving time of the trips beneath it.
  */
-private fun groupByDate(trips: List<Trip>): List<YearNode> {
+private fun groupByDate(trips: List<Trip>, weekdayNames: List<String>): List<YearNode> {
     val cal = Calendar.getInstance()
     val years = LinkedHashMap<Int, LinkedHashMap<Int, LinkedHashMap<Int, MutableList<Trip>>>>()
     for (trip in trips) {
@@ -267,7 +271,7 @@ private fun groupByDate(trips: List<Trip>): List<YearNode> {
             val dayNodes = days.map { (d, dayTrips) ->
                 DayNode(
                     key = "y$y-m$m-d$d",
-                    label = formatDayLabel(dayTrips.first().startTime),
+                    label = formatDayLabel(dayTrips.first().startTime, weekdayNames),
                     distanceMeters = dayTrips.sumOf { it.distanceMeters },
                     movingTimeMillis = dayTrips.sumOf { it.movingTimeMillis },
                     trips = dayTrips,

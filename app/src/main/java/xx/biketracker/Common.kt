@@ -254,9 +254,13 @@ fun formatMonthName(epochMillis: Long): String =
     SimpleDateFormat("LLLL", Locale.getDefault()).format(Date(epochMillis))
         .replaceFirstChar { it.uppercase() }
 
-/** Day-of-month then weekday for the date browser, e.g. "22 Saturday" / "22 суббота". */
-fun formatDayLabel(epochMillis: Long): String =
-    SimpleDateFormat("d EEEE", Locale.getDefault()).format(Date(epochMillis))
+/** Day-of-month then the weekday's abbreviation for the date browser, e.g. "22 Sat" / "22 суб".
+ *  The names come from the caller (R.array.weekday_short) rather than the locale's own, which
+ *  runs to two letters in ru/uk; they are indexed Sunday-first, like Calendar.DAY_OF_WEEK. */
+fun formatDayLabel(epochMillis: Long, weekdayNames: List<String>): String {
+    val cal = Calendar.getInstance().apply { timeInMillis = epochMillis }
+    return "${cal.get(Calendar.DAY_OF_MONTH)} ${weekdayNames[cal.get(Calendar.DAY_OF_WEEK) - 1]}"
+}
 
 /** Wall-clock time of day, "HH:mm" or "HH:mm:ss". */
 fun formatClock(epochMillis: Long, withSeconds: Boolean = false): String =
