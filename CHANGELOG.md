@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- README Features refreshed to cover the speed chart, extended statistics, records, GPX export, ride name/comment, calorie estimate, and configurable auto-pause.
+
 ## v0.5.20260716+121
 
 - Each ride can now be given a name and a comment from its ⋮ menu; the name leads the History row and ride details, the comment shows in the details, and both flow into the exported GPX as the track's name and description.

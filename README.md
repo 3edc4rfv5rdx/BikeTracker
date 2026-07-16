@@ -20,11 +20,28 @@ are the timestamped ZIP backups you create yourself in Settings
   position puck that rotates to the heading, an optional follow mode that rotates the map
   so the direction of travel points up, live speed and ride time in the top bar, tap-to-zoom
   buttons, and offline download of the last viewed area for use without internet.
+- **Speed chart** — a pull-out panel on the Map tab plots smoothed GPS speed over distance
+  or time for the live ride and rides opened from History; tapping or dragging pins a marker
+  to the track and reads out that point's speed, distance, and clock time, with pinch-zoom
+  and one-finger pan after a long-press. Tapping the map near the track moves the marker too.
 - **History** — rides browsed through an expandable year → month → day tree, with
-  week/month/year/total summaries and per-ride details (distance, time, pace, average and
-  max speed, elevation gain). Each ride opens its track on the Map tab.
+  rolling 7/30/365-day and all-time summaries and per-ride details (distance, time, pace,
+  average and max speed, elevation gain, calorie estimate). Each ride opens its track on the
+  Map tab; a per-ride ⋮ menu names/comments the ride, opens extended statistics, or exports
+  GPX. The ride currently on the Map tab is marked with an inverted card.
+- **Extended statistics** — a full-screen per-ride view: an elevation profile with a km
+  axis, a histogram of time spent in each speed band, and figures for descent, min/max
+  altitude, stops, and estimated calories, all computed from the ride's track points.
+- **Records** — a Records button lists personal bests (longest ride by distance and by time,
+  fastest average, top speed, biggest climb, best single day); each entry expands the History
+  tree and scrolls to that ride or day.
+- **GPX export** — a ride's track is written to a GPX file (segments split at pauses, the
+  ride name and comment carried into the track) under `Documents/BikeTracker/GPX-export` and
+  opened straight into the system share sheet.
 - **Settings** — in-app language (English / Ukrainian / Russian) via per-app locales,
-  light/dark/system theme, accent color, and full backup/restore to a timestamped ZIP.
+  light/dark/system theme, accent color, your weight for the calorie estimate, a Recording
+  section to configure auto-pause (speed threshold, hold time, auto-save timeout), and full
+  backup/restore to a timestamped ZIP.
 
 ## Tech stack
 
@@ -45,7 +62,7 @@ app/src/main/java/xx/biketracker/
 ├── Common.kt         # shared constants and formatting helpers
 ├── tracking/         # live tracking screen, recording service, state
 ├── map/              # MapLibre map, offline area download
-├── history/          # ride tree, summaries, ride detail dialog
+├── history/          # ride tree, summaries, ride detail, records, stats, GPX export
 ├── settings/         # language, theme, accent, backup/restore
 ├── data/             # Room database, entities, migrations
 └── ui/               # theme, colors, type, shared UI components
