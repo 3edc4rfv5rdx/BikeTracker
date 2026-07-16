@@ -241,7 +241,19 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     }
 
     if (showRecords) {
-        RecordsDialog(trips = trips, onDismiss = { showRecords = false })
+        RecordsDialog(
+            trips = trips,
+            onOpenRide = { trip ->
+                showRecords = false
+                onShowRideStats(trip)
+            },
+            onOpenDay = { millis ->
+                showRecords = false
+                expanded.clear()
+                expanded.addAll(dayNodeKeys(millis)) // open History straight onto that day
+            },
+            onDismiss = { showRecords = false },
+        )
     }
 }
 
@@ -314,6 +326,16 @@ private fun groupByDate(trips: List<Trip>, weekdayNames: List<String>): List<Yea
             months = monthNodes,
         )
     }
+}
+
+/** The year > month > day expansion keys for the day containing [millis], matching groupByDate's
+ *  key scheme, so opening History onto an arbitrary day reuses the same tree nodes. */
+private fun dayNodeKeys(millis: Long): List<String> {
+    val cal = Calendar.getInstance().apply { timeInMillis = millis }
+    val yearKey = "y${cal.get(Calendar.YEAR)}"
+    val monthKey = "$yearKey-m${cal.get(Calendar.MONTH)}"
+    val dayKey = "$monthKey-d${cal.get(Calendar.DAY_OF_YEAR)}"
+    return listOf(yearKey, monthKey, dayKey)
 }
 
 /** Expansion keys of today's year > month > day branch, or null when today has no rides. */
