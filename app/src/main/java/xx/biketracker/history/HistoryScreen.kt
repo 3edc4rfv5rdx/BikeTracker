@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
@@ -87,6 +88,9 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     // Tapping a ride opens its details as a dialog over this screen (no navigation, so Back
     // just dismisses the dialog). The Trip already carries every figure the dialog shows.
     var selectedTrip by remember { mutableStateOf<Trip?>(null) }
+
+    // Tapping "Edit" on a ride's menu opens the name/comment editor over the tree.
+    var editingTrip by remember { mutableStateOf<Trip?>(null) }
 
     // The Records top-bar button (in the activity) toggles this; the dialog reduces over `trips`.
     var showRecords by remember { mutableStateOf(false) }
@@ -233,6 +237,7 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
                                         onMap = trip.id == mappedTrip?.id,
                                         onClick = { selectedTrip = trip },
                                         onShowStats = { onShowRideStats(trip) },
+                                        onEdit = { editingTrip = trip },
                                         onExport = {
                                             launchGpxShare(context, scope, trip, gpxShareTitle, gpxFailedMessage)
                                         },
@@ -252,6 +257,14 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
             trip = trip,
             onDismiss = { selectedTrip = null },
             onDeleted = { selectedTrip = null },
+        )
+    }
+
+    editingTrip?.let { trip ->
+        RideEditDialog(
+            trip = trip,
+            onDismiss = { editingTrip = null },
+            onSaved = { editingTrip = null },
         )
     }
 
@@ -438,6 +451,7 @@ private fun RideRow(
     onMap: Boolean,
     onClick: () -> Unit,
     onShowStats: () -> Unit,
+    onEdit: () -> Unit,
     onExport: () -> Unit,
     onShowOnMap: () -> Unit,
 ) {
@@ -457,12 +471,17 @@ private fun RideRow(
                     .weight(1f)
                     .padding(start = 14.dp, top = 10.dp, bottom = 10.dp),
             ) {
+                // A named ride leads with its name; the start time then joins the summary line so it
+                // stays visible. Without a name the clock is the bold identity, as before.
+                val title = trip.title?.takeIf { it.isNotBlank() }
                 Text(
-                    text = formatClock(trip.startTime),
+                    text = title ?: formatClock(trip.startTime),
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                 )
                 Text(
-                    text = tripSummaryLine(trip),
+                    text = if (title != null) "${formatClock(trip.startTime)} · ${tripSummaryLine(trip)}"
+                    else tripSummaryLine(trip),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -472,7 +491,7 @@ private fun RideRow(
                     contentDescription = stringResource(R.string.history_show_on_map),
                 )
             }
-            RideActionsMenu(onShowStats = onShowStats, onExport = onExport)
+            RideActionsMenu(onShowStats = onShowStats, onEdit = onEdit, onExport = onExport)
         }
     }
 }
@@ -480,7 +499,7 @@ private fun RideRow(
 /** Overflow menu at the right edge of a ride row: statistics and GPX export (map has its own
  *  button; more actions land here as they arrive). */
 @Composable
-private fun RideActionsMenu(onShowStats: () -> Unit, onExport: () -> Unit) {
+private fun RideActionsMenu(onShowStats: () -> Unit, onEdit: () -> Unit, onExport: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(modifier = Modifier.padding(end = 4.dp)) {
         IconButton(onClick = { open = true }) {
@@ -496,6 +515,14 @@ private fun RideActionsMenu(onShowStats: () -> Unit, onExport: () -> Unit) {
                 onClick = {
                     open = false
                     onShowStats()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.ride_name_label)) },
+                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onEdit()
                 },
             )
             DropdownMenuItem(

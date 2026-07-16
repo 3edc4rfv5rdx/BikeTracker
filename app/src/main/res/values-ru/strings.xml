@@ -86,6 +86,9 @@
     <string name="history_show_on_map">Показать на карте</string>
     <string name="history_stats">Статистика</string>
     <string name="history_actions">Действия</string>
+    <string name="ride_edit_title">Изменить поездку</string>
+    <string name="ride_name_label">Название</string>
+    <string name="ride_note_label">Заметка</string>
     <string name="gpx_export">Экспорт GPX</string>
     <string name="gpx_export_failed">Не удалось экспортировать поездку</string>
 
@@ -123,6 +126,7 @@
     <string name="summary_all">Всего</string>
 
     <string name="history_records">Рекорды</string>
+    <string name="records_title">Рекорды поездок</string>
     <string name="record_longest_distance">Самая длинная</string>
     <string name="record_longest_time">Самая долгая</string>
     <string name="record_fastest_avg">Лучшая средняя</string>
@@ -135,6 +139,7 @@
     <string name="about_build">Сборка</string>
 
     <string name="action_back">Назад</string>
+    <string name="action_save">Сохранить</string>
     <string name="action_delete">Удалить</string>
     <string name="action_cancel">Отмена</string>
     <string name="delete_title">Удалить поездку</string>

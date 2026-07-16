@@ -74,6 +74,18 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate4To5_tripsGainNullTitleAndNote() {
+        seedV1()
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, *AppDatabase.MIGRATIONS).close()
+        val db = helper.runMigrationsAndValidate(TEST_DB, 5, true, *AppDatabase.MIGRATIONS)
+        db.query("SELECT title, note FROM trips").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertTrue(cursor.isNull(0))
+            assertTrue(cursor.isNull(1))
+        }
+    }
+
+    @Test
     fun migrateAll_fromV1ToCurrentKeepsRows() {
         seedV1()
         val db = helper.runMigrationsAndValidate(

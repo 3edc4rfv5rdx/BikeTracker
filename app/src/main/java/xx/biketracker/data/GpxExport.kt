@@ -42,7 +42,10 @@ fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
     sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
     sb.append("<gpx version=\"1.1\" creator=\"BikeTracker\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n")
     sb.append("  <metadata><time>").append(iso.format(Date(trip.startTime))).append("</time></metadata>\n")
-    sb.append("  <trk>\n    <name>").append(gpxEscape(gpxTrackName(trip.startTime))).append("</name>\n")
+    sb.append("  <trk>\n    <name>").append(gpxEscape(gpxTrackName(trip))).append("</name>\n")
+    trip.note?.takeIf { it.isNotBlank() }?.let {
+        sb.append("    <desc>").append(gpxEscape(it)).append("</desc>\n")
+    }
 
     var open = false
     for (i in points.indices) {
@@ -63,9 +66,10 @@ fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
     return sb.toString()
 }
 
-/** Human-readable track name; currently the ride's start date and time. */
-private fun gpxTrackName(startTime: Long): String =
-    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(startTime))
+/** Human-readable track name: the rider's own ride name when set, else its start date and time. */
+private fun gpxTrackName(trip: Trip): String =
+    trip.title?.takeIf { it.isNotBlank() }
+        ?: SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(trip.startTime))
 
 private fun coord(value: Double) = String.format(Locale.US, "%.7f", value)
 private fun oneDecimal(value: Double) = String.format(Locale.US, "%.1f", value)

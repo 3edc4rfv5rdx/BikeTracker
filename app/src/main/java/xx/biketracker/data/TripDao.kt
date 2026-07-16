@@ -19,6 +19,11 @@ interface TripDao {
     @Update
     suspend fun updateTrip(trip: Trip)
 
+    /** Set (or clear, with nulls) a ride's rider-supplied name and comment without touching its
+     *  figures. The History flow refreshes automatically once this commits. */
+    @Query("UPDATE trips SET title = :title, note = :note WHERE id = :tripId")
+    suspend fun updateTripMeta(tripId: Long, title: String?, note: String?)
+
     @Delete
     suspend fun deleteTrip(trip: Trip)
 

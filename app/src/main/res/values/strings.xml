@@ -86,6 +86,9 @@
     <string name="history_show_on_map">Show on map</string>
     <string name="history_stats">Statistics</string>
     <string name="history_actions">Actions</string>
+    <string name="ride_edit_title">Edit ride</string>
+    <string name="ride_name_label">Name</string>
+    <string name="ride_note_label">Note</string>
     <string name="gpx_export">Export GPX</string>
     <string name="gpx_export_failed">Could not export ride</string>
 
@@ -126,6 +129,7 @@
     <string name="summary_all">Total</string>
 
     <string name="history_records">Records</string>
+    <string name="records_title">Ride records</string>
     <string name="record_longest_distance">Longest ride</string>
     <string name="record_longest_time">Longest by time</string>
     <string name="record_fastest_avg">Fastest average</string>
@@ -150,6 +154,7 @@
 
     <string name="action_ok" translatable="false">OK</string>
     <string name="action_back">Back</string>
+    <string name="action_save">Save</string>
     <string name="action_delete">Delete</string>
     <string name="action_cancel">Cancel</string>
     <string name="delete_title">Delete ride</string>

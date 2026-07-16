@@ -51,6 +51,9 @@ fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
         onDismissRequest = onDismiss,
         title = {
             Column {
+                trip.title?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                }
                 Text(formatDate(trip.startTime), fontWeight = FontWeight.Bold)
                 Text(
                     text = "${formatClock(trip.startTime)} – ${formatClock(trip.endTime)}",
@@ -80,6 +83,9 @@ fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
                         stringResource(R.string.unit_m),
                     ),
                 )
+                trip.note?.takeIf { it.isNotBlank() }?.let {
+                    Text(text = it, style = MaterialTheme.typography.bodyMedium)
+                }
             }
         },
         confirmButton = {

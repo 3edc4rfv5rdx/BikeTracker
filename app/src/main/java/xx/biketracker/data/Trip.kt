@@ -29,4 +29,8 @@ data class Trip(
     // into this draft row incrementally, so a process death loses at most the last batch.
     // History/totals queries only show finished trips; finalizeAbandonedTrips() rescues drafts.
     val finished: Boolean = true,
+    // Optional rider-supplied name and free-form comment. Null (or blank) means unset: the UI then
+    // falls back to the start time as the ride's label. Never used in any computation.
+    val title: String? = null,
+    val note: String? = null,
 )

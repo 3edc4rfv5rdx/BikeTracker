@@ -93,7 +93,7 @@ fun RecordsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.history_records)) },
+        title = { Text(stringResource(R.string.records_title)) },
         text = {
             if (trips.isEmpty()) {
                 Text(stringResource(R.string.history_empty))

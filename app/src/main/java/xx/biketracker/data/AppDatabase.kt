@@ -10,7 +10,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-internal const val CURRENT_SCHEMA_VERSION = 4
+internal const val CURRENT_SCHEMA_VERSION = 5
 
 @Database(
     entities = [Trip::class, TrackPoint::class],
@@ -55,8 +55,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v4 -> v5: optional rider-supplied name and comment (existing trips stay NULL/unset). */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE trips ADD COLUMN title TEXT")
+                db.execSQL("ALTER TABLE trips ADD COLUMN note TEXT")
+            }
+        }
+
         /** Full migration path; internal so the instrumentation tests validate the same objects. */
-        internal val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        internal val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 
         @Volatile
         private var instance: AppDatabase? = null
