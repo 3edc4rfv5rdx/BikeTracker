@@ -74,6 +74,8 @@
     <string name="map_offline_deleted">Скачанные области удалены</string>
     <string name="history_show_on_map">Показать на карте</string>
     <string name="history_stats">Статистика</string>
+    <string name="gpx_export">Экспорт GPX</string>
+    <string name="gpx_export_failed">Не удалось экспортировать поездку</string>
 
     <string name="settings_profile">Профиль</string>
     <string name="settings_weight">Ваш вес</string>

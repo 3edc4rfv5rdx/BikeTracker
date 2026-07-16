@@ -34,8 +34,8 @@ import java.util.zip.ZipOutputStream
  * GPX export: GPX is for interop, this is a full restorable snapshot.
  */
 
-/** Public subfolder under Documents where backups are written. */
-private val BACKUP_DIR = "${Environment.DIRECTORY_DOCUMENTS}/BikeTracker"
+/** Public subfolder under Documents where backups and GPX exports are written. */
+internal val EXPORT_DIR = "${Environment.DIRECTORY_DOCUMENTS}/BikeTracker"
 
 /** Name of the single SQLite entry inside the backup ZIP. */
 private const val DB_ENTRY_NAME = "biketracker.db"
@@ -102,7 +102,7 @@ suspend fun backupDatabase(context: Context): String = withContext(Dispatchers.I
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, BACKUP_DIR)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, EXPORT_DIR)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val resolver = context.contentResolver
@@ -132,7 +132,7 @@ suspend fun backupDatabase(context: Context): String = withContext(Dispatchers.I
             throw failure
         }
 
-        "$BACKUP_DIR/$name"
+        "$EXPORT_DIR/$name"
     }
 }
 

@@ -74,6 +74,8 @@
     <string name="map_offline_deleted">Завантажені області видалено</string>
     <string name="history_show_on_map">Показати на карті</string>
     <string name="history_stats">Статистика</string>
+    <string name="gpx_export">Експорт GPX</string>
+    <string name="gpx_export_failed">Не вдалося експортувати поїздку</string>
 
     <string name="settings_profile">Профіль</string>
     <string name="settings_weight">Ваша вага</string>

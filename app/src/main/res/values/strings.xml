@@ -74,6 +74,8 @@
     <string name="map_offline_deleted">Downloaded areas deleted</string>
     <string name="history_show_on_map">Show on map</string>
     <string name="history_stats">Statistics</string>
+    <string name="gpx_export">Export GPX</string>
+    <string name="gpx_export_failed">Could not export ride</string>
 
     <string name="settings_profile">Profile</string>
     <string name="settings_weight">Your weight</string>
