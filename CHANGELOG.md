@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A chart button on each History ride opens a full-screen extended-statistics screen: an elevation profile, a histogram of time spent in each speed band, and figures for descent, min/max altitude, and stops — all computed from the ride's track points; switching tabs or Back closes it.
 - History's day rows name the weekday by a three-letter abbreviation ("22 Sat", "22 пнд") instead of spelling it out.
 - History marks the ride currently opened on the Map tab with an inverted card — near-black on the light theme, near-white on the dark one — so it is no longer lost among the identically purple rows.
 - The speed chart's long-press hand-over to pan mode buzzes through the vibrator at full strength, so it is unmistakable and works on phones with the system's touch-feedback setting turned off.

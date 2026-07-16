@@ -38,6 +38,10 @@
     <string name="unit_pace">мин/км</string>
     <string name="stat_altitude">Высота</string>
     <string name="stat_elevation_gain">Набор высоты</string>
+    <string name="stat_descent">Спуск</string>
+    <string name="stat_altitude_min_max">Мин / макс</string>
+    <string name="stat_stops">Остановки</string>
+    <string name="stats_speed_zones">Время по скорости</string>
 
     <string name="btn_start">Старт</string>
     <string name="btn_pause">Пауза</string>
@@ -66,6 +70,7 @@
     <string name="map_offline_no_area">Сначала откройте вкладку Карта</string>
     <string name="map_offline_deleted">Скачанные области удалены</string>
     <string name="history_show_on_map">Показать на карте</string>
+    <string name="history_stats">Статистика</string>
 
     <string name="settings_appearance">Вид</string>
     <string name="settings_language">Язык</string>
@@ -100,6 +105,7 @@
     <string name="about_version">Версия</string>
     <string name="about_build">Сборка</string>
 
+    <string name="action_back">Назад</string>
     <string name="action_delete">Удалить</string>
     <string name="action_cancel">Отмена</string>
     <string name="delete_title">Удалить поездку</string>

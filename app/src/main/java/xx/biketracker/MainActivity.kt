@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
@@ -65,8 +67,10 @@ import xx.biketracker.data.finalizeAbandonedTrips
 import xx.biketracker.data.recoveryJob
 import xx.biketracker.data.DatabaseRestoreCoordinator
 import xx.biketracker.data.RestoreOperationState
+import xx.biketracker.data.Trip
 import xx.biketracker.history.HistoryCommands
 import xx.biketracker.history.HistoryScreen
+import xx.biketracker.history.RideStatsScreen
 import xx.biketracker.map.MapScreen
 import xx.biketracker.map.MapSelection
 import xx.biketracker.settings.AppSettings
@@ -153,6 +157,11 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     // The About button lives only on the Settings tab.
     var showAbout by remember { mutableStateOf(false) }
 
+    // The extended-stats screen (opened from a History row) is a full-screen overlay above the
+    // tab content, not a nav destination: the bottom bar stays live, and switching tabs closes
+    // it (see navigateTo). Null means it is not shown.
+    var statsTrip by remember { mutableStateOf<Trip?>(null) }
+
     // Exit is blocked while a ride is active: the task would disappear yet the foreground
     // service would keep recording, which reads as either a lost ride or a stuck app.
     val trackingSnapshot by TrackingState.snapshot.collectAsState()
@@ -163,7 +172,9 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     }
 
     // Shared by the bottom bar and History's "show on map": switch tabs, keeping their state.
+    // Any tab switch closes the extended-stats overlay, so it never lingers over another tab.
     fun navigateTo(tab: Destination) {
+        statsTrip = null
         navController.navigate(tab.route) {
             popUpTo(navController.graph.findStartDestination().id) {
                 saveState = true
@@ -175,6 +186,29 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
 
     Scaffold(
         topBar = {
+            val stats = statsTrip
+            if (stats != null) {
+                // The stats overlay owns the bar: a back arrow and the ride's date replace the
+                // tab title and its actions, while the bottom bar underneath stays untouched.
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "${formatDate(stats.startTime)} · " +
+                                "${formatClock(stats.startTime)}–${formatClock(stats.endTime)}",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { statsTrip = null }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(id = R.string.action_back),
+                            )
+                        }
+                    },
+                )
+                return@Scaffold
+            }
             TopAppBar(
                 title = { Text(stringResource(id = (currentTab ?: Destination.Tracking).labelRes())) },
                 navigationIcon = {
@@ -239,22 +273,29 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
             }
         }
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Destination.Tracking.route,
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            composable(Destination.Tracking.route) { TrackingScreen() }
-            composable(Destination.Map.route) { MapScreen() }
-            composable(Destination.History.route) {
-                HistoryScreen(
-                    onShowRideOnMap = { trip ->
-                        MapSelection.select(trip)
-                        navigateTo(Destination.Map)
-                    },
-                )
+        Box(modifier = Modifier.padding(innerPadding)) {
+            NavHost(
+                navController = navController,
+                startDestination = Destination.Tracking.route,
+            ) {
+                composable(Destination.Tracking.route) { TrackingScreen() }
+                composable(Destination.Map.route) { MapScreen() }
+                composable(Destination.History.route) {
+                    HistoryScreen(
+                        onShowRideOnMap = { trip ->
+                            MapSelection.select(trip)
+                            navigateTo(Destination.Map)
+                        },
+                        onShowRideStats = { statsTrip = it },
+                    )
+                }
+                composable(Destination.Settings.route) { SettingsScreen() }
             }
-            composable(Destination.Settings.route) { SettingsScreen() }
+            // Opaque overlay covering the tab content while keeping the NavHost composed, so
+            // History (and Map) keep their state behind it.
+            statsTrip?.let { trip ->
+                RideStatsScreen(trip = trip, onBack = { statsTrip = null })
+            }
         }
     }
 

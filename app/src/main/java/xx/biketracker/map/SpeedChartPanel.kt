@@ -64,7 +64,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
 import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.R
@@ -73,6 +72,7 @@ import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.formatSpeedKmh
 import xx.biketracker.haversineMeters
+import xx.biketracker.isRecordingGap
 import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.ScrubBlue
 import xx.biketracker.ui.gestureBuzz
@@ -133,11 +133,6 @@ internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
     }
     return samples
 }
-
-/** Same discontinuity rule as [xx.biketracker.splitRouteSegments]: no points are recorded
- *  during a pause or GPS outage, so a long wall-time gap is a break, not riding. */
-private fun isRecordingGap(prevTimeMillis: Long, timeMillis: Long): Boolean =
-    prevTimeMillis > 0 && timeMillis > 0 && timeMillis - prevTimeMillis > GPS_STALE_MS
 
 /**
  * Bottom panel of the Map tab: the ride's speed over distance or time. The handle strip

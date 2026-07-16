@@ -38,6 +38,10 @@
     <string name="unit_pace">хв/км</string>
     <string name="stat_altitude">Висота</string>
     <string name="stat_elevation_gain">Набір висоти</string>
+    <string name="stat_descent">Спуск</string>
+    <string name="stat_altitude_min_max">Мін / макс</string>
+    <string name="stat_stops">Зупинки</string>
+    <string name="stats_speed_zones">Час за швидкістю</string>
 
     <string name="btn_start">Старт</string>
     <string name="btn_pause">Пауза</string>
@@ -66,6 +70,7 @@
     <string name="map_offline_no_area">Спочатку відкрийте вкладку Карта</string>
     <string name="map_offline_deleted">Завантажені області видалено</string>
     <string name="history_show_on_map">Показати на карті</string>
+    <string name="history_stats">Статистика</string>
 
     <string name="settings_appearance">Вигляд</string>
     <string name="settings_language">Мова</string>
@@ -100,6 +105,7 @@
     <string name="about_version">Версія</string>
     <string name="about_build">Збірка</string>
 
+    <string name="action_back">Назад</string>
     <string name="action_delete">Видалити</string>
     <string name="action_cancel">Скасувати</string>
     <string name="delete_title">Видалити поїздку</string>

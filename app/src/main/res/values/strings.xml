@@ -38,6 +38,10 @@
     <string name="unit_pace">min/km</string>
     <string name="stat_altitude">Altitude</string>
     <string name="stat_elevation_gain">Elevation gain</string>
+    <string name="stat_descent">Descent</string>
+    <string name="stat_altitude_min_max">Min / max</string>
+    <string name="stat_stops">Stops</string>
+    <string name="stats_speed_zones">Time by speed</string>
 
     <string name="btn_start">Start</string>
     <string name="btn_pause">Pause</string>
@@ -66,6 +70,7 @@
     <string name="map_offline_no_area">Open the Map tab first</string>
     <string name="map_offline_deleted">Downloaded areas deleted</string>
     <string name="history_show_on_map">Show on map</string>
+    <string name="history_stats">Statistics</string>
 
     <string name="settings_appearance">Appearance</string>
     <string name="settings_language">Language</string>
@@ -115,6 +120,7 @@
     <string name="about_build">Build</string>
 
     <string name="action_ok" translatable="false">OK</string>
+    <string name="action_back">Back</string>
     <string name="action_delete">Delete</string>
     <string name="action_cancel">Cancel</string>
     <string name="delete_title">Delete ride</string>

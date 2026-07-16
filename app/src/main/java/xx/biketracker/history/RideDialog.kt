@@ -2,12 +2,7 @@ package xx.biketracker.history
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,14 +11,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import android.widget.Toast
 import xx.biketracker.R
@@ -40,6 +31,8 @@ import xx.biketracker.formatSpeedKmh
 import xx.biketracker.map.MapSelection
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.DialogButtonRow
+import xx.biketracker.ui.Stat
+import xx.biketracker.ui.StatRow
 import kotlin.math.roundToInt
 
 /**
@@ -131,55 +124,5 @@ fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
                 DialogButton(stringResource(R.string.action_cancel), onClick = { confirmDelete = false })
             },
         )
-    }
-}
-
-private data class Stat(val label: String, val value: String, val unit: String? = null)
-
-@Composable
-private fun StatRow(left: Stat, right: Stat?) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        StatCell(left, Modifier.weight(1f))
-        if (right != null) {
-            StatCell(right, Modifier.weight(1f))
-        } else {
-            Spacer(Modifier.weight(1f))
-        }
-    }
-}
-
-// Label, big value, and the unit as a small caption below — keeps the label short so it doesn't
-// wrap into "Макс. / скорость, / км/ч" in the narrow dialog cell.
-@Composable
-private fun StatCell(stat: Stat, modifier: Modifier) {
-    Card(modifier = modifier) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stat.label,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 2,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = stat.value,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-            )
-            if (stat.unit != null) {
-                Text(
-                    text = stat.unit,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-        }
     }
 }

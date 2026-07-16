@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Card
@@ -60,7 +61,7 @@ import xx.biketracker.map.MapSelection
 import java.util.Calendar
 
 @Composable
-fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
+fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Unit) {
     val context = LocalContext.current
     val dao = remember { AppDatabase.get(context).tripDao() }
 
@@ -204,6 +205,7 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
                                         trip = trip,
                                         onMap = trip.id == mappedTrip?.id,
                                         onClick = { selectedTrip = trip },
+                                        onShowStats = { onShowRideStats(trip) },
                                         onShowOnMap = { onShowRideOnMap(trip) },
                                     )
                                 }
@@ -349,13 +351,19 @@ private fun TreeRow(
     }
 }
 
-/** A selectable ride under an expanded day: start time plus the trip's summary line, and a map
- *  button at the right edge that opens this ride's track on the Map tab. Indented to the day
- *  row's level (not the deeper text) and tinted so it reads as a button. The ride currently
- *  shown on the Map tab inverts to near-black on light / near-white on dark, so it stands out
- *  from the identically tinted rows around it. */
+/** A selectable ride under an expanded day: start time plus the trip's summary line, and two
+ *  buttons at the right edge — extended statistics and this ride's track on the Map tab. Indented
+ *  to the day row's level (not the deeper text) and tinted so it reads as a button. The ride
+ *  currently shown on the Map tab inverts to near-black on light / near-white on dark, so it
+ *  stands out from the identically tinted rows around it. */
 @Composable
-private fun RideRow(trip: Trip, onMap: Boolean, onClick: () -> Unit, onShowOnMap: () -> Unit) {
+private fun RideRow(
+    trip: Trip,
+    onMap: Boolean,
+    onClick: () -> Unit,
+    onShowStats: () -> Unit,
+    onShowOnMap: () -> Unit,
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = if (onMap) MaterialTheme.colorScheme.inverseSurface
@@ -379,6 +387,12 @@ private fun RideRow(trip: Trip, onMap: Boolean, onClick: () -> Unit, onShowOnMap
                 Text(
                     text = tripSummaryLine(trip),
                     style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            IconButton(onClick = onShowStats) {
+                Icon(
+                    imageVector = Icons.Filled.BarChart,
+                    contentDescription = stringResource(R.string.history_stats),
                 )
             }
             IconButton(onClick = onShowOnMap, modifier = Modifier.padding(end = 4.dp)) {

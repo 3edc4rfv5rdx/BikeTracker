@@ -117,11 +117,17 @@ fun avgSpeedMps(distanceMeters: Double, movingTimeMillis: Long): Double =
     if (movingTimeMillis > 0) distanceMeters / (movingTimeMillis / 1000.0) else 0.0
 
 /**
- * Split a route into the segments that were actually recorded: no points are written during a
- * pause or a GPS outage, so a wall-time gap above [GPS_STALE_MS] between consecutive points is
- * a recording discontinuity, and drawing across it would show travel the tracker never saw.
- * Points without a timestamp (old data recorded before times reached the route) never split,
- * so such routes stay one segment exactly as before.
+ * A wall-time gap above [GPS_STALE_MS] between two consecutive fixes is a recording
+ * discontinuity — no points are written during a pause or a GPS outage — so it adds neither
+ * distance nor moving time, and a track must not be drawn across it. Fixes without a timestamp
+ * (0, old data recorded before times reached the route) never gap, so such routes stay whole.
+ */
+fun isRecordingGap(prevTimeMillis: Long, timeMillis: Long): Boolean =
+    prevTimeMillis > 0 && timeMillis > 0 && timeMillis - prevTimeMillis > GPS_STALE_MS
+
+/**
+ * Split a route into the segments that were actually recorded: drawing across a recording gap
+ * (see [isRecordingGap]) would show travel the tracker never saw.
  */
 fun splitRouteSegments(route: List<GeoPoint>): List<List<GeoPoint>> {
     if (route.isEmpty()) return emptyList()
@@ -129,9 +135,8 @@ fun splitRouteSegments(route: List<GeoPoint>): List<List<GeoPoint>> {
     for (i in 1 until route.size) {
         val prev = route[i - 1]
         val point = route[i]
-        val gapped = prev.timeMillis > 0 && point.timeMillis > 0 &&
-            point.timeMillis - prev.timeMillis > GPS_STALE_MS
-        if (gapped) segments += mutableListOf(point) else segments.last() += point
+        if (isRecordingGap(prev.timeMillis, point.timeMillis)) segments += mutableListOf(point)
+        else segments.last() += point
     }
     return segments
 }
