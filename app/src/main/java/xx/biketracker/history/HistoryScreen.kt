@@ -56,6 +56,7 @@ import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.formatMonthName
 import xx.biketracker.formatSpeedKmh
+import xx.biketracker.map.MapSelection
 import java.util.Calendar
 
 @Composable
@@ -65,6 +66,9 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
 
     val trips by remember { dao.observeTrips() }.collectAsState(initial = emptyList())
     val years = remember(trips) { groupByDate(trips) }
+
+    // The ride currently shown on the Map tab, so its row can be told apart from the rest.
+    val mappedTrip by MapSelection.trip.collectAsState()
 
     // Tapping a ride opens its details as a dialog over this screen (no navigation, so Back
     // just dismisses the dialog). The Trip already carries every figure the dialog shows.
@@ -194,6 +198,7 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit) {
                                 items(dayNode.trips, key = { "t-${it.id}" }) { trip ->
                                     RideRow(
                                         trip = trip,
+                                        onMap = trip.id == mappedTrip?.id,
                                         onClick = { selectedTrip = trip },
                                         onShowOnMap = { onShowRideOnMap(trip) },
                                     )
@@ -342,11 +347,16 @@ private fun TreeRow(
 
 /** A selectable ride under an expanded day: start time plus the trip's summary line, and a map
  *  button at the right edge that opens this ride's track on the Map tab. Indented to the day
- *  row's level (not the deeper text) and tinted so it reads as a button. */
+ *  row's level (not the deeper text) and tinted so it reads as a button. The ride currently
+ *  shown on the Map tab inverts to near-black on light / near-white on dark, so it stands out
+ *  from the identically tinted rows around it. */
 @Composable
-private fun RideRow(trip: Trip, onClick: () -> Unit, onShowOnMap: () -> Unit) {
+private fun RideRow(trip: Trip, onMap: Boolean, onClick: () -> Unit, onShowOnMap: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        colors = CardDefaults.cardColors(
+            containerColor = if (onMap) MaterialTheme.colorScheme.inverseSurface
+            else MaterialTheme.colorScheme.primaryContainer,
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 40.dp, top = 2.dp, bottom = 2.dp)

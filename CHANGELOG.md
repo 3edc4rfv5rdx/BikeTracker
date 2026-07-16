@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- History marks the ride currently opened on the Map tab with an inverted card — near-black on the light theme, near-white on the dark one — so it is no longer lost among the identically purple rows.
 - The speed chart's long-press hand-over to pan mode buzzes through the vibrator at full strength, so it is unmistakable and works on phones with the system's touch-feedback setting turned off.
 - Speed chart controls sit further apart on the readout row, so the round buttons no longer crowd each other.
 
