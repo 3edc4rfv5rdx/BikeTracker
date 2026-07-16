@@ -31,6 +31,7 @@
     <string name="unit_kcal">ккал</string>
     <string name="unit_min">хв</string>
     <string name="unit_hour">год</string>
+    <string name="unit_sec">с</string>
 
     <string name="stat_speed">Швидкість</string>
     <string name="stat_distance">Відстань</string>
@@ -63,6 +64,14 @@
     <string name="map_follow_heading">Повертати карту за напрямком руху</string>
     <string name="map_speed_chart">Графік швидкості</string>
     <string name="chart_menu">Меню графіка</string>
+    <string name="settings_recording_section">Запис</string>
+    <string name="autopause_title">Автопауза</string>
+    <string name="autopause_enable">Увімкнена</string>
+    <string name="autopause_speed">Поріг швидкості</string>
+    <string name="autopause_hold">Час утримання</string>
+    <string name="autopause_autosave">Автозбереження поїздки через</string>
+    <string name="autopause_resume_hint">Відновлення на 1 км/год вище порога</string>
+
     <string name="settings_map_section">Карта</string>
     <string name="map_offline_title">Офлайн-карта</string>
     <string name="map_offline_hint">Буде завантажено останню переглянуту область карти</string>

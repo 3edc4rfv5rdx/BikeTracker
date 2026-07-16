@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -60,6 +62,7 @@ fun SettingsScreen() {
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showOfflineMapDialog by remember { mutableStateOf(false) }
+    var showAutoPauseDialog by remember { mutableStateOf(false) }
 
     val themeMode by AppSettings.themeMode.collectAsState()
     val weightKg by AppSettings.riderWeightKg.collectAsState()
@@ -111,6 +114,12 @@ fun SettingsScreen() {
 
         SectionHeader(stringResource(R.string.settings_profile))
         WeightRow(weightKg = weightKg, onChange = { AppSettings.setRiderWeightKg(context, it) })
+
+        SectionHeader(stringResource(R.string.settings_recording_section))
+        NavRow(
+            label = stringResource(R.string.autopause_title),
+            onClick = { showAutoPauseDialog = true },
+        )
 
         SectionHeader(stringResource(R.string.settings_map_section))
         NavRow(
@@ -175,6 +184,10 @@ fun SettingsScreen() {
 
     if (showOfflineMapDialog) {
         OfflineMapDialog(onDismiss = { showOfflineMapDialog = false })
+    }
+
+    if (showAutoPauseDialog) {
+        AutoPauseDialog(onDismiss = { showAutoPauseDialog = false })
     }
 
     if (showRestoreConfirm) {
@@ -301,6 +314,94 @@ private fun WeightRow(weightKg: Int, onChange: (Int) -> Unit) {
             singleLine = true,
             // A Done key gives the number keyboard a way to close and drop focus — without it the
             // field traps the cursor, since a numeric IME has no default dismiss action.
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+            modifier = Modifier.width(96.dp),
+        )
+    }
+}
+
+/** Auto-pause settings behind a Settings row: the toggle plus speed / hold / auto-save numbers,
+ *  each applied live. Speed and hold grey out while auto-pause is off; auto-save still applies to a
+ *  manual pause, so it stays active. */
+@Composable
+private fun AutoPauseDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val enabled by AppSettings.autoPauseEnabled.collectAsState()
+    val speedKmh by AppSettings.autoPauseSpeedKmh.collectAsState()
+    val holdSec by AppSettings.autoPauseHoldSec.collectAsState()
+    val saveMin by AppSettings.autoSaveMin.collectAsState()
+    val kmh = stringResource(R.string.unit_kmh)
+    val sec = stringResource(R.string.unit_sec)
+    val min = stringResource(R.string.unit_min)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.autopause_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.autopause_enable), modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { AppSettings.setAutoPauseEnabled(context, it) },
+                    )
+                }
+                LabeledNumberField(
+                    label = "${stringResource(R.string.autopause_speed)}, $kmh",
+                    value = speedKmh,
+                    enabled = enabled,
+                    onValueChange = { AppSettings.setAutoPauseSpeedKmh(context, it) },
+                )
+                LabeledNumberField(
+                    label = "${stringResource(R.string.autopause_hold)}, $sec",
+                    value = holdSec,
+                    enabled = enabled,
+                    onValueChange = { AppSettings.setAutoPauseHoldSec(context, it) },
+                )
+                LabeledNumberField(
+                    label = "${stringResource(R.string.autopause_autosave)}, $min",
+                    value = saveMin,
+                    enabled = true, // auto-save applies to a manual pause too, so it is always live
+                    onValueChange = { AppSettings.setAutoSaveMin(context, it) },
+                )
+                Text(
+                    text = stringResource(R.string.autopause_resume_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { DialogButton(stringResource(R.string.action_ok), onClick = onDismiss) },
+    )
+}
+
+/** A "Label, unit" row with a compact numeric field on the right, applied live (an empty field
+ *  saves nothing). Greys out its label when [enabled] is false. */
+@Composable
+private fun LabeledNumberField(label: String, value: Int, enabled: Boolean, onValueChange: (Int) -> Unit) {
+    var text by remember { mutableStateOf(value.toString()) }
+    val focusManager = LocalFocusManager.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            color = if (enabled) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+        )
+        OutlinedTextField(
+            value = text,
+            enabled = enabled,
+            onValueChange = { entered ->
+                text = entered.filter { it.isDigit() }.take(3)
+                text.toIntOrNull()?.let(onValueChange)
+            },
+            singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             modifier = Modifier.width(96.dp),

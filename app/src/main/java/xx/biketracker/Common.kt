@@ -36,23 +36,18 @@ const val ACCURACY_THRESHOLD_M = 25f
 /** Drop a segment implying a speed above this (m/s ≈ 108 km/h) — almost surely a GPS jump. */
 const val MAX_PLAUSIBLE_SPEED_MPS = 30.0
 
-// --- Auto-pause / auto-resume (defaults; overridable in Settings later) ---
-/** Below this speed (m/s ≈ 2 km/h) the ride is a candidate for auto-pause. */
+// --- Stopped-speed threshold ---
+// Defaults for "the rider is stopped"; the live auto-pause thresholds are user settings in
+// AppSettings, while these drive ride-stats stop detection and the heading gate.
+/** Below this speed (m/s ≈ 2 km/h) the rider counts as stopped. */
 const val AUTO_PAUSE_SPEED_MPS = 2.0 / MPS_TO_KMH
-/** Speed must stay low this long before auto-pause actually triggers. */
+/** A stopped stretch must last at least this long to count. */
 const val AUTO_PAUSE_DEBOUNCE_MS = 10_000L
-/** Above this speed (m/s ≈ 3 km/h) an auto-paused ride resumes; hysteresis avoids flapping.
- *  A manual pause is sticky and never auto-resumes. */
-const val AUTO_RESUME_SPEED_MPS = 3.0 / MPS_TO_KMH
 
 // --- GPS signal quality ---
 /** No fix for this long while tracking means the GPS signal is effectively lost. Also breaks
  *  the recorded segment: a longer gap (tunnel, indoors) adds neither distance nor moving time. */
 const val GPS_STALE_MS = 10_000L
-
-// --- Auto-save ---
-/** A ride paused longer than this is finished and saved automatically (default 15 min). */
-const val DEFAULT_AUTO_SAVE_MS = 15L * 60L * 1000L
 
 // --- Draft persistence ---
 /** Flush recorded points to the draft trip every this many points (~30 s at GPS cadence). */

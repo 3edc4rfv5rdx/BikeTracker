@@ -37,10 +37,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import xx.biketracker.ACCURACY_THRESHOLD_M
-import xx.biketracker.AUTO_PAUSE_DEBOUNCE_MS
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
-import xx.biketracker.AUTO_RESUME_SPEED_MPS
-import xx.biketracker.DEFAULT_AUTO_SAVE_MS
 import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
 import xx.biketracker.elevationGainMeters
 import xx.biketracker.GPS_INTERVAL_MS
@@ -48,6 +45,7 @@ import xx.biketracker.GPS_MIN_INTERVAL_MS
 import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
+import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.haversineMeters
 import xx.biketracker.MainActivity
 import xx.biketracker.R
@@ -60,6 +58,8 @@ import xx.biketracker.data.Trip
 import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.map.MapSelection
+import xx.biketracker.settings.AUTO_RESUME_MARGIN_KMH
+import xx.biketracker.settings.AppSettings
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
@@ -265,6 +265,7 @@ class TrackingService : Service() {
 
     private fun startTracking(startId: Int) {
         if (status != TrackingStatus.IDLE || startupPending) return
+        AppSettings.load(this) // pick up the latest auto-pause settings, even in a fresh process
         if (DatabaseRestoreCoordinator.state.value == RestoreOperationState.Running) {
             stopSelf()
             return
@@ -474,10 +475,16 @@ class TrackingService : Service() {
     }
 
     private fun evaluateAutoPause(speed: Double, now: Long) {
-        if (speed < AUTO_PAUSE_SPEED_MPS) {
+        if (!AppSettings.autoPauseEnabled.value) {
+            lowSpeedSince = 0L
+            return
+        }
+        val thresholdMps = AppSettings.autoPauseSpeedKmh.value / MPS_TO_KMH
+        val holdMillis = AppSettings.autoPauseHoldSec.value * 1000L
+        if (speed < thresholdMps) {
             if (lowSpeedSince == 0L) {
                 lowSpeedSince = now
-            } else if (now - lowSpeedSince >= AUTO_PAUSE_DEBOUNCE_MS) {
+            } else if (now - lowSpeedSince >= holdMillis) {
                 pauseTracking(automatic = true)
             }
         } else {
@@ -487,7 +494,8 @@ class TrackingService : Service() {
 
     // Only an automatic pause resumes by itself; a manual one waits for the button.
     private fun maybeAutoResume(speedMps: Double) {
-        if (pausedAutomatically && speedMps >= AUTO_RESUME_SPEED_MPS) {
+        val resumeMps = (AppSettings.autoPauseSpeedKmh.value + AUTO_RESUME_MARGIN_KMH) / MPS_TO_KMH
+        if (pausedAutomatically && speedMps >= resumeMps) {
             resumeTracking()
         }
     }
@@ -526,7 +534,7 @@ class TrackingService : Service() {
     private fun scheduleAutoSave() {
         cancelAutoSave()
         autoSaveJob = scope.launch {
-            delay(DEFAULT_AUTO_SAVE_MS)
+            delay(AppSettings.autoSaveMin.value * 60_000L)
             // Decide and stop on the main thread so this can't race with a resume or
             // recordLocation mutating status/points; a resume's cancelAutoSave() then
             // aborts here before the check.

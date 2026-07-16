@@ -31,6 +31,7 @@
     <string name="unit_kcal">kcal</string>
     <string name="unit_min">min</string>
     <string name="unit_hour">h</string>
+    <string name="unit_sec">s</string>
 
     <string name="stat_speed">Speed</string>
     <string name="stat_distance">Distance</string>
@@ -63,6 +64,14 @@
     <string name="map_follow_heading">Rotate map with direction of travel</string>
     <string name="map_speed_chart">Speed chart</string>
     <string name="chart_menu">Chart menu</string>
+    <string name="settings_recording_section">Recording</string>
+    <string name="autopause_title">Auto-pause</string>
+    <string name="autopause_enable">Enabled</string>
+    <string name="autopause_speed">Speed threshold</string>
+    <string name="autopause_hold">Hold time</string>
+    <string name="autopause_autosave">Auto-save ride after</string>
+    <string name="autopause_resume_hint">Resumes 1 km/h above the threshold</string>
+
     <string name="settings_map_section">Map</string>
     <string name="map_offline_title">Offline map</string>
     <string name="map_offline_hint">The last viewed map area will be downloaded for offline use</string>
