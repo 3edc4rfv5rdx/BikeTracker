@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BarChart
@@ -90,6 +91,11 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     // The Records top-bar button (in the activity) toggles this; the dialog reduces over `trips`.
     var showRecords by remember { mutableStateOf(false) }
 
+    // Opening a record scrolls the tree to a node once it has been expanded and laid out. The key
+    // is the ride row ("t-<id>") or a day node; cleared after the scroll runs.
+    val listState = rememberLazyListState()
+    var scrollTargetKey by remember { mutableStateOf<String?>(null) }
+
     // Rolling 7/30/365-day windows (the labels name the exact spans). The anchor re-arms at
     // every local midnight so trips age out even when this screen stays alive across a day
     // boundary; day granularity keeps the Room flows from being recreated more often than the
@@ -151,14 +157,23 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
         }
     }
 
+    // After a record expands its branch, scroll the freshly laid-out tree to the target node.
+    LaunchedEffect(scrollTargetKey, years) {
+        val key = scrollTargetKey ?: return@LaunchedEffect
+        val index = orderedItemKeys(years, expanded).indexOf(key)
+        if (index >= 0) listState.animateScrollToItem(index)
+        scrollTargetKey = null
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 12.dp),
         contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        item {
+        item(key = "summary") {
             SummaryCard(week, month, year, all)
         }
 
@@ -241,17 +256,18 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     }
 
     if (showRecords) {
+        // A record navigates to its ride in the tree: open the day's branch and scroll to the row
+        // (or the day node, for the best-day total), leaving map/details/stats to the user there.
+        fun openInTree(dayMillis: Long, targetKey: String) {
+            showRecords = false
+            expanded.clear()
+            expanded.addAll(dayNodeKeys(dayMillis))
+            scrollTargetKey = targetKey
+        }
         RecordsDialog(
             trips = trips,
-            onOpenRide = { trip ->
-                showRecords = false
-                onShowRideStats(trip)
-            },
-            onOpenDay = { millis ->
-                showRecords = false
-                expanded.clear()
-                expanded.addAll(dayNodeKeys(millis)) // open History straight onto that day
-            },
+            onOpenRide = { trip -> openInTree(trip.startTime, "t-${trip.id}") },
+            onOpenDay = { millis -> openInTree(millis, dayNodeKeys(millis).last()) },
             onDismiss = { showRecords = false },
         )
     }
@@ -326,6 +342,25 @@ private fun groupByDate(trips: List<Trip>, weekdayNames: List<String>): List<Yea
             months = monthNodes,
         )
     }
+}
+
+/** The item keys the LazyColumn emits, in order, for the current [expanded] set — lets a node key
+ *  be resolved to a scroll index. Mirrors the tree rendering: the summary card first, then each
+ *  open year > month > day > ride node. */
+private fun orderedItemKeys(years: List<YearNode>, expanded: List<String>): List<String> {
+    val keys = ArrayList<String>()
+    keys += "summary"
+    for (yearNode in years) {
+        keys += yearNode.key
+        if (yearNode.key in expanded) for (monthNode in yearNode.months) {
+            keys += monthNode.key
+            if (monthNode.key in expanded) for (dayNode in monthNode.days) {
+                keys += dayNode.key
+                if (dayNode.key in expanded) for (trip in dayNode.trips) keys += "t-${trip.id}"
+            }
+        }
+    }
+    return keys
 }
 
 /** The year > month > day expansion keys for the day containing [millis], matching groupByDate's

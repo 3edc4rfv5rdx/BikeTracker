@@ -29,6 +29,8 @@
     <string name="unit_m">м</string>
     <string name="unit_kg">кг</string>
     <string name="unit_kcal">ккал</string>
+    <string name="unit_min">мин</string>
+    <string name="unit_hour">час</string>
 
     <string name="stat_speed">Скорость</string>
     <string name="stat_distance">Расстояние</string>

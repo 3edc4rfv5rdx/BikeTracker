@@ -4,7 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
-- A Records button in History's top bar shows personal bests — longest ride, longest by time, fastest average, top speed, biggest climb, and best single day — each dated and tappable: a ride opens its statistics, the best day opens History on that day.
+- A Records button in History's top bar shows personal bests — longest ride, longest by time, fastest average, top speed, biggest climb, and best single day — each tappable: it expands the History tree and scrolls to that ride (the best day, to that day), where map/details/statistics are one tap away.
 - Each History ride gained a ⋮ actions menu holding Statistics and Export GPX (the map keeps its own button next to it).
 - Export GPX writes the ride's track to a GPX file, opened straight into the system share sheet (Strava, Komoot, email, …) and kept under Documents/BikeTracker/GPX-export; pauses split it into separate track segments.
 

@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import xx.biketracker.R
 import xx.biketracker.avgSpeedMps
 import xx.biketracker.data.Trip
-import xx.biketracker.formatDate
 import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.formatSpeedKmh
@@ -35,9 +34,8 @@ import kotlin.math.roundToInt
 private const val MIN_AVG_RECORD_METERS = 1_000.0
 
 /**
- * Personal bests over every finished ride. Each per-ride record keeps the [Trip] behind it so the
- * dialog can date it and open its statistics; the best day is a calendar-day distance total, dated
- * by that day.
+ * Personal bests over every finished ride. Each per-ride record keeps the [Trip] behind it so
+ * tapping can jump to it in History; the best day is a calendar-day distance total.
  */
 class Records(
     val longestDistance: Trip?,
@@ -90,6 +88,8 @@ fun RecordsDialog(
     val km = stringResource(R.string.unit_km)
     val kmh = stringResource(R.string.unit_kmh)
     val meters = stringResource(R.string.unit_m)
+    val min = stringResource(R.string.unit_min)
+    val hour = stringResource(R.string.unit_hour)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -100,42 +100,43 @@ fun RecordsDialog(
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     RecordRow(
-                        stringResource(R.string.record_longest_distance),
-                        records.longestDistance?.let { "${formatKm(it.distanceMeters)} $km" },
-                        records.longestDistance?.startTime,
-                        records.longestDistance?.let { t -> { onOpenRide(t) } },
+                        label = stringResource(R.string.record_longest_distance),
+                        unit = km,
+                        value = records.longestDistance?.let { formatKm(it.distanceMeters) },
+                        onClick = records.longestDistance?.let { t -> { onOpenRide(t) } },
                     )
                     RecordRow(
-                        stringResource(R.string.record_longest_time),
-                        records.longestTime?.let { formatDuration(it.movingTimeMillis) },
-                        records.longestTime?.startTime,
-                        records.longestTime?.let { t -> { onOpenRide(t) } },
+                        label = stringResource(R.string.record_longest_time),
+                        // Hours or minutes, matching what the value actually shows (H:MM:SS vs MM:SS).
+                        unit = records.longestTime?.let { if (it.movingTimeMillis >= 3_600_000L) hour else min } ?: min,
+                        value = records.longestTime?.let { formatDuration(it.movingTimeMillis) },
+                        onClick = records.longestTime?.let { t -> { onOpenRide(t) } },
                     )
                     RecordRow(
-                        stringResource(R.string.record_fastest_avg),
-                        records.fastestAverage?.let {
-                            "${formatSpeedKmh(avgSpeedMps(it.distanceMeters, it.movingTimeMillis))} $kmh"
+                        label = stringResource(R.string.record_fastest_avg),
+                        unit = kmh,
+                        value = records.fastestAverage?.let {
+                            formatSpeedKmh(avgSpeedMps(it.distanceMeters, it.movingTimeMillis))
                         },
-                        records.fastestAverage?.startTime,
-                        records.fastestAverage?.let { t -> { onOpenRide(t) } },
+                        onClick = records.fastestAverage?.let { t -> { onOpenRide(t) } },
                     )
                     RecordRow(
-                        stringResource(R.string.record_top_speed),
-                        records.topSpeed?.let { "${formatSpeedKmh(it.maxSpeedMps)} $kmh" },
-                        records.topSpeed?.startTime,
-                        records.topSpeed?.let { t -> { onOpenRide(t) } },
+                        label = stringResource(R.string.record_top_speed),
+                        unit = kmh,
+                        value = records.topSpeed?.let { formatSpeedKmh(it.maxSpeedMps) },
+                        onClick = records.topSpeed?.let { t -> { onOpenRide(t) } },
                     )
                     RecordRow(
-                        stringResource(R.string.record_biggest_climb),
-                        records.biggestClimb?.elevationGainMeters?.let { "${it.roundToInt()} $meters" },
-                        records.biggestClimb?.startTime,
-                        records.biggestClimb?.let { t -> { onOpenRide(t) } },
+                        label = stringResource(R.string.record_biggest_climb),
+                        unit = meters,
+                        value = records.biggestClimb?.elevationGainMeters?.let { it.roundToInt().toString() },
+                        onClick = records.biggestClimb?.let { t -> { onOpenRide(t) } },
                     )
                     RecordRow(
-                        stringResource(R.string.record_best_day),
-                        records.bestDayStart?.let { "${formatKm(records.bestDayMeters)} $km" },
-                        records.bestDayStart,
-                        records.bestDayStart?.let { d -> { onOpenDay(d) } },
+                        label = stringResource(R.string.record_best_day),
+                        unit = km,
+                        value = records.bestDayStart?.let { formatKm(records.bestDayMeters) },
+                        onClick = records.bestDayStart?.let { d -> { onOpenDay(d) } },
                     )
                 }
             }
@@ -147,29 +148,33 @@ fun RecordsDialog(
 }
 
 /**
- * One record line on a single row: name on the left, then its value, date, and a chevron. Tapping
- * it runs [onClick]; a record with no ride to open ([onClick] null, e.g. no climb data yet) shows
- * a dash, no date and no chevron, and a spacer keeps the values aligned with the clickable rows.
+ * One record: the name over its unit (both centered) on the left, the value, then a chevron.
+ * Tapping it runs [onClick]; a record with no ride to open ([onClick] null, e.g. no climb data
+ * yet) shows a dash and no chevron, with a spacer keeping the values aligned with the clickable
+ * rows.
  */
 @Composable
-private fun RecordRow(label: String, value: String?, dateMillis: Long?, onClick: (() -> Unit)?) {
+private fun RecordRow(label: String, unit: String, value: String?, onClick: (() -> Unit)?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(vertical = 10.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Text(value ?: "—", fontWeight = FontWeight.Bold)
-        if (value != null && dateMillis != null) {
-            Spacer(Modifier.width(8.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(label)
             Text(
-                text = formatDate(dateMillis),
+                text = unit,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        Spacer(Modifier.width(8.dp))
+        Text(value ?: "—", fontWeight = FontWeight.Bold)
         if (onClick != null) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -177,7 +182,7 @@ private fun RecordRow(label: String, value: String?, dateMillis: Long?, onClick:
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            Spacer(Modifier.width(24.dp)) // keep values lined up when a row has no chevron
+            Spacer(Modifier.width(24.dp)) // keep values aligned when a row has no chevron
         }
     }
 }

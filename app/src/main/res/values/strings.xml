@@ -29,6 +29,8 @@
     <string name="unit_m">m</string>
     <string name="unit_kg">kg</string>
     <string name="unit_kcal">kcal</string>
+    <string name="unit_min">min</string>
+    <string name="unit_hour">h</string>
 
     <string name="stat_speed">Speed</string>
     <string name="stat_distance">Distance</string>
