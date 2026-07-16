@@ -9,14 +9,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,8 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -55,6 +62,7 @@ fun SettingsScreen() {
     var showOfflineMapDialog by remember { mutableStateOf(false) }
 
     val themeMode by AppSettings.themeMode.collectAsState()
+    val weightKg by AppSettings.riderWeightKg.collectAsState()
     val tracking by TrackingState.snapshot.collectAsState()
     val restoreState by DatabaseRestoreCoordinator.state.collectAsState()
     val restoreRunning = restoreState == RestoreOperationState.Running
@@ -100,6 +108,9 @@ fun SettingsScreen() {
             value = stringResource(themeLabel(themeMode)),
             onClick = { showThemeDialog = true },
         )
+
+        SectionHeader(stringResource(R.string.settings_profile))
+        WeightRow(weightKg = weightKg, onChange = { AppSettings.setRiderWeightKg(context, it) })
 
         SectionHeader(stringResource(R.string.settings_map_section))
         NavRow(
@@ -256,6 +267,43 @@ private fun ValueRow(label: String, value: String, onClick: () -> Unit) {
             Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Rider weight as an inline numeric field: the "Your weight, kg" label with a "for calories"
+ *  hint on the left, a compact entry on the right that persists each valid edit immediately (an
+ *  empty field simply saves nothing). */
+@Composable
+private fun WeightRow(weightKg: Int, onChange: (Int) -> Unit) {
+    var text by remember { mutableStateOf(weightKg.takeIf { it > 0 }?.toString().orEmpty()) }
+    val focusManager = LocalFocusManager.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("${stringResource(R.string.settings_weight)}, ${stringResource(R.string.unit_kg)}")
+            Text(
+                text = stringResource(R.string.settings_weight_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { entered ->
+                text = entered.filter { it.isDigit() }.take(3)
+                text.toIntOrNull()?.let(onChange)
+            },
+            singleLine = true,
+            // A Done key gives the number keyboard a way to close and drop focus — without it the
+            // field traps the cursor, since a numeric IME has no default dismiss action.
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+            modifier = Modifier.width(96.dp),
         )
     }
 }

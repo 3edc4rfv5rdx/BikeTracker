@@ -22,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,13 +36,24 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import xx.biketracker.METERS_PER_KM
 import xx.biketracker.R
+import xx.biketracker.caloriesKcal
 import xx.biketracker.data.AppDatabase
 import xx.biketracker.data.Trip
+import xx.biketracker.distanceTickStepMeters
 import xx.biketracker.formatDuration
+import xx.biketracker.formatKm
+import xx.biketracker.settings.AppSettings
 import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.Stat
 import xx.biketracker.ui.StatRow
@@ -58,6 +70,8 @@ import kotlin.math.roundToInt
 fun RideStatsScreen(trip: Trip, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
+
+    val weightKg by AppSettings.riderWeightKg.collectAsState()
 
     var stats by remember(trip.id) { mutableStateOf<RideStats?>(null) }
     LaunchedEffect(trip.id) {
@@ -91,7 +105,7 @@ fun RideStatsScreen(trip: Trip, onBack: () -> Unit) {
                 )
                 SpeedHistogram(current.speedZoneMillis)
 
-                RideStatCells(current)
+                RideStatCells(current, caloriesKcal(trip.distanceMeters, trip.movingTimeMillis, weightKg))
             }
         }
     }
@@ -107,7 +121,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun RideStatCells(stats: RideStats) {
+private fun RideStatCells(stats: RideStats, caloriesKcal: Double) {
     val meters = stringResource(R.string.unit_m)
     val dash = "—"
     val descent = Stat(
@@ -126,16 +140,27 @@ private fun RideStatCells(stats: RideStats) {
         stringResource(R.string.stat_stops),
         if (stats.stopCount == 0) "0" else "${stats.stopCount} · ${formatDuration(stats.stoppedMillis)}",
     )
-    StatRow(descent, altRange, stops)
+    val calories = Stat(
+        stringResource(R.string.stat_calories),
+        if (caloriesKcal > 0) caloriesKcal.roundToInt().toString() else dash,
+        stringResource(R.string.unit_kcal),
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatRow(descent, altRange)
+        StatRow(stops, calories)
+    }
 }
 
 // --- Elevation profile ---
 
-private val PROFILE_HEIGHT = 140.dp
+private val PROFILE_HEIGHT = 150.dp
+/** Most km ticks the profile's X axis may carry. */
+private const val PROFILE_MAX_TICKS = 6
 
 /** Altitude over distance: a filled line whose vertical scale spans exactly the ride's min-to-max
- *  altitude, with those two values labelled at the plot's edges. Recording gaps keep the same x
- *  (distance does not advance across them), so the line simply carries on. */
+ *  altitude (both values captioned at their reference lines), over an X axis of round-step km
+ *  ticks. Recording gaps keep the same x (distance does not advance across them), so the line
+ *  simply carries on. */
 @Composable
 private fun ElevationProfile(stats: RideStats) {
     val profile = stats.elevationProfile
@@ -144,57 +169,70 @@ private fun ElevationProfile(stats: RideStats) {
     val lineColor = AccentOrange
     val fillColor = AccentOrange.copy(alpha = 0.18f)
     val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val axisColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = TextStyle(fontSize = 10.sp, color = axisColor)
 
-    Box(modifier = Modifier.fillMaxWidth().height(PROFILE_HEIGHT)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            if (profile.size < 2) return@Canvas
-            val topPad = 8f
-            val h = size.height - topPad
-            val w = size.width
-            val maxDist = profile.last().distanceMeters.coerceAtLeast(1e-9)
-            val span = (maxAlt - minAlt).coerceAtLeast(1e-6)
-            fun xOf(d: Double) = (d / maxDist * w).toFloat()
-            fun yOf(a: Double) = (topPad + (1.0 - (a - minAlt) / span) * h).toFloat()
+    Canvas(modifier = Modifier.fillMaxWidth().height(PROFILE_HEIGHT)) {
+        if (profile.size < 2) return@Canvas
+        val w = size.width
+        val topPad = 8f
+        val tickLen = 3.dp.toPx()
+        val labelHeight = textMeasurer.measure(AnnotatedString("0"), labelStyle).size.height
+        val axisY = size.height - (tickLen + labelHeight + 2f)
+        val plotH = axisY - topPad
+        val maxDist = profile.last().distanceMeters.coerceAtLeast(1e-9)
+        val span = (maxAlt - minAlt).coerceAtLeast(1e-6)
+        fun xOf(d: Double) = (d / maxDist * w).toFloat()
+        fun yOf(a: Double) = (topPad + (1.0 - (a - minAlt) / span) * plotH).toFloat()
 
-            // Top and bottom reference lines (max and min altitude).
-            drawLine(gridColor, Offset(0f, yOf(maxAlt)), Offset(w, yOf(maxAlt)), strokeWidth = 1f)
-            drawLine(gridColor, Offset(0f, yOf(minAlt)), Offset(w, yOf(minAlt)), strokeWidth = 1f)
+        // Min and max altitude reference lines bound the plot band.
+        drawLine(gridColor, Offset(0f, yOf(maxAlt)), Offset(w, yOf(maxAlt)), strokeWidth = 1f)
+        drawLine(gridColor, Offset(0f, yOf(minAlt)), Offset(w, yOf(minAlt)), strokeWidth = 1f)
 
-            val line = Path().apply {
-                moveTo(xOf(profile.first().distanceMeters), yOf(profile.first().altitudeMeters))
-                for (i in 1 until profile.size) lineTo(xOf(profile[i].distanceMeters), yOf(profile[i].altitudeMeters))
-            }
-            val area = Path().apply {
-                addPath(line)
-                lineTo(xOf(profile.last().distanceMeters), topPad + h)
-                lineTo(xOf(profile.first().distanceMeters), topPad + h)
-                close()
-            }
-            drawPath(area, fillColor)
-            drawPath(
-                line, lineColor,
-                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
-            )
+        val line = Path().apply {
+            moveTo(xOf(profile.first().distanceMeters), yOf(profile.first().altitudeMeters))
+            for (i in 1 until profile.size) lineTo(xOf(profile[i].distanceMeters), yOf(profile[i].altitudeMeters))
         }
-        // Min/max altitude captions, at the levels their reference lines sit.
-        Text(
-            text = maxAlt.roundToInt().toString(),
-            modifier = Modifier.align(Alignment.TopStart),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        val area = Path().apply {
+            addPath(line)
+            lineTo(xOf(profile.last().distanceMeters), axisY)
+            lineTo(xOf(profile.first().distanceMeters), axisY)
+            close()
+        }
+        drawPath(area, fillColor)
+        drawPath(
+            line, lineColor,
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
-        Text(
-            text = minAlt.roundToInt().toString(),
-            modifier = Modifier.align(Alignment.BottomStart),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+
+        // X axis with round-step km ticks (0 omitted; the axis line itself marks the origin).
+        drawLine(axisColor, Offset(0f, axisY), Offset(w, axisY), strokeWidth = 1.dp.toPx())
+        val step = distanceTickStepMeters(maxDist, PROFILE_MAX_TICKS)
+        val decimals = if (step < METERS_PER_KM) 1 else 0
+        var tick = step
+        while (tick <= maxDist) {
+            val x = xOf(tick)
+            drawLine(axisColor, Offset(x, axisY), Offset(x, axisY + tickLen), strokeWidth = 1.dp.toPx())
+            val label = textMeasurer.measure(AnnotatedString(formatKm(tick, decimals)), labelStyle)
+            val labelX = (x - label.size.width / 2f).coerceIn(0f, w - label.size.width)
+            drawText(label, topLeft = Offset(labelX, axisY + tickLen + 1f))
+            tick += step
+        }
+
+        // Altitude captions sitting on their reference lines.
+        drawText(textMeasurer.measure(AnnotatedString(maxAlt.roundToInt().toString()), labelStyle), topLeft = Offset(2f, yOf(maxAlt)))
+        val minLabel = textMeasurer.measure(AnnotatedString(minAlt.roundToInt().toString()), labelStyle)
+        drawText(minLabel, topLeft = Offset(2f, yOf(minAlt) - minLabel.size.height))
     }
 }
 
 // --- Speed histogram ---
 
-private val HISTO_LABEL_WIDTH = 52.dp
+/** Fixed side columns leave the bar (the weighted middle) shorter, and are wide enough that
+ *  "10–20" and a "H:MM:SS" duration never wrap. */
+private val HISTO_RANGE_WIDTH = 58.dp
+private val HISTO_TIME_WIDTH = 68.dp
 private val HISTO_BAR_HEIGHT = 20.dp
 
 /** Horizontal bars of moving time per speed bucket, each bar scaled to the busiest bucket and
@@ -208,8 +246,10 @@ private fun SpeedHistogram(zoneMillis: LongArray) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = zoneLabel(i),
-                    modifier = Modifier.width(HISTO_LABEL_WIDTH),
+                    modifier = Modifier.width(HISTO_RANGE_WIDTH),
                     style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    softWrap = false,
                 )
                 Box(
                     modifier = Modifier
@@ -230,9 +270,12 @@ private fun SpeedHistogram(zoneMillis: LongArray) {
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = if (zoneMillis[i] > 0) formatDuration(zoneMillis[i]) else "",
-                    modifier = Modifier.width(HISTO_LABEL_WIDTH),
+                    modifier = Modifier.width(HISTO_TIME_WIDTH),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                    textAlign = TextAlign.End,
                 )
             }
         }

@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import xx.biketracker.PREFS_NAME
 
+/** Default rider weight (kg) until the user sets their own — a rough adult average. */
+const val DEFAULT_WEIGHT_KG = 73
+
 /** Light/dark override; SYSTEM follows the device setting. */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
@@ -28,19 +31,31 @@ enum class AppLanguage(val tag: String) {
  */
 object AppSettings {
     private const val KEY_THEME = "theme_mode"
+    private const val KEY_WEIGHT = "rider_weight_kg"
 
     private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    /** Rider body weight in kilograms, for the MET calorie estimate; defaults to [DEFAULT_WEIGHT_KG]. */
+    private val _riderWeightKg = MutableStateFlow(DEFAULT_WEIGHT_KG)
+    val riderWeightKg: StateFlow<Int> = _riderWeightKg.asStateFlow()
 
     /** Load persisted settings into memory. Call once at startup before the UI reads them. */
     fun load(context: Context) {
         val stored = prefs(context).getString(KEY_THEME, null)
         _themeMode.value = stored?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM
+        _riderWeightKg.value = prefs(context).getInt(KEY_WEIGHT, DEFAULT_WEIGHT_KG)
     }
 
     fun setThemeMode(context: Context, mode: ThemeMode) {
         _themeMode.value = mode
         prefs(context).edit { putString(KEY_THEME, mode.name) }
+    }
+
+    fun setRiderWeightKg(context: Context, kg: Int) {
+        val clamped = kg.coerceIn(0, 300)
+        _riderWeightKg.value = clamped
+        prefs(context).edit { putInt(KEY_WEIGHT, clamped) }
     }
 
     /** The language currently applied via per-app locales. */

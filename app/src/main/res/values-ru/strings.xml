@@ -27,6 +27,8 @@
     <string name="gps_no_signal">Нет сигнала GPS</string>
 
     <string name="unit_m">м</string>
+    <string name="unit_kg">кг</string>
+    <string name="unit_kcal">ккал</string>
 
     <string name="stat_speed">Скорость</string>
     <string name="stat_distance">Расстояние</string>
@@ -41,6 +43,7 @@
     <string name="stat_descent">Спуск</string>
     <string name="stat_altitude_min_max">Мин / макс</string>
     <string name="stat_stops">Остановки</string>
+    <string name="stat_calories">Калории</string>
     <string name="stats_speed_zones">Время по скорости</string>
 
     <string name="btn_start">Старт</string>
@@ -71,6 +74,10 @@
     <string name="map_offline_deleted">Скачанные области удалены</string>
     <string name="history_show_on_map">Показать на карте</string>
     <string name="history_stats">Статистика</string>
+
+    <string name="settings_profile">Профиль</string>
+    <string name="settings_weight">Ваш вес</string>
+    <string name="settings_weight_hint">Для подсчёта калорий</string>
 
     <string name="settings_appearance">Вид</string>
     <string name="settings_language">Язык</string>

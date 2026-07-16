@@ -116,6 +116,38 @@ fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Dou
 fun avgSpeedMps(distanceMeters: Double, movingTimeMillis: Long): Double =
     if (movingTimeMillis > 0) distanceMeters / (movingTimeMillis / 1000.0) else 0.0
 
+/** Metabolic equivalent (MET) of cycling at [speedKmh], from the Compendium of Physical
+ *  Activities' effort bands. Assumes the rider provides the power, so it is not meaningful for a
+ *  motor-assisted ride. */
+fun cyclingMet(speedKmh: Double): Double = when {
+    speedKmh < 16 -> 4.0
+    speedKmh < 19 -> 6.8
+    speedKmh < 22 -> 8.0
+    speedKmh < 25 -> 10.0
+    speedKmh < 30 -> 12.0
+    else -> 15.8
+}
+
+/** Rough energy burned (kcal) over a ride: the MET at its average moving speed times body weight
+ *  times hours in motion (1 MET ≈ 1 kcal/kg/h). 0 when weight or moving time is unknown. */
+fun caloriesKcal(distanceMeters: Double, movingTimeMillis: Long, weightKg: Int): Double {
+    if (weightKg <= 0 || movingTimeMillis <= 0) return 0.0
+    val hours = movingTimeMillis / 3_600_000.0
+    val speedKmh = mpsToKmh(avgSpeedMps(distanceMeters, movingTimeMillis))
+    return cyclingMet(speedKmh) * weightKg * hours
+}
+
+/** Round "1-2-5" distance step (meters) so a span of [spanMeters] gets at most [maxTicks]
+ *  gridlines — shared by the speed chart's X axis and the elevation profile. */
+private val DISTANCE_TICK_STEPS_KM =
+    doubleArrayOf(0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
+
+fun distanceTickStepMeters(spanMeters: Double, maxTicks: Int): Double {
+    val spanKm = spanMeters / METERS_PER_KM
+    return (DISTANCE_TICK_STEPS_KM.firstOrNull { spanKm / it <= maxTicks }
+        ?: DISTANCE_TICK_STEPS_KM.last()) * METERS_PER_KM
+}
+
 /**
  * A wall-time gap above [GPS_STALE_MS] between two consecutive fixes is a recording
  * discontinuity — no points are written during a pause or a GPS outage — so it adds neither

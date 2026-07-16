@@ -27,6 +27,8 @@
     <string name="gps_no_signal">No GPS signal</string>
 
     <string name="unit_m">m</string>
+    <string name="unit_kg">kg</string>
+    <string name="unit_kcal">kcal</string>
 
     <string name="stat_speed">Speed</string>
     <string name="stat_distance">Distance</string>
@@ -41,6 +43,7 @@
     <string name="stat_descent">Descent</string>
     <string name="stat_altitude_min_max">Min / max</string>
     <string name="stat_stops">Stops</string>
+    <string name="stat_calories">Calories</string>
     <string name="stats_speed_zones">Time by speed</string>
 
     <string name="btn_start">Start</string>
@@ -71,6 +74,10 @@
     <string name="map_offline_deleted">Downloaded areas deleted</string>
     <string name="history_show_on_map">Show on map</string>
     <string name="history_stats">Statistics</string>
+
+    <string name="settings_profile">Profile</string>
+    <string name="settings_weight">Your weight</string>
+    <string name="settings_weight_hint">For calorie estimates</string>
 
     <string name="settings_appearance">Appearance</string>
     <string name="settings_language">Language</string>

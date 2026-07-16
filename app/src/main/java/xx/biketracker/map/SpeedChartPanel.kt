@@ -67,6 +67,7 @@ import kotlinx.coroutines.withContext
 import xx.biketracker.GeoPoint
 import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.R
+import xx.biketracker.distanceTickStepMeters
 import xx.biketracker.formatClock
 import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
@@ -94,9 +95,8 @@ private const val BUTTON_ZOOM_STEP = 1.5f
 private val PLOT_H_PAD = 12.dp
 /** Gap between the round chart controls on the readout row; they must not read as one blob. */
 private val CONTROL_SPACING = 12.dp
-/** X-axis tick ladders (1-2-5-ish) and the most ticks a window may get. */
-private val DISTANCE_TICK_STEPS_KM =
-    doubleArrayOf(0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
+/** X-axis time tick ladder (1-2-5-ish) and the most ticks a window may get. The distance ladder
+ *  lives in [distanceTickStepMeters], shared with the elevation profile. */
 private val TIME_TICK_STEPS_MIN =
     doubleArrayOf(0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 240.0)
 private const val MAX_X_TICKS = 6
@@ -515,9 +515,7 @@ private fun gridStepKmh(maxKmh: Double): Double = when {
  *  step is taken only when even it would overflow [MAX_X_TICKS]. */
 private fun xTickStep(axisDistance: Boolean, windowSpan: Double): Double {
     return if (axisDistance) {
-        val spanKm = windowSpan / 1000.0
-        (DISTANCE_TICK_STEPS_KM.firstOrNull { spanKm / it <= MAX_X_TICKS }
-            ?: DISTANCE_TICK_STEPS_KM.last()) * 1000.0
+        distanceTickStepMeters(windowSpan, MAX_X_TICKS)
     } else {
         val spanMin = windowSpan / 60_000.0
         (TIME_TICK_STEPS_MIN.firstOrNull { spanMin / it <= MAX_X_TICKS }
