@@ -613,9 +613,11 @@ private fun DrawScope.drawSpeedChart(
         grid += step
     }
 
-    // Y-axis unit (km/h) in the top-right corner, clear of the gridline numbers on the left.
+    // Y-axis unit (km/h) right after the topmost gridline number, next to the axis.
+    val topGridY = yOf((yMaxKmh / MPS_TO_KMH).toFloat())
+    val topNum = style.textMeasurer.measure(AnnotatedString(yMaxKmh.toInt().toString()), style.labelStyle)
     val speedUnit = style.textMeasurer.measure(AnnotatedString(style.speedUnit), style.labelStyle)
-    drawText(speedUnit, topLeft = Offset(w - speedUnit.size.width - labelPad, 1f))
+    drawText(speedUnit, topLeft = Offset(labelPad + topNum.size.width + 4f, topGridY - speedUnit.size.height - 1f))
 
     // X axis with distance/time ticks at round steps of the visible window.
     drawLine(style.axisColor, Offset(0f, axisY), Offset(w, axisY), strokeWidth = 1.dp.toPx())
