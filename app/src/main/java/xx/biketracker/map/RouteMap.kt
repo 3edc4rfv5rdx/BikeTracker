@@ -386,10 +386,10 @@ fun RouteMap(
                     )
                 }
             }
-            SmallFloatingActionButton(onClick = { mapInstance?.animateCamera(CameraUpdateFactory.zoomBy(1.0)) }) {
+            SmallFloatingActionButton(onClick = { zoomMap(mapInstance, marker, 1.0) }) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.map_zoom_in))
             }
-            SmallFloatingActionButton(onClick = { mapInstance?.animateCamera(CameraUpdateFactory.zoomBy(-1.0)) }) {
+            SmallFloatingActionButton(onClick = { zoomMap(mapInstance, marker, -1.0) }) {
                 Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.map_zoom_out))
             }
             if (route.isNotEmpty()) {
@@ -402,6 +402,22 @@ fun RouteMap(
             }
         }
     }
+}
+
+/** Zoom the map by [delta] steps. When the scrub marker (the blue dot) is on screen, zoom around
+ *  it as the focal point so it stays put instead of drifting off the edge; otherwise zoom around
+ *  the map center, leaving a hand-panned map free to explore. */
+private fun zoomMap(map: MapLibreMap?, marker: GeoPoint?, delta: Double) {
+    map ?: return
+    val focus = marker
+        ?.let { LatLng(it.lat, it.lon) }
+        ?.takeIf { map.projection.visibleRegion.latLngBounds.contains(it) }
+        ?.let { map.projection.toScreenLocation(it) }
+        ?.let { android.graphics.Point(it.x.toInt(), it.y.toInt()) }
+    map.animateCamera(
+        if (focus != null) CameraUpdateFactory.zoomBy(delta, focus)
+        else CameraUpdateFactory.zoomBy(delta)
+    )
 }
 
 /** Index of the route point nearest to (lat, lon) with its distance in meters, or null when

@@ -84,6 +84,7 @@
     <string name="map_offline_no_area">Спочатку відкрийте вкладку Карта</string>
     <string name="map_offline_deleted">Завантажені області видалено</string>
     <string name="history_show_on_map">Показати на карті</string>
+    <string name="history_summary">Зведення</string>
     <string name="history_stats">Статистика</string>
     <string name="history_actions">Дії</string>
     <string name="ride_edit_title">Змінити поїздку</string>

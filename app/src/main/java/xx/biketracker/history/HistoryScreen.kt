@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
@@ -491,15 +492,16 @@ private fun RideRow(
                     contentDescription = stringResource(R.string.history_show_on_map),
                 )
             }
-            RideActionsMenu(onShowStats = onShowStats, onEdit = onEdit, onExport = onExport)
+            RideActionsMenu(onSummary = onClick, onShowStats = onShowStats, onEdit = onEdit, onExport = onExport)
         }
     }
 }
 
-/** Overflow menu at the right edge of a ride row: statistics and GPX export (map has its own
- *  button; more actions land here as they arrive). */
+/** Overflow menu at the right edge of a ride row: a Summary shortcut (same as tapping the row),
+ *  statistics and GPX export (map has its own button; more actions land here as they arrive). The
+ *  menu's container is a high tonal surface so it reads clearly against the tinted rows behind it. */
 @Composable
-private fun RideActionsMenu(onShowStats: () -> Unit, onEdit: () -> Unit, onExport: () -> Unit) {
+private fun RideActionsMenu(onSummary: () -> Unit, onShowStats: () -> Unit, onEdit: () -> Unit, onExport: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(modifier = Modifier.padding(end = 4.dp)) {
         IconButton(onClick = { open = true }) {
@@ -508,7 +510,19 @@ private fun RideActionsMenu(onShowStats: () -> Unit, onEdit: () -> Unit, onExpor
                 contentDescription = stringResource(R.string.history_actions),
             )
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.history_summary)) },
+                leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onSummary()
+                },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.history_stats)) },
                 leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null) },

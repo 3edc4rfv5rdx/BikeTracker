@@ -84,6 +84,7 @@
     <string name="map_offline_no_area">Open the Map tab first</string>
     <string name="map_offline_deleted">Downloaded areas deleted</string>
     <string name="history_show_on_map">Show on map</string>
+    <string name="history_summary">Summary</string>
     <string name="history_stats">Statistics</string>
     <string name="history_actions">Actions</string>
     <string name="ride_edit_title">Edit ride</string>

@@ -315,6 +315,9 @@ private class ChartStyle(
     val lineColor: Color,
     val dotColor: Color,
     val axisColor: Color,
+    val speedUnit: String, // km/h — labels the Y (speed) axis
+    val distanceUnit: String, // km — X axis unit in distance mode
+    val timeUnit: String, // min — X axis unit in time mode
 )
 
 /** What the current chart gesture is; decided once per gesture and never downgraded. */
@@ -340,6 +343,9 @@ private fun SpeedChart(
         lineColor = AccentOrange,
         dotColor = ScrubBlue,
         axisColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        speedUnit = stringResource(R.string.unit_kmh),
+        distanceUnit = stringResource(R.string.unit_km),
+        timeUnit = stringResource(R.string.unit_min),
     )
     val vibrator = rememberVibrator()
 
@@ -570,8 +576,17 @@ private fun DrawScope.drawSpeedChart(
         grid += step
     }
 
+    // Y-axis unit (km/h) in the top-right corner, clear of the gridline numbers on the left.
+    val speedUnit = style.textMeasurer.measure(AnnotatedString(style.speedUnit), style.labelStyle)
+    drawText(speedUnit, topLeft = Offset(w - speedUnit.size.width - labelPad, 1f))
+
     // X axis with distance/time ticks at round steps of the visible window.
     drawLine(style.axisColor, Offset(0f, axisY), Offset(w, axisY), strokeWidth = 1.dp.toPx())
+
+    // X-axis unit (km or min, per the current mode) sitting just above the axis at its right end.
+    val xUnitText = if (axisDistance) style.distanceUnit else style.timeUnit
+    val xUnit = style.textMeasurer.measure(AnnotatedString(xUnitText), style.labelStyle)
+    drawText(xUnit, topLeft = Offset(w - xUnit.size.width - labelPad, axisY - xUnit.size.height - 1f))
     val tickStep = xTickStep(axisDistance, windowSpan)
     var tick = ceil(windowStart / tickStep) * tickStep
     while (tick <= windowStart + windowSpan) {

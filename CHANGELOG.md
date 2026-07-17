@@ -4,6 +4,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- Map zoom buttons now keep the blue scrub dot on screen by zooming around it while it is visible.
+- Speed chart labels its axes with units: km/h at the top-right, and km or min above the axis per the current mode.
+- The ride ⋮ menu's background is now a higher-contrast surface so it stands out from the tinted rows.
+- The ride ⋮ menu gained a Summary item that opens the ride details, the same as tapping the row.
 - README Features refreshed to cover the speed chart, extended statistics, records, GPX export, ride name/comment, calorie estimate, and configurable auto-pause.
 
 ## v0.5.20260716+121
