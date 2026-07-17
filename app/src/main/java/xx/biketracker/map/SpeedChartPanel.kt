@@ -167,9 +167,23 @@ fun SpeedChartPanel(
     var viewStart by remember(trackKey) { mutableFloatStateOf(0f) }
     var viewWidth by remember(trackKey) { mutableFloatStateOf(1f) }
     fun applyZoom(factor: Float) {
-        val (start, width) = zoomedView(viewStart, viewWidth, factor, focus = 0.5f, panFraction = 0f)
-        viewStart = start
+        // Zoom around the blue marker (kept on screen) when one is scrubbed, else the center.
+        val frac = scrubFraction(samples, axisDistance, scrubIndex)
+        val focus = frac?.let { ((it - viewStart) / viewWidth).coerceIn(0f, 1f) } ?: 0.5f
+        val (start, width) = zoomedView(viewStart, viewWidth, factor, focus = focus, panFraction = 0f)
+        viewStart = if (frac != null) keepFractionInView(start, width, frac) else start
         viewWidth = width
+    }
+
+    // Selecting a point on the map (or a record) scrolls the zoomed window so the marker sits in
+    // the middle, showing its instantaneous speed/distance even when it started outside the view.
+    // Only fires when the point is off-window, so scrubbing inside the chart never recenters and
+    // slides the curve under the finger.
+    LaunchedEffect(scrubIndex, samples, axisDistance) {
+        val frac = scrubFraction(samples, axisDistance, scrubIndex) ?: return@LaunchedEffect
+        if (frac < viewStart || frac > viewStart + viewWidth) {
+            viewStart = (frac - viewWidth / 2f).coerceIn(0f, 1f - viewWidth)
+        }
     }
 
     val panelHeight = (LocalConfiguration.current.screenHeightDp / PANEL_SCREEN_DIVISOR).dp
@@ -353,6 +367,7 @@ private fun SpeedChart(
     // cancel a scrub, pan, or pinch in progress.
     val currentSamples by rememberUpdatedState(samples)
     val currentAxis by rememberUpdatedState(axisDistance)
+    val currentScrubIndex by rememberUpdatedState(scrubIndex)
     val currentViewStart by rememberUpdatedState(viewStart)
     val currentViewWidth by rememberUpdatedState(viewWidth)
     val currentOnInteract by rememberUpdatedState(onInteract)
@@ -429,7 +444,9 @@ private fun SpeedChart(
                                     currentViewStart, currentViewWidth,
                                     zoom, focus, pan.x / plotWidth(),
                                 )
-                                onViewChange(start, width)
+                                // Keep the scrubbed blue marker in the window as the pinch zooms.
+                                val frac = scrubFraction(currentSamples, currentAxis, currentScrubIndex)
+                                onViewChange(if (frac != null) keepFractionInView(start, width, frac) else start, width)
                             }
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
                         }
@@ -457,6 +474,26 @@ private fun SpeedChart(
         drawSpeedChart(samples, axisDistance, scrubIndex, viewStart, viewWidth, style)
     }
 }
+
+/** Domain fraction (0..1 over the whole ride) of the scrubbed sample, or null when nothing is
+ *  scrubbed — lets a zoom keep the blue marker inside the visible window. */
+private fun scrubFraction(samples: List<SpeedSample>, axisDistance: Boolean, scrubIndex: Int?): Float? {
+    val sample = scrubIndex?.let { samples.getOrNull(it) } ?: return null
+    if (samples.size < 2) return null
+    val frac = if (axisDistance) {
+        val last = samples.last().distanceMeters
+        if (last <= 0.0) 0.0 else sample.distanceMeters / last
+    } else {
+        val t0 = samples.first().timeMillis
+        val span = (samples.last().timeMillis - t0).toDouble()
+        if (span <= 0.0) 0.0 else (sample.timeMillis - t0) / span
+    }
+    return frac.toFloat().coerceIn(0f, 1f)
+}
+
+/** Shift [start] the least amount so [fraction] stays inside the [start, start+width] window. */
+private fun keepFractionInView(start: Float, width: Float, fraction: Float): Float =
+    start.coerceIn(fraction - width, fraction).coerceIn(0f, 1f - width)
 
 /**
  * New (start, width) fractions of the X window after zooming by [zoom] around the screen
