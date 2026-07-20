@@ -166,6 +166,12 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
+    // Align every kotlinx-serialization module on one BOM. Room's migration-test helper pulls
+    // serialization-json 1.8.1, but transitive deps otherwise pin core to 1.7.3; consistent
+    // resolution then forces that stale core onto the instrumentation runtime, so its Room
+    // schema deserialization dies with AbstractMethodError. Pinning the BOM here lifts the app
+    // runtime's core to 1.8.1, and the androidTest runtime follows it.
+    implementation(platform(libs.kotlinx.serialization.bom))
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Pinned the kotlinx-serialization BOM so the migration instrumentation tests no longer crash on a split serialization-core/json runtime.
 - Auto-resume speed is now a shared derived helper, repairing the JVM test suite that referenced the removed threshold constant.
 - Speed-chart time axis and scrubbing now use a monotonic elapsed-time clock, so a mid-ride wall-clock change can't distort riding time or the axis.
 - Speed smoothing no longer bleeds across a pause or GPS outage: each recording segment is averaged on its own.
