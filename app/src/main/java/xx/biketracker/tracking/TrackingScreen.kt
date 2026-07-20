@@ -38,6 +38,7 @@ import androidx.compose.ui.text.TextStyle
 import xx.biketracker.ui.KeepScreenOnWhile
 import xx.biketracker.ui.PausedOrange
 import xx.biketracker.ui.ScrubBlue
+import xx.biketracker.ui.StopGrey
 import xx.biketracker.ui.StopRed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -434,7 +435,7 @@ private fun Controls(
                 // red would read alike); the neutral tonal grey otherwise.
                 containerColor = when (status) {
                     TrackingStatus.RECORDING -> StopRed
-                    TrackingStatus.PAUSED -> Color(0xFFDDDDDD)
+                    TrackingStatus.PAUSED -> StopGrey
                     else -> null
                 },
                 // Red stands on its own; the greys sit close to a light background, so outline them.

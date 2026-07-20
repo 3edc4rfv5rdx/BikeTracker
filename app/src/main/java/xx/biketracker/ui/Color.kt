@@ -19,6 +19,10 @@ val PausedOrange = Color(0xFFFF9800)
 // stays clearly distinct from the paused-state PausedOrange next to it.
 val StopRed = Color(0xFFFF5252)
 
+// Light grey for the Stop button while paused: the neighbouring Resume is orange, so red
+// would read alike; grey keeps Stop visible without competing.
+val StopGrey = Color(0xFFDDDDDD)
+
 // Scrub-marker blue, shared by the speed chart's dot and the matching marker on the map
 // track: must stand out against the orange track line and both map styles.
 val ScrubBlue = Color(0xFF1E88E5)
