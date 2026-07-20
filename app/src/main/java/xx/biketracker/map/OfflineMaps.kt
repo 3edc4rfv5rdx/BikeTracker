@@ -189,7 +189,7 @@ object OfflineMapManager {
                     val regions = offlineRegions.orEmpty()
                     val keys = regions.map { region ->
                         val meta = region.metadata
-                        if (meta == null || meta.isEmpty()) null else String(meta, Charsets.UTF_8)
+                        if (meta.isEmpty()) null else String(meta, Charsets.UTF_8)
                     }
                     val resumable = findResumableRegion(keys, key)
                     if (resumable != null) {
