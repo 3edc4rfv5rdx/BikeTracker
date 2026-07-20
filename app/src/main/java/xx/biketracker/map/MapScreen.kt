@@ -31,6 +31,8 @@ import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
 import xx.biketracker.tracking.hasGpsTrouble
 import xx.biketracker.tracking.rideActive
+import xx.biketracker.ui.AccentOrange
+import xx.biketracker.ui.ImportGreen
 import xx.biketracker.ui.KeepScreenOnWhile
 
 /**
@@ -54,6 +56,7 @@ fun MapScreen() {
     val context = LocalContext.current
     val snapshot by TrackingState.snapshot.collectAsState()
     val selected by MapSelection.trip.collectAsState()
+    val imported by MapSelection.imported.collectAsState()
 
     // Stored track of the selected ride, loaded when the selection changes. The GPS speed
     // rides along so the chart panel can plot stored rides exactly like the live one.
@@ -65,7 +68,11 @@ fun MapScreen() {
         } ?: emptyList()
     }
 
-    val route = if (selected != null) selectedRoute else snapshot.route
+    val route = when {
+        selected != null -> selectedRoute
+        imported != null -> imported!!.route
+        else -> snapshot.route
+    }
 
     // Standby is between rides — treat it like idle here so the map neither follows an empty
     // live track nor keeps the screen awake for the length of the standby window.
@@ -74,8 +81,8 @@ fun MapScreen() {
     // The map is watched mid-ride too; don't let the screen dim while one is active.
     KeepScreenOnWhile(rideActive)
 
-    // The heading puck belongs to the live ride only, not to a stored ride opened from History.
-    val live = selected == null && rideActive
+    // The heading puck belongs to the live ride only, not to a stored ride or an imported track.
+    val live = selected == null && imported == null && rideActive
     val puckPosition = if (live) snapshot.route.lastOrNull() else null
 
     // GPS staleness must surface even when no fixes arrive to recompose us, so tick locally.
@@ -93,7 +100,8 @@ fun MapScreen() {
         else -> PuckState.NORMAL
     }
 
-    val recenterKey = mapRecenterKey(selected?.id, snapshot.startElapsedRealtime)
+    val recenterKey = if (imported != null) "import-${imported!!.id}"
+    else mapRecenterKey(selected?.id, snapshot.startElapsedRealtime)
     // Scrub selection from the chart, as an index into the route (samples are one per point).
     // Keyed to the shown track's identity, so another ride never inherits a stale marker.
     var scrubIndex by remember(recenterKey) { mutableStateOf<Int?>(null) }
@@ -115,11 +123,12 @@ fun MapScreen() {
                 position = puckPosition,
                 bearingDegrees = if (live) snapshot.bearingDegrees else null,
                 puckState = puckState,
+                lineColor = if (imported != null) ImportGreen else AccentOrange,
                 marker = scrubIndex?.let { route.getOrNull(it) },
                 onTrackTap = { scrubIndex = it },
             )
 
-            if (selected == null && snapshot.route.isEmpty()) {
+            if (selected == null && imported == null && snapshot.route.isEmpty()) {
                 Card(
                     modifier = Modifier
                         .align(Alignment.TopCenter)

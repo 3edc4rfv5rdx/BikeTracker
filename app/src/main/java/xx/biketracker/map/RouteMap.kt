@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -79,8 +80,6 @@ private const val MAX_ZOOM = 19.0
 private const val ROUTE_SOURCE_ID = "ride-route"
 private const val ROUTE_LAYER_ID = "ride-route-line"
 private const val ROUTE_LINE_WIDTH = 4f
-// Fixed accent color (not theme-derived): high contrast against both map styles.
-private val ROUTE_LINE_COLOR = AccentOrange.toArgb()
 private const val ROUTE_BOUNDS_PADDING_PX = 64
 
 // Live-position puck: an arrow at the current fix, rotated to the heading of travel.
@@ -119,6 +118,7 @@ fun RouteMap(
     bearingDegrees: Float? = null,
     puckState: PuckState = PuckState.NORMAL,
     marker: GeoPoint? = null,
+    lineColor: Color = AccentOrange,
     onTrackTap: ((Int) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -207,7 +207,7 @@ fun RouteMap(
             style.addSource(GeoJsonSource(ROUTE_SOURCE_ID))
             style.addLayer(
                 LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
-                    PropertyFactory.lineColor(ROUTE_LINE_COLOR),
+                    PropertyFactory.lineColor(lineColor.toArgb()),
                     PropertyFactory.lineWidth(ROUTE_LINE_WIDTH),
                     PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
@@ -320,6 +320,12 @@ fun RouteMap(
     LaunchedEffect(puckState, styleEpoch) {
         val layer = mapInstance?.style?.getLayer(PUCK_LAYER_ID) as? SymbolLayer ?: return@LaunchedEffect
         layer.setProperties(PropertyFactory.iconImage(puckState.imageId))
+    }
+
+    // Recolor the track line — an imported GPX is drawn in a distinct color from your own rides.
+    LaunchedEffect(lineColor, styleEpoch) {
+        val layer = mapInstance?.style?.getLayer(ROUTE_LAYER_ID) as? LineLayer ?: return@LaunchedEffect
+        layer.setProperties(PropertyFactory.lineColor(lineColor.toArgb()))
     }
 
     // Move the puck to the current fix (empty when there is no live position).

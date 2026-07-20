@@ -27,6 +27,10 @@ val StopGrey = Color(0xFFDDDDDD)
 // track: must stand out against the orange track line and both map styles.
 val ScrubBlue = Color(0xFF1E88E5)
 
+// Dark green for an imported GPX track on the map: clearly distinct from the orange live/stored
+// track so a viewed file is never mistaken for one of your own rides.
+val ImportGreen = Color(0xFF1B7D3A)
+
 // Light theme: a faint grey window with pure-white containers.
 val WindowLight = Color(0xFFF1F2F4)
 val ContainerLight = Color.White

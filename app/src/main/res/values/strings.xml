@@ -61,6 +61,9 @@
     <string name="map_no_ride">No active ride</string>
     <string name="map_center_route">Center on route</string>
     <string name="map_close_ride">Back to current ride</string>
+    <string name="map_import_gpx">Import GPX to view</string>
+    <string name="map_imported_track">Imported track</string>
+    <string name="map_import_failed">Couldn\'t read that GPX file</string>
     <string name="map_zoom_in">Zoom in</string>
     <string name="map_zoom_out">Zoom out</string>
     <string name="map_follow_heading">Rotate map with direction of travel</string>

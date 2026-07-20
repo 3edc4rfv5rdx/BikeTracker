@@ -4,8 +4,10 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
@@ -44,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,9 +66,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import xx.biketracker.data.finalizeAbandonedTrips
+import xx.biketracker.data.parseGpx
 import xx.biketracker.data.recoveryJob
 import xx.biketracker.data.DatabaseRestoreCoordinator
 import xx.biketracker.data.RestoreOperationState
@@ -187,6 +194,27 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
         }
     }
 
+    // Import a GPX file to view on the map (read-only, never stored). Reading and parsing run off
+    // the main thread; a parse failure shows a toast and leaves the current view untouched.
+    val context = LocalContext.current
+    val importScope = rememberCoroutineScope()
+    val importFailedMessage = stringResource(id = R.string.map_import_failed)
+    val gpxPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        importScope.launch {
+            val parsed = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                }.getOrNull()?.let(::parseGpx)
+            }
+            if (parsed != null) {
+                MapSelection.showImported(parsed.name, parsed.route)
+            } else {
+                Toast.makeText(context, importFailedMessage, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             val stats = statsTrip
@@ -226,20 +254,33 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                         TopBarClock()
                     }
                     if (currentTab == Destination.Map) {
-                        // The ride opened from History is named here, off the map itself.
+                        // What's shown on the map is named here, off the map itself: a stored ride,
+                        // an imported GPX track, or — when neither — the live ride's stats.
                         val selectedTrip by MapSelection.trip.collectAsState()
-                        selectedTrip?.let { trip ->
-                            Text(
-                                text = "${formatDate(trip.startTime)} · ${formatClock(trip.startTime)}",
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                            IconButton(onClick = { MapSelection.clear() }) {
-                                Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.map_close_ride))
+                        val importedTrack by MapSelection.imported.collectAsState()
+                        when {
+                            selectedTrip != null -> {
+                                Text(
+                                    text = "${formatDate(selectedTrip!!.startTime)} · ${formatClock(selectedTrip!!.startTime)}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                IconButton(onClick = { MapSelection.clear() }) {
+                                    Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.map_close_ride))
+                                }
                             }
+                            importedTrack != null -> {
+                                Text(
+                                    text = importedTrack!!.name ?: stringResource(id = R.string.map_imported_track),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                IconButton(onClick = { MapSelection.clear() }) {
+                                    Icon(Icons.Default.Close, contentDescription = stringResource(id = R.string.map_close_ride))
+                                }
+                            }
+                            rideActive -> MapLiveStats(trackingSnapshot)
                         }
-                        // Live ride stats belong to the top bar, not to an overlay on the map.
-                        if (selectedTrip == null && rideActive) {
-                            MapLiveStats(trackingSnapshot)
+                        TopBarButton(Icons.Default.FileOpen, stringResource(id = R.string.map_import_gpx)) {
+                            gpxPicker.launch(arrayOf("*/*"))
                         }
                     }
                     if (currentTab == Destination.History) {
@@ -319,7 +360,6 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     }
 
     if (showAbout) {
-        val context = LocalContext.current
         val pkg = remember { context.packageManager.getPackageInfo(context.packageName, 0) }
         AlertDialog(
             onDismissRequest = { showAbout = false },
