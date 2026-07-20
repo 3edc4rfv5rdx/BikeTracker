@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The Stop button is now light red while recording, distinct from the paused-state orange Resume.
+- Auto-resume now gives a single buzz, distinct from the double buzz on auto-pause.
 - Picking a point on the map now scrolls the zoomed speed chart to it, and zooming the chart keeps the blue marker in view instead of letting it slide out of the window.
 - Map zoom buttons now keep the blue scrub dot on screen by zooming around it while it is visible.
 - Speed chart labels its axes with units: km/h at the top-right, and km or min above the axis per the current mode.

@@ -37,6 +37,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import xx.biketracker.ui.KeepScreenOnWhile
 import xx.biketracker.ui.PausedOrange
+import xx.biketracker.ui.StopRed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -419,6 +420,9 @@ private fun Controls(
                 modifier = Modifier.fillMaxWidth(),
                 tonal = true,
                 enabled = status != TrackingStatus.IDLE,
+                // Red only while recording; in PAUSED the neighbouring Resume is orange and the
+                // two would read alike, so Stop stays the neutral tonal grey there.
+                containerColor = if (status == TrackingStatus.RECORDING) StopRed else null,
             )
             if (status != TrackingStatus.IDLE) {
                 val config = LocalViewConfiguration.current
@@ -454,14 +458,27 @@ private fun BigButton(
         Text(text, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
     if (tonal) {
-        // The tonal fill is close to the background; an outline makes the button read as one.
-        val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 1f else 0.38f)
-        FilledTonalButton(
-            onClick = onClick,
-            enabled = enabled,
-            border = BorderStroke(2.dp, borderColor),
-            modifier = modifier.height(68.dp),
-        ) { label() }
+        if (containerColor != null) {
+            // A bright fill stands on its own — no outline needed to separate it from the background.
+            FilledTonalButton(
+                onClick = onClick,
+                enabled = enabled,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = containerColor,
+                    contentColor = Color.Black,
+                ),
+                modifier = modifier.height(68.dp),
+            ) { label() }
+        } else {
+            // The tonal fill is close to the background; an outline makes the button read as one.
+            val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 1f else 0.38f)
+            FilledTonalButton(
+                onClick = onClick,
+                enabled = enabled,
+                border = BorderStroke(2.dp, borderColor),
+                modifier = modifier.height(68.dp),
+            ) { label() }
+        }
     } else {
         val colors = if (containerColor != null) {
             ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = Color.Black)

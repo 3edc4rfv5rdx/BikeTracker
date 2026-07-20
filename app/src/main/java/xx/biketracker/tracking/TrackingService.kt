@@ -496,7 +496,7 @@ class TrackingService : Service() {
     private fun maybeAutoResume(speedMps: Double) {
         val resumeMps = (AppSettings.autoPauseSpeedKmh.value + AUTO_RESUME_MARGIN_KMH) / MPS_TO_KMH
         if (pausedAutomatically && speedMps >= resumeMps) {
-            resumeTracking()
+            resumeTracking(automatic = true)
         }
     }
 
@@ -516,19 +516,30 @@ class TrackingService : Service() {
         if (automatic) vibrateAutoPause()
     }
 
-    private fun resumeTracking() {
+    private fun resumeTracking(automatic: Boolean = false) {
         if (status != TrackingStatus.PAUSED) return
         status = TrackingStatus.RECORDING
         pausedAutomatically = false
         cancelAutoSave()
         updateNotification()
         publish()
+        // The rider triggered a manual resume on-screen; only the unasked-for one warrants a buzz.
+        if (automatic) vibrateAutoResume()
     }
 
     /** Double buzz on auto-pause — noticeable in a pocket, unlike any on-screen hint. */
     private fun vibrateAutoPause() {
+        vibrate(longArrayOf(0, 200, 150, 200))
+    }
+
+    /** Single buzz on auto-resume, so it reads as clearly different from the double auto-pause. */
+    private fun vibrateAutoResume() {
+        vibrate(longArrayOf(0, 200))
+    }
+
+    private fun vibrate(timings: LongArray) {
         val vibrator = getSystemService(VibratorManager::class.java)?.defaultVibrator ?: return
-        vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 200, 150, 200), -1))
+        vibrator.vibrate(VibrationEffect.createWaveform(timings, -1))
     }
 
     private fun scheduleAutoSave() {
