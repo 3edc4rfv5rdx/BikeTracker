@@ -367,11 +367,18 @@ class TrackingService : Service() {
         draftStartJob = scope.launch {
             val result = persistence.ensureDraft()
             withContext(Dispatchers.Main) {
-                if (result.isSuccess) {
-                    draftReady = true
-                    completeStartupIfReady()
-                } else {
-                    failStartup()
+                when {
+                    result.isSuccess -> {
+                        draftReady = true
+                        completeStartupIfReady()
+                    }
+                    startupPending -> failStartup()
+                    // A standby start records optimistically; surface the failed draft the same
+                    // way as a failed flush — persist() retries draft creation on the next one.
+                    else -> {
+                        persistenceFailed = true
+                        publish()
+                    }
                 }
             }
         }

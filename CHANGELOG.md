@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A draft that fails to open on a ride auto-started from standby now shows the save-failure banner instead of being silently ignored.
 - Standby now keeps high-accuracy GPS at its slower interval, so movement detection can't be starved by speed-less network fixes.
 - Fixed a rare race where a failed standby GPS registration could shut down a ride just started from standby.
 - After a long pause auto-saves the ride, tracking now waits in standby (lighter GPS) and auto-starts a fresh ride when you set off again, shutting down only after 30 motionless minutes.
