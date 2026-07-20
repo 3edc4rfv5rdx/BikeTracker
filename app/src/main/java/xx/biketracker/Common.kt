@@ -8,7 +8,10 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.hypot
+import kotlin.math.log10
+import kotlin.math.pow
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -183,15 +186,51 @@ fun caloriesKcal(distanceMeters: Double, movingTimeMillis: Long, weightKg: Int):
     return cyclingMet(speedKmh) * weightKg * hours
 }
 
+/**
+ * Smallest "1-2-5 × 10^n" value that is ≥ [rawStep]. Unbounded above, so any finite positive
+ * [rawStep] gets a round step and a tick count that stays within budget; non-finite or
+ * non-positive input returns 1.0. Used to extend the fixed tick ladders below past their top
+ * entry, so an arbitrarily long ride can't overflow its tick budget with the ladder's last step.
+ */
+fun niceTickStep(rawStep: Double): Double {
+    if (!rawStep.isFinite() || rawStep <= 0.0) return 1.0
+    val magnitude = 10.0.pow(floor(log10(rawStep)))
+    val mantissa = rawStep / magnitude
+    val nice = when {
+        mantissa <= 1.0 -> 1.0
+        mantissa <= 2.0 -> 2.0
+        mantissa <= 5.0 -> 5.0
+        else -> 10.0
+    }
+    return nice * magnitude
+}
+
 /** Round "1-2-5" distance step (meters) so a span of [spanMeters] gets at most [maxTicks]
- *  gridlines — shared by the speed chart's X axis and the elevation profile. */
+ *  gridlines — shared by the speed chart's X axis and the elevation profile. Past the ladder's
+ *  100 km top the 1-2-5 scale continues via [niceTickStep], so very long rides stay bounded. */
 private val DISTANCE_TICK_STEPS_KM =
     doubleArrayOf(0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
 
 fun distanceTickStepMeters(spanMeters: Double, maxTicks: Int): Double {
+    val ticks = maxTicks.coerceAtLeast(1)
     val spanKm = spanMeters / METERS_PER_KM
-    return (DISTANCE_TICK_STEPS_KM.firstOrNull { spanKm / it <= maxTicks }
-        ?: DISTANCE_TICK_STEPS_KM.last()) * METERS_PER_KM
+    val stepKm = DISTANCE_TICK_STEPS_KM.firstOrNull { spanKm / it <= ticks }
+        ?: niceTickStep(spanKm / ticks)
+    return stepKm * METERS_PER_KM
+}
+
+/** X-axis time tick ladder (clean clock steps up to 4 h). Past the top the scale continues as a
+ *  whole-hour 1-2-5 progression via [niceTickStep], so a multi-day ride keeps ≤ maxTicks ticks. */
+private val TIME_TICK_STEPS_MIN =
+    doubleArrayOf(0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 240.0)
+
+/** Round time tick step (millis) so a span of [spanMillis] gets at most [maxTicks] gridlines. */
+fun timeTickStepMillis(spanMillis: Double, maxTicks: Int): Double {
+    val ticks = maxTicks.coerceAtLeast(1)
+    val spanMin = spanMillis / 60_000.0
+    val stepMin = TIME_TICK_STEPS_MIN.firstOrNull { spanMin / it <= ticks }
+        ?: niceTickStep(spanMin / ticks / 60.0) * 60.0
+    return stepMin * 60_000.0
 }
 
 /**

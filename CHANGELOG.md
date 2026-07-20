@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Speed-chart X axis now keeps a bounded, round tick spacing on arbitrarily long rides instead of crowding labels.
 - History summary now totals the current calendar Week, Month, and Year instead of rolling 7/30/365-day windows.
 - The paused Stop button's light grey is now a shared named color.
 - Exiting the app is no longer blocked during standby, and the map top-bar live stats hide there; ride-active checks share one helper.
