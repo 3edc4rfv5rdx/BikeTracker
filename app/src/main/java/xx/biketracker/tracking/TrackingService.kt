@@ -622,8 +622,11 @@ class TrackingService : Service() {
         if (automatic) vibrateAutoResume()
     }
 
+    // High accuracy even in standby: a lower priority may yield network fixes that carry no
+    // speed and fail the accuracy filter, so movement would never be detected. The battery
+    // saving comes from the longer interval alone.
     private fun switchToStandbyGps() = requestUpdates(
-        priority = Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+        priority = Priority.PRIORITY_HIGH_ACCURACY,
         intervalMs = STANDBY_GPS_INTERVAL_MS,
         minIntervalMs = STANDBY_GPS_MIN_INTERVAL_MS,
         onSuccess = {},
