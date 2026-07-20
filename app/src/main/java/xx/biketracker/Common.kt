@@ -269,6 +269,25 @@ fun isSegmentBoundary(
     segmentStart || (!hasElapsedMetadata && isRecordingGap(prevTimeMillis, timeMillis))
 
 /**
+ * Monotonic time step (ms) between two consecutive recorded points: the persisted elapsed-realtime
+ * delta when both points carry it, otherwise the wall-clock delta for legacy rows. Clamped to ≥ 0
+ * so a backward clock correction can never make cumulative time or a time axis run backward.
+ */
+fun monotonicStepMillis(
+    prevElapsedMillis: Long?,
+    elapsedMillis: Long?,
+    prevTimeMillis: Long,
+    timeMillis: Long,
+): Long {
+    val delta = if (prevElapsedMillis != null && elapsedMillis != null) {
+        elapsedMillis - prevElapsedMillis
+    } else {
+        timeMillis - prevTimeMillis
+    }
+    return delta.coerceAtLeast(0L)
+}
+
+/**
  * Split a route into the segments that were actually recorded: drawing across a boundary
  * (see [isSegmentBoundary]) would show travel the tracker never saw.
  */

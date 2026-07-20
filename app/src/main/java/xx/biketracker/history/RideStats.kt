@@ -7,6 +7,7 @@ import xx.biketracker.data.TrackPoint
 import xx.biketracker.elevationGainMeters
 import xx.biketracker.haversineMeters
 import xx.biketracker.isSegmentBoundary
+import xx.biketracker.monotonicStepMillis
 
 /** Upper bounds (km/h) of the speed-histogram buckets; the last bucket is open-ended, so these
  *  three bounds make four buckets: 0-10, 10-20, 20-30, 30+. */
@@ -34,10 +35,14 @@ class RideStats(
 }
 
 /**
- * A stop is a stretch below [AUTO_PAUSE_SPEED_MPS] (or a recording gap) lasting at least
- * [AUTO_PAUSE_DEBOUNCE_MS] — the same signal auto-pause reacts to, so a red-light crawl counts
- * but a brief coast does not. Distance, moving time and speed buckets ignore recording gaps,
- * exactly like the trip totals and the speed chart.
+ * A stop is a stretch of recorded motion below [AUTO_PAUSE_SPEED_MPS] lasting at least
+ * [AUTO_PAUSE_DEBOUNCE_MS] — the same signal auto-pause reacts to, so a red-light crawl counts but
+ * a brief coast does not. A recording boundary (pause or GPS outage) is conservatively never
+ * counted as a stop: a boolean boundary can't tell a café pause from a tunnel, so its gap adds to
+ * neither stopped time nor the buckets. Time comes from the monotonic
+ * [xx.biketracker.data.TrackPoint.elapsedMillis] so a mid-ride clock change can't distort it.
+ * Every non-boundary interval lands in a speed bucket, so the buckets sum to the ride's moving
+ * time; distance and buckets ignore recording gaps like the trip totals.
  */
 fun computeRideStats(points: List<TrackPoint>): RideStats {
     val profile = ArrayList<ElevationPoint>()
@@ -47,10 +52,14 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
     var stoppedMillis = 0L
     var runMillis = 0L // length of the current below-threshold run, still to be judged a stop or not
 
+    // Close the pending low-speed run: a real stop once it reaches the debounce, otherwise brief
+    // low-speed motion that still belongs to the ride's moving time, so it enters the slowest bucket.
     fun closeRun() {
         if (runMillis >= AUTO_PAUSE_DEBOUNCE_MS) {
             stopCount++
             stoppedMillis += runMillis
+        } else {
+            zones[0] += runMillis
         }
         runMillis = 0L
     }
@@ -59,17 +68,18 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
         val p = points[i]
         if (i > 0) {
             val prev = points[i - 1]
-            val dt = (p.time - prev.time).coerceAtLeast(0L)
+            val step = monotonicStepMillis(prev.elapsedMillis, p.elapsedMillis, prev.time, p.time)
             if (isSegmentBoundary(prev.time, p.time, p.segmentStart, p.elapsedMillis != null)) {
-                runMillis += dt // a pause/outage is stopped time, and closes the run around it
+                // A pause/outage gap is added to neither the run nor any bucket; only recorded
+                // low-speed motion counts as a stop.
                 closeRun()
             } else {
                 distance += haversineMeters(prev.lat, prev.lon, p.lat, p.lon)
                 if (p.speedMps < AUTO_PAUSE_SPEED_MPS) {
-                    runMillis += dt // slow enough to be stopping; the run decides if it's a real stop
+                    runMillis += step // slow enough to be stopping; the run decides if it's a real stop
                 } else {
                     closeRun()
-                    zones[zoneIndexFor(p.speedMps)] += dt
+                    zones[zoneIndexFor(p.speedMps)] += step
                 }
             }
         }

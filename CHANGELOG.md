@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Extended ride stats now use monotonic time, never count a pause/outage gap as a stop, and bucket brief low-speed motion so the speed zones sum to moving time.
 - Dropped an always-false null check on non-null offline-region metadata, clearing a release compiler warning.
 - Pinned the kotlinx-serialization BOM so the migration instrumentation tests no longer crash on a split serialization-core/json runtime.
 - Auto-resume speed is now a shared derived helper, repairing the JVM test suite that referenced the removed threshold constant.

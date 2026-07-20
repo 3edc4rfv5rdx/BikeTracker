@@ -75,6 +75,7 @@ import xx.biketracker.formatKm
 import xx.biketracker.formatSpeedKmh
 import xx.biketracker.haversineMeters
 import xx.biketracker.isSegmentBoundary
+import xx.biketracker.monotonicStepMillis
 import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.ScrubBlue
 import xx.biketracker.ui.gestureBuzz
@@ -117,19 +118,9 @@ internal class SpeedSample(
     val segmentStart: Boolean, // true where a pause/outage breaks the plotted line
 )
 
-/** Monotonic time step (ms) between two consecutive points: the persisted elapsed-realtime delta
- *  when both points carry it, otherwise the wall-clock delta. Clamped to ≥ 0 so a backward clock
- *  change can never make cumulative time or the chart's time axis run backward. */
-private fun elapsedStepMillis(prev: GeoPoint, curr: GeoPoint): Long {
-    val prevElapsed = prev.elapsedMillis
-    val currElapsed = curr.elapsedMillis
-    val delta = if (prevElapsed != null && currElapsed != null) {
-        currElapsed - prevElapsed
-    } else {
-        curr.timeMillis - prev.timeMillis
-    }
-    return delta.coerceAtLeast(0L)
-}
+/** Monotonic time step (ms) between two consecutive points; see [monotonicStepMillis]. */
+private fun elapsedStepMillis(prev: GeoPoint, curr: GeoPoint): Long =
+    monotonicStepMillis(prev.elapsedMillis, curr.elapsedMillis, prev.timeMillis, curr.timeMillis)
 
 internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
     if (route.size < 2) return emptyList()
