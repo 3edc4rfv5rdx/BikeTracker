@@ -203,6 +203,9 @@ class TrackingService : Service() {
     // Guards stopAndSave so a manual Stop racing with the pause auto-save (on
     // different threads) can't persist the same ride twice.
     private val stopping = AtomicBoolean(false)
+    // Whether the in-flight stop ends in standby; main-thread only. A manual Stop arriving
+    // while the auto-save is still persisting downgrades it to a plain stop.
+    private var pendingStandby = false
     private var ownsRideReservation = false
 
     // Every checkpoint is reconciled against the database point count. Failed or ambiguously
@@ -715,7 +718,13 @@ class TrackingService : Service() {
     private fun saveAndEnterStandby() = stop(save = true, thenStandby = true)
 
     private fun stop(save: Boolean, thenStandby: Boolean) {
-        if (!stopping.compareAndSet(false, true)) return
+        if (!stopping.compareAndSet(false, true)) {
+            // The ride is already being persisted (long-pause auto-save); honor the rider's
+            // explicit Stop by finishing outright instead of dropping into standby.
+            if (!thenStandby) pendingStandby = false
+            return
+        }
+        pendingStandby = thenStandby
         cancelAutoSave()
         if (persistenceFailed) {
             persistenceFailed = false
@@ -742,7 +751,7 @@ class TrackingService : Service() {
                 withContext(Dispatchers.Main) {
                     when {
                         result.isFailure -> handleSaveFailure()
-                        thenStandby -> enterStandby()
+                        pendingStandby -> enterStandby()
                         else -> finishService()
                     }
                 }
