@@ -1,5 +1,6 @@
 package xx.biketracker.map
 
+import android.annotation.SuppressLint
 import android.content.Context
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -110,6 +111,9 @@ object OfflineMapManager {
     private val _regions = MutableStateFlow<RegionCounts?>(null)
     val regions: StateFlow<RegionCounts?> = _regions.asStateFlow()
 
+    // Not an Activity leak: MapLibre regions hold the application context, and the field is cleared
+    // as soon as a download finishes or is cancelled.
+    @SuppressLint("StaticFieldLeak")
     private var activeRegion: OfflineRegion? = null
 
     /** The UI acknowledges a terminal result after showing it, re-arming the Download action. */

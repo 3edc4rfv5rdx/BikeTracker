@@ -51,7 +51,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -223,7 +224,10 @@ fun SpeedChartPanel(
         }
     }
 
-    val panelHeight = (LocalConfiguration.current.screenHeightDp / PANEL_SCREEN_DIVISOR).dp
+    // Size the panel off the actual window height (multi-window-aware), not the whole display.
+    val panelHeight = with(LocalDensity.current) {
+        LocalWindowInfo.current.containerSize.height.toDp() / PANEL_SCREEN_DIVISOR
+    }
     val chartLabel = stringResource(R.string.map_speed_chart)
 
     Surface {

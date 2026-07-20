@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Speed-chart panel height now tracks the actual window size (correct in split-screen/multi-window) instead of the whole display.
+- Silenced two false-positive lint warnings with documented suppressions (intentional weekday-array caching, application-context offline region).
 - Renamed the debug build script 05-MakeDebug.sh to 01-MakeDebug.sh.
 - Fixed an off-by-one in a ride-stats test that expected four intervals from four points instead of three.
 - Fixed the GPX export tests to check track-point times only, not the document's metadata time, which had made three of them fail.

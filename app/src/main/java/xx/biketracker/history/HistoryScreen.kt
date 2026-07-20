@@ -1,5 +1,6 @@
 package xx.biketracker.history
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -87,6 +88,9 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
 
     // Read once per context (i.e. re-read after a locale change recreates the activity), so the
     // grouping isn't invalidated by the fresh array getStringArray hands back each recomposition.
+    // Read via context (not stringArrayResource) on purpose: caching a stable array keeps the
+    // grouping's remember from being invalidated by a fresh array each recomposition.
+    @SuppressLint("LocalContextResourcesRead")
     val weekdayNames = remember(context) { context.resources.getStringArray(R.array.weekday_short).toList() }
 
     val trips by remember { dao.observeTrips() }.collectAsState(initial = emptyList())
