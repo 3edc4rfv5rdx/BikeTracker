@@ -1,6 +1,7 @@
 package xx.biketracker
 
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -83,5 +84,67 @@ class DayBoundaryTest {
     fun resultIsAlwaysPositive() {
         assertTrue(millisUntilNextMidnight(0L, kyiv) >= 1L)
         assertTrue(millisUntilNextMidnight(Long.MIN_VALUE / 4, kyiv) >= 1L)
+    }
+
+    private fun withFirstDayOfWeek(day: Int, block: () -> Unit) {
+        val previous = Locale.getDefault()
+        // Locale drives Calendar.firstDayOfWeek: Monday in fr-FR, Sunday in en-US.
+        Locale.setDefault(if (day == Calendar.MONDAY) Locale.FRANCE else Locale.US)
+        try {
+            block()
+        } finally {
+            Locale.setDefault(previous)
+        }
+    }
+
+    @Test
+    fun startOfWeekLandsOnLocaleFirstDayAtMidnight() {
+        // 2026-07-15 is a Wednesday.
+        val now = at(kyiv, 2026, 7, 15, hour = 9)
+        withFirstDayOfWeek(Calendar.MONDAY) {
+            val start = startOfWeekMillis(now, kyiv)
+            assertEquals(at(kyiv, 2026, 7, 13), start) // Monday
+            assertIsMidnight(start, kyiv)
+        }
+        withFirstDayOfWeek(Calendar.SUNDAY) {
+            val start = startOfWeekMillis(now, kyiv)
+            assertEquals(at(kyiv, 2026, 7, 12), start) // Sunday
+            assertIsMidnight(start, kyiv)
+        }
+    }
+
+    @Test
+    fun startOfWeekOnTheFirstDayReturnsThatMidnight() {
+        withFirstDayOfWeek(Calendar.MONDAY) {
+            val monday = at(kyiv, 2026, 7, 13, hour = 23, minute = 59)
+            assertEquals(at(kyiv, 2026, 7, 13), startOfWeekMillis(monday, kyiv))
+        }
+    }
+
+    @Test
+    fun startOfMonthIsFirstDayAtMidnight() {
+        val now = at(kyiv, 2026, 7, 15, hour = 9)
+        val start = startOfMonthMillis(now, kyiv)
+        assertEquals(at(kyiv, 2026, 7, 1), start)
+        assertIsMidnight(start, kyiv)
+    }
+
+    @Test
+    fun startOfYearIsJanuaryFirstAtMidnight() {
+        val now = at(kyiv, 2026, 7, 15, hour = 9)
+        val start = startOfYearMillis(now, kyiv)
+        assertEquals(at(kyiv, 2026, 1, 1), start)
+        assertIsMidnight(start, kyiv)
+    }
+
+    @Test
+    fun periodStartsHonorTheTimezone() {
+        val now = at(kyiv, 2026, 7, 15, hour = 9)
+        val tokyo = TimeZone.getTimeZone("Asia/Tokyo")
+        assertIsMidnight(startOfMonthMillis(now, tokyo), tokyo)
+        assertIsMidnight(startOfYearMillis(now, tokyo), tokyo)
+        withFirstDayOfWeek(Calendar.MONDAY) {
+            assertIsMidnight(startOfWeekMillis(now, tokyo), tokyo)
+        }
     }
 }

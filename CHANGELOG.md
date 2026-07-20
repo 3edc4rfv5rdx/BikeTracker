@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- History summary now totals the current calendar Week, Month, and Year instead of rolling 7/30/365-day windows.
 - The paused Stop button's light grey is now a shared named color.
 - Exiting the app is no longer blocked during standby, and the map top-bar live stats hide there; ride-active checks share one helper.
 - Stop pressed while the long-pause auto-save is still writing now ends tracking instead of dropping into standby.

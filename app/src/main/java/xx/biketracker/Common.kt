@@ -91,6 +91,47 @@ fun millisUntilNextMidnight(nowMillis: Long, timeZone: TimeZone = TimeZone.getDe
     return (calendar.timeInMillis - nowMillis).coerceAtLeast(1L)
 }
 
+/** Zeroes the time-of-day fields of [calendar] to local midnight, leaving the date untouched. */
+private fun Calendar.atStartOfDay() {
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}
+
+/**
+ * Epoch millis of the local-midnight start of the calendar week containing [nowMillis], in
+ * [timeZone]. The week's first day follows the locale (Monday in most, Sunday in some), so the
+ * History "Week" total covers this calendar week rather than a rolling seven days.
+ */
+fun startOfWeekMillis(nowMillis: Long, timeZone: TimeZone = TimeZone.getDefault()): Long =
+    Calendar.getInstance(timeZone).run {
+        timeInMillis = nowMillis
+        atStartOfDay()
+        var daysSinceWeekStart = get(Calendar.DAY_OF_WEEK) - firstDayOfWeek
+        if (daysSinceWeekStart < 0) daysSinceWeekStart += 7
+        add(Calendar.DAY_OF_YEAR, -daysSinceWeekStart)
+        timeInMillis
+    }
+
+/** Epoch millis of the local-midnight first day of the calendar month containing [nowMillis]. */
+fun startOfMonthMillis(nowMillis: Long, timeZone: TimeZone = TimeZone.getDefault()): Long =
+    Calendar.getInstance(timeZone).run {
+        timeInMillis = nowMillis
+        atStartOfDay()
+        set(Calendar.DAY_OF_MONTH, 1)
+        timeInMillis
+    }
+
+/** Epoch millis of the local-midnight first day of the calendar year containing [nowMillis]. */
+fun startOfYearMillis(nowMillis: Long, timeZone: TimeZone = TimeZone.getDefault()): Long =
+    Calendar.getInstance(timeZone).run {
+        timeInMillis = nowMillis
+        atStartOfDay()
+        set(Calendar.DAY_OF_YEAR, 1)
+        timeInMillis
+    }
+
 // --- Preferences ---
 /** Single SharedPreferences file for all app settings. */
 const val PREFS_NAME = "biketracker_prefs"
