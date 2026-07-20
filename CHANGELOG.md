@@ -4,7 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
-- Added unit tests for elevation gain, route smoothing, the GPS Kalman filter, and duration/pace formatting, with per-test runner scripts (05-Lint, 06–09).
+- Added unit tests for elevation gain, route smoothing, the GPS Kalman filter, and duration/pace formatting, plus a lint runner (05-Lint.sh) and a unit-test runner (06-Test.sh) that print findings as text.
 - Added unit tests for the timing helpers (monotonicStepMillis, isRecordingGap, isSegmentBoundary) and the ride formulas (avgSpeedMps, cyclingMet, caloriesKcal, haversineMeters).
 - README Features now list the read-only GPX import.
 - The Map tab can now import a GPX file to view its track (drawn in dark green) and speed chart read-only, without saving it; a top-bar button opens the file, and its name and a close button appear like an opened ride.
