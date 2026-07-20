@@ -221,6 +221,15 @@ class TrackingService : Service() {
     private var startupPending = false
     private var registrationReady = false
     private var draftReady = false
+    // True while the pending startup was launched from standby, so a failure returns to a working
+    // standby request instead of tearing the service down.
+    private var startupFromStandby = false
+    // Bumped on every startup attempt; the draft callback checks it so a superseded attempt's late
+    // completion can't advance a newer ride.
+    private var startupGeneration = 0
+    // Bumped on every location-update registration; the one-shot ack callbacks check it so a stale
+    // request (e.g. a previous standby's late failure) can't tear down the request that replaced it.
+    private var gpsRequestGeneration = 0
     private var foregroundStarted = false
     private var activeStartId = 0
 
@@ -302,6 +311,8 @@ class TrackingService : Service() {
         }
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
         activeStartId = startId
+        startupFromStandby = false
+        startupGeneration++
         startupPending = true
         registrationReady = false
         draftReady = false
@@ -325,7 +336,7 @@ class TrackingService : Service() {
                 registrationReady = true
                 completeStartupIfReady()
             },
-            onFailure = { failStartup() },
+            onFailure = { abortStartup() },
         )
     }
 
@@ -361,6 +372,7 @@ class TrackingService : Service() {
 
     /** Open a fresh draft trip for the ride now starting; [resetRideState] must run first. */
     private fun createDraft() {
+        val generation = startupGeneration
         val initialTrip = Trip(
             startTime = startTime,
             endTime = startTime,
@@ -375,17 +387,15 @@ class TrackingService : Service() {
             val result = persistence.ensureDraft()
             withContext(Dispatchers.Main) {
                 when {
+                    // A newer startup (or a teardown) has superseded this attempt; its state is
+                    // no longer ours to touch.
+                    generation != startupGeneration -> {}
                     result.isSuccess -> {
                         draftReady = true
                         completeStartupIfReady()
                     }
-                    startupPending -> failStartup()
-                    // A standby start records optimistically; surface the failed draft the same
-                    // way as a failed flush — persist() retries draft creation on the next one.
-                    else -> {
-                        persistenceFailed = true
-                        publish()
-                    }
+                    startupPending -> abortStartup()
+                    else -> {}
                 }
             }
         }
@@ -398,10 +408,15 @@ class TrackingService : Service() {
         onSuccess: () -> Unit,
         onFailure: () -> Unit,
     ) {
+        // A newer registration supersedes this one's async ack: only the latest request's callback
+        // may act, so a stale success/failure can't drive state for the request that replaced it.
+        val generation = ++gpsRequestGeneration
+        val ackSuccess = { if (generation == gpsRequestGeneration) onSuccess() }
+        val ackFailure = { if (generation == gpsRequestGeneration) onFailure() }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            onFailure()
+            ackFailure()
             return
         }
         // Re-requesting with the same callback just replaces the previous request's cadence.
@@ -410,16 +425,19 @@ class TrackingService : Service() {
             .build()
         try {
             fusedClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
-                .addOnSuccessListener { onSuccess() }
-                .addOnFailureListener { onFailure() }
+                .addOnSuccessListener { ackSuccess() }
+                .addOnFailureListener { ackFailure() }
         } catch (_: SecurityException) {
-            onFailure()
+            ackFailure()
         } catch (_: RuntimeException) {
-            onFailure()
+            ackFailure()
         }
     }
 
     private fun completeStartupIfReady() {
+        // A manual Stop mid-startup sets stopping before the acks land; never advertise RECORDING
+        // once the service is tearing down.
+        if (stopping.get()) return
         if (!startupPending || !registrationReady || !draftReady) return
         startupPending = false
         status = TrackingStatus.RECORDING
@@ -453,6 +471,24 @@ class TrackingService : Service() {
                 }
             }
         }
+    }
+
+    /** Route a failed prerequisite to the right recovery: a cold start tears down, a standby start
+     *  falls back to a working standby request. */
+    private fun abortStartup() {
+        if (startupFromStandby) failStandbyStartup() else failStartup()
+    }
+
+    /** A ride started from standby failed to register GPS or open its draft; the session is still
+     *  valid, so discard the aborted draft and return to a working standby request rather than
+     *  advertising a Recording state that has no fix stream. */
+    private fun failStandbyStartup() {
+        if (!startupPending) return
+        startupPending = false
+        startupGeneration++ // invalidate this attempt's late callbacks
+        val persistence = draftPersistence
+        scope.launch { withContext(NonCancellable) { persistence?.discard() } }
+        enterStandby() // resets ride state and re-arms the lighter standby GPS request
     }
 
     private fun onLocation(location: Location) {
@@ -636,16 +672,31 @@ class TrackingService : Service() {
     }
 
     private fun startRideFromStandby(automatic: Boolean) {
-        if (status != TrackingStatus.STANDBY) return
+        // startupPending guards against a fix arriving mid-startup and re-triggering this.
+        if (status != TrackingStatus.STANDBY || startupPending) return
         cancelStandbyTimeout()
         resetRideState()
-        status = TrackingStatus.RECORDING
+        // Gate on the same two prerequisites as a cold start: never advertise RECORDING until the
+        // draft is open and the high-accuracy request is registered. The rider stays in standby
+        // (its telemetry still flowing) until then; a failure falls back to a working standby.
+        startupFromStandby = true
+        val generation = ++startupGeneration
+        startupPending = true
+        registrationReady = false
+        draftReady = false
         createDraft()
-        switchToRecordingGps()
-        // A ride opened from History would otherwise keep hiding the live track on the Map tab.
-        MapSelection.clear()
-        updateNotification()
-        publish()
+        requestUpdates(
+            priority = Priority.PRIORITY_HIGH_ACCURACY,
+            intervalMs = GPS_INTERVAL_MS,
+            minIntervalMs = GPS_MIN_INTERVAL_MS,
+            onSuccess = {
+                if (generation == startupGeneration) {
+                    registrationReady = true
+                    completeStartupIfReady()
+                }
+            },
+            onFailure = { if (generation == startupGeneration) abortStartup() },
+        )
         // Auto-start warrants the same single buzz as auto-resume; a button press does not.
         if (automatic) vibrateAutoResume()
     }
@@ -662,14 +713,6 @@ class TrackingService : Service() {
         // staying up. The failure callback is async: by the time it fires a new ride may have
         // started, and that ride must not be torn down.
         onFailure = { if (status == TrackingStatus.STANDBY) finishService() },
-    )
-
-    private fun switchToRecordingGps() = requestUpdates(
-        priority = Priority.PRIORITY_HIGH_ACCURACY,
-        intervalMs = GPS_INTERVAL_MS,
-        minIntervalMs = GPS_MIN_INTERVAL_MS,
-        onSuccess = {},
-        onFailure = {},
     )
 
     private fun scheduleStandbyTimeout() {
@@ -848,6 +891,9 @@ class TrackingService : Service() {
     }
 
     private fun finishService() {
+        // A Stop during a standby-start gate ends here; drop the pending startup so a late GPS or
+        // draft ack can't flip a torn-down service back to RECORDING.
+        startupPending = false
         TrackingState.reset()
         status = TrackingStatus.IDLE
         releaseRideReservation()

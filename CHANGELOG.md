@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A ride auto-started from standby now waits for its draft and GPS registration before showing Recording, and falls back to standby on failure instead of a dead Recording state.
 - Extended ride stats now use monotonic time, never count a pause/outage gap as a stop, and bucket brief low-speed motion so the speed zones sum to moving time.
 - Dropped an always-false null check on non-null offline-region metadata, clearing a release compiler warning.
 - Pinned the kotlinx-serialization BOM so the migration instrumentation tests no longer crash on a split serialization-core/json runtime.
