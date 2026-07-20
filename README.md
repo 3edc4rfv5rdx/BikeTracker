@@ -10,9 +10,11 @@ are the timestamped ZIP backups you create yourself in Settings
 ## Features
 
 - **Recording** — GPS tracking via a foreground service (FusedLocationProvider) with
-  Kalman filtering, accuracy/speed-jump rejection, and auto-pause on standstill. Rides
-  are saved incrementally, so one interrupted by process death is recovered at the next
-  launch. Pause/Resume and Stop controls live in the notification too.
+  Kalman filtering, accuracy/speed-jump rejection, and auto-pause on standstill. After a
+  long pause the ride auto-saves and tracking waits in standby on a lighter GPS cadence,
+  auto-starting a fresh ride when you set off again and shutting down after 30 motionless
+  minutes. Rides are saved incrementally, so one interrupted by process death is recovered
+  at the next launch. Pause/Resume and Stop controls live in the notification too.
 - **Live screen** — large, sunlight-readable speed, distance, time, average speed,
   altitude, and clock. GPS warnings (weak / no signal) and an auto-pause banner appear in
   fixed slots so the layout never shifts.
