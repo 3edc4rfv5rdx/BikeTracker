@@ -45,8 +45,12 @@ class GpxBuildTest {
             .apply { timeZone = TimeZone.getTimeZone("UTC") }
             .format(Date(millis))
 
+    // Times on the track points only — the document's <metadata><time> is deliberately excluded.
     private fun times(gpx: String): List<String> =
-        Regex("<time>(.*?)</time>").findAll(gpx).map { it.groupValues[1] }.toList()
+        gpx.lineSequence()
+            .filter { it.contains("<trkpt") }
+            .mapNotNull { Regex("<time>(.*?)</time>").find(it)?.groupValues?.get(1) }
+            .toList()
 
     @Test
     fun escapesXmlSpecialsInTitleAndNote() {
@@ -60,7 +64,7 @@ class GpxBuildTest {
     fun omitsEleAndTimeWhenAbsent() {
         val gpx = buildGpx(trip(), listOf(tp(time = 0, altitude = null, elapsedMillis = null)))
         assertFalse(gpx.contains("<ele>"))
-        assertFalse(gpx.contains("<time>"))
+        assertTrue(times(gpx).isEmpty()) // the point carries no time (metadata time is separate)
         assertEquals(1, gpx.count("<trkpt"))
     }
 
