@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed a rare race where a failed standby GPS registration could shut down a ride just started from standby.
 - After a long pause auto-saves the ride, tracking now waits in standby (lighter GPS) and auto-starts a fresh ride when you set off again, shutting down only after 30 motionless minutes.
 - The Stop button is now light red while recording, distinct from the paused-state orange Resume.
 - The Stop button is now light grey while paused, set off from the orange Resume beside it.

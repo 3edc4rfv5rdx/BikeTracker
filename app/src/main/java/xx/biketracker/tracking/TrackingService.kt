@@ -627,8 +627,10 @@ class TrackingService : Service() {
         intervalMs = STANDBY_GPS_INTERVAL_MS,
         minIntervalMs = STANDBY_GPS_MIN_INTERVAL_MS,
         onSuccess = {},
-        // Standby with no location updates could never catch movement, so there is no point staying up.
-        onFailure = { finishService() },
+        // Standby with no location updates could never catch movement, so there is no point
+        // staying up. The failure callback is async: by the time it fires a new ride may have
+        // started, and that ride must not be torn down.
+        onFailure = { if (status == TrackingStatus.STANDBY) finishService() },
     )
 
     private fun switchToRecordingGps() = requestUpdates(
