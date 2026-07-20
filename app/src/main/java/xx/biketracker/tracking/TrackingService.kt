@@ -39,7 +39,7 @@ import kotlinx.coroutines.withContext
 import xx.biketracker.ACCURACY_THRESHOLD_M
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
 import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
-import xx.biketracker.elevationGainMeters
+import xx.biketracker.elevationGainBySegment
 import xx.biketracker.GPS_INTERVAL_MS
 import xx.biketracker.GPS_MIN_INTERVAL_MS
 import xx.biketracker.GPS_STALE_MS
@@ -837,7 +837,7 @@ class TrackingService : Service() {
                     null
                 },
                 elevationGainMeters = if (finished && altitudes.any { it != null }) {
-                    elevationGainMeters(altitudes)
+                    elevationGainBySegment(recorded)
                 } else {
                     null
                 },

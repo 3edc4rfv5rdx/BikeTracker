@@ -4,7 +4,7 @@ import xx.biketracker.AUTO_PAUSE_DEBOUNCE_MS
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
 import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.data.TrackPoint
-import xx.biketracker.elevationGainMeters
+import xx.biketracker.elevationGainBySegment
 import xx.biketracker.haversineMeters
 import xx.biketracker.isSegmentBoundary
 import xx.biketracker.monotonicStepMillis
@@ -13,8 +13,14 @@ import xx.biketracker.monotonicStepMillis
  *  three bounds make four buckets: 0-10, 10-20, 20-30, 30+. */
 val SPEED_ZONE_BOUNDS_KMH = doubleArrayOf(10.0, 20.0, 30.0)
 
-/** One altitude reading placed along the ride, for the elevation profile (x = distance so far). */
-class ElevationPoint(val distanceMeters: Double, val altitudeMeters: Double)
+/** One altitude reading placed along the ride, for the elevation profile (x = distance so far).
+ *  [segmentStart] marks the first reading after a recording boundary, where the profile must break
+ *  rather than draw a vertical cliff across the gap. */
+class ElevationPoint(
+    val distanceMeters: Double,
+    val altitudeMeters: Double,
+    val segmentStart: Boolean = false,
+)
 
 /**
  * Extended per-ride figures derived from the track points in one pass — none are stored on the
@@ -51,6 +57,7 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
     var stopCount = 0
     var stoppedMillis = 0L
     var runMillis = 0L // length of the current below-threshold run, still to be judged a stop or not
+    var pendingProfileBreak = false // a boundary was crossed; the next altitude opens a new segment
 
     // Close the pending low-speed run: a real stop once it reaches the debounce, otherwise brief
     // low-speed motion that still belongs to the ride's moving time, so it enters the slowest bucket.
@@ -71,8 +78,9 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
             val step = monotonicStepMillis(prev.elapsedMillis, p.elapsedMillis, prev.time, p.time)
             if (isSegmentBoundary(prev.time, p.time, p.segmentStart, p.elapsedMillis != null)) {
                 // A pause/outage gap is added to neither the run nor any bucket; only recorded
-                // low-speed motion counts as a stop.
+                // low-speed motion counts as a stop. The profile breaks here too.
                 closeRun()
+                pendingProfileBreak = true
             } else {
                 distance += haversineMeters(prev.lat, prev.lon, p.lat, p.lon)
                 if (p.speedMps < AUTO_PAUSE_SPEED_MPS) {
@@ -83,12 +91,14 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
                 }
             }
         }
-        p.altitudeMeters?.let { profile.add(ElevationPoint(distance, it)) }
+        p.altitudeMeters?.let {
+            profile.add(ElevationPoint(distance, it, segmentStart = pendingProfileBreak))
+            pendingProfileBreak = false
+        }
     }
     closeRun()
 
-    val descent = if (profile.isEmpty()) null
-    else elevationGainMeters(points.map { pt -> pt.altitudeMeters?.let { -it } })
+    val descent = if (profile.isEmpty()) null else elevationGainBySegment(points, descent = true)
 
     return RideStats(
         elevationProfile = profile,

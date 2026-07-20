@@ -2,7 +2,7 @@ package xx.biketracker.data
 
 import android.content.Context
 import kotlinx.coroutines.Job
-import xx.biketracker.elevationGainMeters
+import xx.biketracker.elevationGainBySegment
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
 
@@ -34,7 +34,7 @@ suspend fun finalizeAbandonedTrips(context: Context, startedBefore: Long) {
                     trip.copy(
                         endTime = points.last().time,
                         avgGpsSpeedMps = points.map { it.speedMps.toDouble() }.average(),
-                        elevationGainMeters = if (altitudes.any { it != null }) elevationGainMeters(altitudes) else null,
+                        elevationGainMeters = if (altitudes.any { it != null }) elevationGainBySegment(points) else null,
                         finished = true,
                     )
                 )

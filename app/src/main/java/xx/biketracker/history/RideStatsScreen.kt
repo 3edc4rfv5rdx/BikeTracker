@@ -159,8 +159,8 @@ private const val PROFILE_MAX_TICKS = 6
 
 /** Altitude over distance: a filled line whose vertical scale spans exactly the ride's min-to-max
  *  altitude (both values captioned at their reference lines), over an X axis of round-step km
- *  ticks. Recording gaps keep the same x (distance does not advance across them), so the line
- *  simply carries on. */
+ *  ticks. A recording boundary (pause/outage) breaks the line into a separate segment, so an
+ *  altitude jump the rider never rode is not drawn as a vertical cliff. */
 @Composable
 private fun ElevationProfile(stats: RideStats) {
     val profile = stats.elevationProfile
@@ -190,21 +190,26 @@ private fun ElevationProfile(stats: RideStats) {
         drawLine(gridColor, Offset(0f, yOf(maxAlt)), Offset(w, yOf(maxAlt)), strokeWidth = 1f)
         drawLine(gridColor, Offset(0f, yOf(minAlt)), Offset(w, yOf(minAlt)), strokeWidth = 1f)
 
-        val line = Path().apply {
-            moveTo(xOf(profile.first().distanceMeters), yOf(profile.first().altitudeMeters))
-            for (i in 1 until profile.size) lineTo(xOf(profile[i].distanceMeters), yOf(profile[i].altitudeMeters))
+        // Draw each recording segment on its own, so the fill and line never bridge a boundary.
+        val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        var from = 0
+        while (from < profile.size) {
+            var to = from + 1
+            while (to < profile.size && !profile[to].segmentStart) to++
+            val line = Path().apply {
+                moveTo(xOf(profile[from].distanceMeters), yOf(profile[from].altitudeMeters))
+                for (i in from + 1 until to) lineTo(xOf(profile[i].distanceMeters), yOf(profile[i].altitudeMeters))
+            }
+            val area = Path().apply {
+                addPath(line)
+                lineTo(xOf(profile[to - 1].distanceMeters), axisY)
+                lineTo(xOf(profile[from].distanceMeters), axisY)
+                close()
+            }
+            drawPath(area, fillColor)
+            drawPath(line, lineColor, style = stroke)
+            from = to
         }
-        val area = Path().apply {
-            addPath(line)
-            lineTo(xOf(profile.last().distanceMeters), axisY)
-            lineTo(xOf(profile.first().distanceMeters), axisY)
-            close()
-        }
-        drawPath(area, fillColor)
-        drawPath(
-            line, lineColor,
-            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
-        )
 
         // X axis with round-step km ticks (0 omitted; the axis line itself marks the origin).
         drawLine(axisColor, Offset(0f, axisY), Offset(w, axisY), strokeWidth = 1.dp.toPx())

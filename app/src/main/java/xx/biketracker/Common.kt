@@ -1,5 +1,6 @@
 package xx.biketracker
 
+import xx.biketracker.data.TrackPoint
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -404,6 +405,35 @@ fun elevationGainMeters(altitudes: List<Double?>, thresholdMeters: Double = 3.0)
             reference = a
         }
     }
+    return gain
+}
+
+/**
+ * Total ascent that starts a fresh altitude reference at each recording boundary, so a height
+ * change across a pause or GPS outage — points the rider never connected — is not counted as a
+ * climb. [descent] negates altitudes to measure drops instead. Boundaries are detected with
+ * [isSegmentBoundary], so legacy rows fall back to the wall-time gap heuristic.
+ */
+fun elevationGainBySegment(
+    points: List<TrackPoint>,
+    descent: Boolean = false,
+    thresholdMeters: Double = 3.0,
+): Double {
+    var gain = 0.0
+    val segment = ArrayList<Double?>()
+    fun flush() {
+        if (segment.isNotEmpty()) gain += elevationGainMeters(segment, thresholdMeters)
+        segment.clear()
+    }
+    for (i in points.indices) {
+        val p = points[i]
+        if (i > 0 && isSegmentBoundary(points[i - 1].time, p.time, p.segmentStart, p.elapsedMillis != null)) {
+            flush()
+        }
+        val a = p.altitudeMeters
+        segment += if (a != null && descent) -a else a
+    }
+    flush()
     return gain
 }
 
