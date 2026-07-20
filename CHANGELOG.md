@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Renamed the debug build script 05-MakeDebug.sh to 01-MakeDebug.sh.
 - Fixed an off-by-one in a ride-stats test that expected four intervals from four points instead of three.
 - Fixed the GPX export tests to check track-point times only, not the document's metadata time, which had made three of them fail.
 - Added unit tests for elevation gain, route smoothing, the GPS Kalman filter, and duration/pace formatting, plus a lint runner (05-Lint.sh) and a unit-test runner (06-Test.sh) that print findings as text.
