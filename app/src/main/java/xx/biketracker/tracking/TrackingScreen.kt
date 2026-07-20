@@ -37,6 +37,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import xx.biketracker.ui.KeepScreenOnWhile
 import xx.biketracker.ui.PausedOrange
+import xx.biketracker.ui.ScrubBlue
 import xx.biketracker.ui.StopRed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -141,13 +142,19 @@ fun TrackingScreen() {
     }
 
     // Keep the screen awake while a ride is active — readable in sunlight, no missed taps.
-    KeepScreenOnWhile(snapshot.status != TrackingStatus.IDLE)
+    // Standby may last up to half an hour, so let the screen sleep through it.
+    KeepScreenOnWhile(
+        snapshot.status == TrackingStatus.RECORDING || snapshot.status == TrackingStatus.PAUSED,
+    )
 
     // Ride time ticks every second locally between the ~1.5 s GPS updates.
     val liveMovingMs = snapshot.liveMovingTimeMillis(nowElapsedRealtime)
 
-    // Total ride time including pauses: wall clock elapsed since the start.
-    val liveTotalMs = if (snapshot.status != TrackingStatus.IDLE) {
+    // Total ride time including pauses: wall clock elapsed since the start. Frozen off-ride,
+    // including standby (there is no active ride to time between rides).
+    val liveTotalMs = if (
+        snapshot.status == TrackingStatus.RECORDING || snapshot.status == TrackingStatus.PAUSED
+    ) {
         (nowElapsedRealtime - snapshot.startElapsedRealtime).coerceAtLeast(0L)
     } else {
         0L
@@ -226,6 +233,13 @@ fun TrackingScreen() {
                     stringResource(R.string.track_auto_paused),
                     PausedOrange,
                     Color.Black,
+                    Modifier.padding(horizontal = 16.dp),
+                )
+            } else if (snapshot.status == TrackingStatus.STANDBY) {
+                StatusBanner(
+                    stringResource(R.string.track_standby),
+                    ScrubBlue,
+                    Color.White,
                     Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -388,12 +402,12 @@ private fun Controls(
     // Two fixed buttons that never rearrange: a primary Start/Pause/Resume that morphs
     // with state, and a Stop that is always present (disabled while idle).
     val primaryText = when (status) {
-        TrackingStatus.IDLE -> stringResource(R.string.btn_start)
+        TrackingStatus.IDLE, TrackingStatus.STANDBY -> stringResource(R.string.btn_start)
         TrackingStatus.RECORDING -> stringResource(R.string.btn_pause)
         TrackingStatus.PAUSED -> stringResource(R.string.btn_resume)
     }
     val primaryAction = when (status) {
-        TrackingStatus.IDLE -> onStart
+        TrackingStatus.IDLE, TrackingStatus.STANDBY -> onStart
         TrackingStatus.RECORDING -> onPause
         TrackingStatus.PAUSED -> onResume
     }

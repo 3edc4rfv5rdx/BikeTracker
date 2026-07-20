@@ -16,9 +16,11 @@
     <string name="notif_channel_name">Запись поездки</string>
     <string name="notif_recording">Идёт запись поездки</string>
     <string name="notif_paused">Поездка на паузе</string>
+    <string name="notif_standby">Готов к поездке</string>
     <string name="notif_stop">Стоп</string>
 
     <string name="track_auto_paused">Авто-пауза</string>
+    <string name="track_standby">Ожидание движения</string>
     <string name="track_discarded">Не записано</string>
     <string name="track_save_failed">Не удалось сохранить поездку. Нажмите «Стоп &amp; сохранить», чтобы повторить, или удерживайте, чтобы удалить.</string>
     <string name="notif_save_failed">Ошибка сохранения - откройте приложение, чтобы повторить</string>

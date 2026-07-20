@@ -30,6 +30,16 @@ const val METERS_PER_KM = 1000.0
 const val GPS_INTERVAL_MS = 1500L
 const val GPS_MIN_INTERVAL_MS = 1000L
 
+// --- Standby after a long-pause auto-save ---
+// The ride is saved but the service stays alive, listening for the rider to set off again.
+/** How long standby waits for movement before shutting the service down for good. */
+const val STANDBY_TIMEOUT_MS = 30L * 60L * 1000L
+/** Movement must hold above the resume threshold this long to auto-start a ride from standby. */
+const val STANDBY_RESUME_HOLD_MS = 3_000L
+/** Reduced GPS cadence while in standby — lighter on the battery, still catches movement quickly. */
+const val STANDBY_GPS_INTERVAL_MS = 4_000L
+const val STANDBY_GPS_MIN_INTERVAL_MS = 2_000L
+
 // --- Point filtering ---
 /** Drop fixes whose reported horizontal accuracy is worse than this (meters). */
 const val ACCURACY_THRESHOLD_M = 25f

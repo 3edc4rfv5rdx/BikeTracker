@@ -16,9 +16,11 @@
     <string name="notif_channel_name">Ride tracking</string>
     <string name="notif_recording">Recording ride</string>
     <string name="notif_paused">Ride paused</string>
+    <string name="notif_standby">Ready to ride</string>
     <string name="notif_stop">Stop</string>
 
     <string name="track_auto_paused">Auto-pause</string>
+    <string name="track_standby">Waiting for movement</string>
     <string name="track_discarded">Not saved</string>
     <string name="track_save_failed">Ride data could not be saved. Tap Stop &amp; save to retry, or hold it to discard.</string>
     <string name="notif_save_failed">Save failed - open the app to retry</string>

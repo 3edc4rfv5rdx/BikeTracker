@@ -66,11 +66,16 @@ fun MapScreen() {
 
     val route = if (selected != null) selectedRoute else snapshot.route
 
+    // Standby is between rides — treat it like idle here so the map neither follows an empty
+    // live track nor keeps the screen awake for the length of the standby window.
+    val rideActive = snapshot.status == TrackingStatus.RECORDING ||
+        snapshot.status == TrackingStatus.PAUSED
+
     // The map is watched mid-ride too; don't let the screen dim while one is active.
-    KeepScreenOnWhile(snapshot.status != TrackingStatus.IDLE)
+    KeepScreenOnWhile(rideActive)
 
     // The heading puck belongs to the live ride only, not to a stored ride opened from History.
-    val live = selected == null && snapshot.status != TrackingStatus.IDLE
+    val live = selected == null && rideActive
     val puckPosition = if (live) snapshot.route.lastOrNull() else null
 
     // GPS staleness must surface even when no fixes arrive to recompose us, so tick locally.

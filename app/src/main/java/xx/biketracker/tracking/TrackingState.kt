@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class TrackingStatus { IDLE, RECORDING, PAUSED }
+enum class TrackingStatus { IDLE, RECORDING, PAUSED, STANDBY }
 
 /**
  * Live view of the ride in progress, published by [TrackingService] and collected
@@ -38,7 +38,7 @@ data class TrackingSnapshot(
  * clock at a coarser cadence than fixes arrive, so a negative age is routine.
  */
 fun TrackingSnapshot.hasGpsTrouble(nowElapsedRealtime: Long): Boolean =
-    status != TrackingStatus.IDLE &&
+    (status == TrackingStatus.RECORDING || status == TrackingStatus.PAUSED) &&
         (lastTrustedFixElapsedRealtime <= 0L ||
             nowElapsedRealtime - lastTrustedFixElapsedRealtime > GPS_STALE_MS ||
             gpsAccuracyMeters == null ||

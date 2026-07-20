@@ -46,6 +46,10 @@ import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.MPS_TO_KMH
+import xx.biketracker.STANDBY_GPS_INTERVAL_MS
+import xx.biketracker.STANDBY_GPS_MIN_INTERVAL_MS
+import xx.biketracker.STANDBY_RESUME_HOLD_MS
+import xx.biketracker.STANDBY_TIMEOUT_MS
 import xx.biketracker.haversineMeters
 import xx.biketracker.MainActivity
 import xx.biketracker.R
@@ -156,8 +160,10 @@ internal fun validateLocationFix(
  * location provider, filters noise, accumulates distance / moving time / peak
  * speed, and drives the start → pause → resume → stop state machine (including
  * auto-pause on standstill with auto-resume on movement, and auto-save after a
- * long pause). A manual pause is sticky: only the Resume button ends it. On stop it persists
- * the ride and its points, then stops itself.
+ * long pause). A manual pause is sticky: only the Resume button ends it. A manual stop persists
+ * the ride and its points, then stops itself. The long-pause auto-save instead saves the ride and
+ * drops into standby: the service stays alive at a lighter GPS cadence and auto-starts a fresh ride
+ * when the rider sets off again, shutting down only after a long, motionless standby.
  *
  * The UI never binds here; it sends commands via the companion helpers and reads
  * live state from [TrackingState].
@@ -184,6 +190,10 @@ class TrackingService : Service() {
     private var pausedAutomatically = false
     private var lowSpeedSince = 0L
     private var autoSaveJob: Job? = null
+    // Standby (post-auto-save) bookkeeping: when the rider started moving again, and the
+    // watchdog that shuts the service down after a long, motionless standby.
+    private var movingSince = 0L
+    private var standbyJob: Job? = null
 
     private var currentSpeedMps = 0.0
     private var altitudeMeters: Double? = null
@@ -253,11 +263,15 @@ class TrackingService : Service() {
             return START_NOT_STICKY
         }
         when (intent?.action) {
-            ACTION_START -> startTracking(startId)
+            // In standby there is no active ride: Start opens a fresh one, and Stop/Discard just
+            // end standby (there is nothing to save or throw away).
+            ACTION_START ->
+                if (status == TrackingStatus.STANDBY) startRideFromStandby(automatic = false)
+                else startTracking(startId)
             ACTION_PAUSE -> pauseTracking(automatic = false)
             ACTION_RESUME -> resumeTracking()
-            ACTION_STOP -> stopAndSave()
-            ACTION_DISCARD -> stopAndDiscard()
+            ACTION_STOP -> if (status == TrackingStatus.STANDBY) finishService() else stopAndSave()
+            ACTION_DISCARD -> if (status == TrackingStatus.STANDBY) finishService() else stopAndDiscard()
             else -> stopSelf()
         }
         return START_NOT_STICKY
@@ -295,6 +309,22 @@ class TrackingService : Service() {
         }
 
         // In the rare case this instance is reused after a stop, allow the new ride to save.
+        resetRideState()
+        createDraft()
+        requestUpdates(
+            priority = Priority.PRIORITY_HIGH_ACCURACY,
+            intervalMs = GPS_INTERVAL_MS,
+            minIntervalMs = GPS_MIN_INTERVAL_MS,
+            onSuccess = {
+                registrationReady = true
+                completeStartupIfReady()
+            },
+            onFailure = { failStartup() },
+        )
+    }
+
+    /** Clear every per-ride accumulator so the same service instance can record a fresh ride. */
+    private fun resetRideState() {
         stopping.set(false)
         kalman.reset()
         flushJobs.clear()
@@ -302,8 +332,28 @@ class TrackingService : Service() {
         persistenceFailed = false
         lastTrustedFix = null
         lastTrustedFixElapsedRealtime = 0L
+        lastPoint = null
+        lastPointElapsedRealtimeNanos = null
+        points.clear()
+        route.clear()
+        distanceMeters = 0.0
+        movingTimeMillis = 0L
+        maxSpeedMps = 0.0
+        currentSpeedMps = 0.0
+        altitudeMeters = null
+        gpsAccuracyMeters = null
+        bearingDegrees = null
+        pausedAutomatically = false
+        lowSpeedSince = 0L
+        movingSince = 0L
+        draftPersistence = null
+        draftStartJob = null
         startTime = System.currentTimeMillis()
         startElapsedRealtime = SystemClock.elapsedRealtime()
+    }
+
+    /** Open a fresh draft trip for the ride now starting; [resetRideState] must run first. */
+    private fun createDraft() {
         val initialTrip = Trip(
             startTime = startTime,
             endTime = startTime,
@@ -325,30 +375,33 @@ class TrackingService : Service() {
                 }
             }
         }
-        requestUpdates()
     }
 
-    private fun requestUpdates() {
+    private fun requestUpdates(
+        priority: Int,
+        intervalMs: Long,
+        minIntervalMs: Long,
+        onSuccess: () -> Unit,
+        onFailure: () -> Unit,
+    ) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            failStartup()
+            onFailure()
             return
         }
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, GPS_INTERVAL_MS)
-            .setMinUpdateIntervalMillis(GPS_MIN_INTERVAL_MS)
+        // Re-requesting with the same callback just replaces the previous request's cadence.
+        val request = LocationRequest.Builder(priority, intervalMs)
+            .setMinUpdateIntervalMillis(minIntervalMs)
             .build()
         try {
             fusedClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
-                .addOnSuccessListener {
-                    registrationReady = true
-                    completeStartupIfReady()
-                }
-                .addOnFailureListener { failStartup() }
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { onFailure() }
         } catch (_: SecurityException) {
-            failStartup()
+            onFailure()
         } catch (_: RuntimeException) {
-            failStartup()
+            onFailure()
         }
     }
 
@@ -420,6 +473,7 @@ class TrackingService : Service() {
         when (status) {
             TrackingStatus.RECORDING -> recordLocation(fix)
             TrackingStatus.PAUSED -> fix.speedMps?.let(::maybeAutoResume)
+            TrackingStatus.STANDBY -> maybeStandbyStart(fix)
             TrackingStatus.IDLE -> return
         }
         publish()
@@ -527,6 +581,79 @@ class TrackingService : Service() {
         if (automatic) vibrateAutoResume()
     }
 
+    // Standby: after the long-pause auto-save the ride is already stored, so movement here opens
+    // a brand-new ride rather than resuming the finished one.
+    private fun maybeStandbyStart(fix: ValidatedLocationFix) {
+        val speed = fix.speedMps ?: return
+        val startMps = (AppSettings.autoPauseSpeedKmh.value + AUTO_RESUME_MARGIN_KMH) / MPS_TO_KMH
+        val now = fix.elapsedRealtimeNanos / 1_000_000L
+        if (speed >= startMps) {
+            if (movingSince == 0L) movingSince = now
+            else if (now - movingSince >= STANDBY_RESUME_HOLD_MS) startRideFromStandby(automatic = true)
+        } else {
+            movingSince = 0L
+        }
+    }
+
+    /** Keep the service alive after the auto-save, listening at a lighter GPS cadence for the
+     *  rider to set off again; a long, motionless standby then shuts everything down. */
+    private fun enterStandby() {
+        resetRideState()
+        status = TrackingStatus.STANDBY
+        scheduleStandbyTimeout()
+        updateNotification()
+        publish()
+        // Last, so a synchronous failure here (finishService) has the final say on state.
+        switchToStandbyGps()
+    }
+
+    private fun startRideFromStandby(automatic: Boolean) {
+        if (status != TrackingStatus.STANDBY) return
+        cancelStandbyTimeout()
+        resetRideState()
+        status = TrackingStatus.RECORDING
+        createDraft()
+        switchToRecordingGps()
+        // A ride opened from History would otherwise keep hiding the live track on the Map tab.
+        MapSelection.clear()
+        updateNotification()
+        publish()
+        // Auto-start warrants the same single buzz as auto-resume; a button press does not.
+        if (automatic) vibrateAutoResume()
+    }
+
+    private fun switchToStandbyGps() = requestUpdates(
+        priority = Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+        intervalMs = STANDBY_GPS_INTERVAL_MS,
+        minIntervalMs = STANDBY_GPS_MIN_INTERVAL_MS,
+        onSuccess = {},
+        // Standby with no location updates could never catch movement, so there is no point staying up.
+        onFailure = { finishService() },
+    )
+
+    private fun switchToRecordingGps() = requestUpdates(
+        priority = Priority.PRIORITY_HIGH_ACCURACY,
+        intervalMs = GPS_INTERVAL_MS,
+        minIntervalMs = GPS_MIN_INTERVAL_MS,
+        onSuccess = {},
+        onFailure = {},
+    )
+
+    private fun scheduleStandbyTimeout() {
+        cancelStandbyTimeout()
+        standbyJob = scope.launch {
+            delay(STANDBY_TIMEOUT_MS)
+            withContext(Dispatchers.Main) {
+                if (status == TrackingStatus.STANDBY) finishService()
+            }
+        }
+    }
+
+    private fun cancelStandbyTimeout() {
+        standbyJob?.cancel()
+        standbyJob = null
+    }
+
     /** Double buzz on auto-pause — noticeable in a pocket, unlike any on-screen hint. */
     private fun vibrateAutoPause() {
         vibrate(longArrayOf(0, 200, 150, 200))
@@ -550,7 +677,7 @@ class TrackingService : Service() {
             // recordLocation mutating status/points; a resume's cancelAutoSave() then
             // aborts here before the check.
             withContext(Dispatchers.Main) {
-                if (status == TrackingStatus.PAUSED) stopAndSave()
+                if (status == TrackingStatus.PAUSED) saveAndEnterStandby()
             }
         }
     }
@@ -571,10 +698,11 @@ class TrackingService : Service() {
         }
     }
 
-    private fun stopAndSave() = stop(save = true)
-    private fun stopAndDiscard() = stop(save = false)
+    private fun stopAndSave() = stop(save = true, thenStandby = false)
+    private fun stopAndDiscard() = stop(save = false, thenStandby = false)
+    private fun saveAndEnterStandby() = stop(save = true, thenStandby = true)
 
-    private fun stop(save: Boolean) {
+    private fun stop(save: Boolean, thenStandby: Boolean) {
         if (!stopping.compareAndSet(false, true)) return
         cancelAutoSave()
         if (persistenceFailed) {
@@ -600,7 +728,11 @@ class TrackingService : Service() {
                     persistence.persist(finalCheckpoint)
                 }
                 withContext(Dispatchers.Main) {
-                    if (result.isSuccess) finishService() else handleSaveFailure()
+                    when {
+                        result.isFailure -> handleSaveFailure()
+                        thenStandby -> enterStandby()
+                        else -> finishService()
+                    }
                 }
             }
         }
@@ -734,11 +866,16 @@ class TrackingService : Service() {
     private fun buildNotification(): Notification {
         val title = when {
             persistenceFailed -> getString(R.string.notif_save_failed)
+            status == TrackingStatus.STANDBY -> getString(R.string.notif_standby)
             status == TrackingStatus.PAUSED -> getString(R.string.notif_paused)
             else -> getString(R.string.notif_recording)
         }
-        val text = "${formatKm(distanceMeters)} ${getString(R.string.unit_km)} · " +
-            formatDuration(movingTimeMillis)
+        val text = if (status == TrackingStatus.STANDBY) {
+            getString(R.string.track_standby)
+        } else {
+            "${formatKm(distanceMeters)} ${getString(R.string.unit_km)} · " +
+                formatDuration(movingTimeMillis)
+        }
 
         val contentIntent = PendingIntent.getActivity(
             this,
@@ -755,15 +892,19 @@ class TrackingService : Service() {
             .setSilent(true)
             .setContentIntent(contentIntent)
 
-        // Pause/Resume toggles with state; Stop is always offered.
-        if (status == TrackingStatus.PAUSED) {
-            builder.addAction(
+        // Pause/Resume toggles with state; in standby it becomes Start; Stop is always offered.
+        when (status) {
+            TrackingStatus.STANDBY -> builder.addAction(
+                R.drawable.ic_notif_resume,
+                getString(R.string.btn_start),
+                servicePendingIntent(ACTION_START),
+            )
+            TrackingStatus.PAUSED -> builder.addAction(
                 R.drawable.ic_notif_resume,
                 getString(R.string.btn_resume),
                 servicePendingIntent(ACTION_RESUME),
             )
-        } else {
-            builder.addAction(
+            else -> builder.addAction(
                 R.drawable.ic_notif_pause,
                 getString(R.string.btn_pause),
                 servicePendingIntent(ACTION_PAUSE),
@@ -799,6 +940,7 @@ class TrackingService : Service() {
 
     override fun onDestroy() {
         cancelAutoSave()
+        cancelStandbyTimeout()
         if (::fusedClient.isInitialized) {
             fusedClient.removeLocationUpdates(locationCallback)
         }
