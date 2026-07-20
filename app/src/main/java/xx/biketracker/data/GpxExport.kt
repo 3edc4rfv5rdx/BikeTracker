@@ -32,9 +32,24 @@ private fun gpxFileName(startTime: Long): String =
     "ride-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(startTime))}.gpx"
 
 /**
+ * Absolute UTC millis to stamp on a point, monotonic so exported times never run backward and
+ * confuse a GPX consumer. New rows carry [TrackPoint.elapsedMillis] (monotonic since ride start),
+ * so their time is the ride start plus that offset — immune to a mid-ride wall-clock correction.
+ * Legacy rows fall back to the recorded wall time; a zero (never reached the track) has no time.
+ */
+private fun gpxPointTimeMillis(trip: Trip, point: TrackPoint): Long? {
+    val elapsed = point.elapsedMillis
+    return when {
+        elapsed != null -> trip.startTime + elapsed
+        point.time > 0 -> point.time
+        else -> null
+    }
+}
+
+/**
  * Build the GPX document for [trip] from its [points]. Coordinates use 7 decimals (~1 cm),
  * altitude one. A recording gap (pause or GPS outage) starts a new `<trkseg>`, so an importing
- * app never draws a straight line across a stop.
+ * app never draws a straight line across a stop. Point times are monotonic; see [gpxPointTimeMillis].
  */
 fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
     val iso = isoUtc()
@@ -58,7 +73,7 @@ fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
         }
         sb.append("      <trkpt lat=\"").append(coord(p.lat)).append("\" lon=\"").append(coord(p.lon)).append("\">")
         p.altitudeMeters?.let { sb.append("<ele>").append(oneDecimal(it)).append("</ele>") }
-        if (p.time > 0) sb.append("<time>").append(iso.format(Date(p.time))).append("</time>")
+        gpxPointTimeMillis(trip, p)?.let { sb.append("<time>").append(iso.format(Date(it))).append("</time>") }
         sb.append("</trkpt>\n")
     }
     if (open) sb.append("    </trkseg>\n")
@@ -96,7 +111,8 @@ suspend fun exportRideGpx(context: Context, trip: Trip, points: List<TrackPoint>
             target = resolver.insert(MediaStore.Files.getContentUri("external"), values)
                 ?: error("Cannot create GPX file")
             resolver.openOutputStream(target)?.use { it.write(bytes) } ?: error("Cannot open output stream")
-            resolver.update(target, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+            val published = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            check(resolver.update(target, published, null, null) == 1) { "Cannot publish GPX file" }
             target
         } catch (failure: Throwable) {
             target?.let { resolver.delete(it, null, null) }
