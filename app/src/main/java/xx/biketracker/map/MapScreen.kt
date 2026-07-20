@@ -30,6 +30,7 @@ import xx.biketracker.data.AppDatabase
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
 import xx.biketracker.tracking.hasGpsTrouble
+import xx.biketracker.tracking.rideActive
 import xx.biketracker.ui.KeepScreenOnWhile
 
 /**
@@ -68,8 +69,7 @@ fun MapScreen() {
 
     // Standby is between rides — treat it like idle here so the map neither follows an empty
     // live track nor keeps the screen awake for the length of the standby window.
-    val rideActive = snapshot.status == TrackingStatus.RECORDING ||
-        snapshot.status == TrackingStatus.PAUSED
+    val rideActive = snapshot.rideActive
 
     // The map is watched mid-ride too; don't let the screen dim while one is active.
     KeepScreenOnWhile(rideActive)

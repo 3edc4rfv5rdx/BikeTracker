@@ -32,13 +32,17 @@ data class TrackingSnapshot(
     val route: List<GeoPoint> = emptyList(),
 )
 
+/** True while a ride is being recorded or paused; standby between rides doesn't count. */
+val TrackingSnapshot.rideActive: Boolean
+    get() = status == TrackingStatus.RECORDING || status == TrackingStatus.PAUSED
+
 /**
  * True while a ride is active but the fixes are stale, missing, or too inaccurate to trust.
  * A fix timestamped after [nowElapsedRealtime] is fresh, not trouble: the UI samples its
  * clock at a coarser cadence than fixes arrive, so a negative age is routine.
  */
 fun TrackingSnapshot.hasGpsTrouble(nowElapsedRealtime: Long): Boolean =
-    (status == TrackingStatus.RECORDING || status == TrackingStatus.PAUSED) &&
+    rideActive &&
         (lastTrustedFixElapsedRealtime <= 0L ||
             nowElapsedRealtime - lastTrustedFixElapsedRealtime > GPS_STALE_MS ||
             gpsAccuracyMeters == null ||

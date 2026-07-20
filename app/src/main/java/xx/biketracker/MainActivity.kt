@@ -79,8 +79,8 @@ import xx.biketracker.settings.SettingsScreen
 import xx.biketracker.tracking.TrackingScreen
 import xx.biketracker.tracking.TrackingSnapshot
 import xx.biketracker.tracking.TrackingState
-import xx.biketracker.tracking.TrackingStatus
 import xx.biketracker.tracking.liveMovingTimeMillis
+import xx.biketracker.tracking.rideActive
 import xx.biketracker.ui.BikeTrackerTheme
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.NavLabelStyle
@@ -165,9 +165,11 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
 
     // Exit is blocked while a ride is active: the task would disappear yet the foreground
     // service would keep recording, which reads as either a lost ride or a stuck app.
+    // Standby doesn't block: the ride is already saved, and the service's notification
+    // still offers Start/Stop after the task is gone.
     val trackingSnapshot by TrackingState.snapshot.collectAsState()
     var showExitBlocked by remember { mutableStateOf(false) }
-    val rideActive = trackingSnapshot.status != TrackingStatus.IDLE
+    val rideActive = trackingSnapshot.rideActive
     fun onExitRequested() {
         if (rideActive) showExitBlocked = true else onExit()
     }

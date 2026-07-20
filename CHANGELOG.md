@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Exiting the app is no longer blocked during standby, and the map top-bar live stats hide there; ride-active checks share one helper.
 - Stop pressed while the long-pause auto-save is still writing now ends tracking instead of dropping into standby.
 - A draft that fails to open on a ride auto-started from standby now shows the save-failure banner instead of being silently ignored.
 - Standby now keeps high-accuracy GPS at its slower interval, so movement detection can't be starved by speed-less network fixes.

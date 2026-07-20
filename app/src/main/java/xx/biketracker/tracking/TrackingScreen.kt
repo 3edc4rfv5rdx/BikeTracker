@@ -143,18 +143,14 @@ fun TrackingScreen() {
 
     // Keep the screen awake while a ride is active — readable in sunlight, no missed taps.
     // Standby may last up to half an hour, so let the screen sleep through it.
-    KeepScreenOnWhile(
-        snapshot.status == TrackingStatus.RECORDING || snapshot.status == TrackingStatus.PAUSED,
-    )
+    KeepScreenOnWhile(snapshot.rideActive)
 
     // Ride time ticks every second locally between the ~1.5 s GPS updates.
     val liveMovingMs = snapshot.liveMovingTimeMillis(nowElapsedRealtime)
 
     // Total ride time including pauses: wall clock elapsed since the start. Frozen off-ride,
     // including standby (there is no active ride to time between rides).
-    val liveTotalMs = if (
-        snapshot.status == TrackingStatus.RECORDING || snapshot.status == TrackingStatus.PAUSED
-    ) {
+    val liveTotalMs = if (snapshot.rideActive) {
         (nowElapsedRealtime - snapshot.startElapsedRealtime).coerceAtLeast(0L)
     } else {
         0L
