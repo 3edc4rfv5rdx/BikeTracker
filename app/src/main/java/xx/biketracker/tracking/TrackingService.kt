@@ -62,7 +62,7 @@ import xx.biketracker.data.Trip
 import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.map.MapSelection
-import xx.biketracker.settings.AUTO_RESUME_MARGIN_KMH
+import xx.biketracker.settings.resumeSpeedMps
 import xx.biketracker.settings.AppSettings
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
@@ -574,7 +574,7 @@ class TrackingService : Service() {
 
     // Only an automatic pause resumes by itself; a manual one waits for the button.
     private fun maybeAutoResume(speedMps: Double) {
-        val resumeMps = (AppSettings.autoPauseSpeedKmh.value + AUTO_RESUME_MARGIN_KMH) / MPS_TO_KMH
+        val resumeMps = resumeSpeedMps(AppSettings.autoPauseSpeedKmh.value)
         if (pausedAutomatically && speedMps >= resumeMps) {
             resumeTracking(automatic = true)
         }
@@ -613,7 +613,7 @@ class TrackingService : Service() {
     // a brand-new ride rather than resuming the finished one.
     private fun maybeStandbyStart(fix: ValidatedLocationFix) {
         val speed = fix.speedMps ?: return
-        val startMps = (AppSettings.autoPauseSpeedKmh.value + AUTO_RESUME_MARGIN_KMH) / MPS_TO_KMH
+        val startMps = resumeSpeedMps(AppSettings.autoPauseSpeedKmh.value)
         val now = fix.elapsedRealtimeNanos / 1_000_000L
         if (speed >= startMps) {
             if (movingSince == 0L) movingSince = now

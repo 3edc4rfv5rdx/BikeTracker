@@ -7,6 +7,7 @@ import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.PREFS_NAME
 
 /** Default rider weight (kg) until the user sets their own — a rough adult average. */
@@ -18,6 +19,9 @@ const val DEFAULT_AUTO_PAUSE_HOLD_SEC = 10
 const val DEFAULT_AUTO_SAVE_MIN = 10
 /** Auto-resume speed is derived, not stored: this much above the pause threshold (hysteresis). */
 const val AUTO_RESUME_MARGIN_KMH = 1
+
+/** Resume/standby-start threshold in m/s, derived from the pause threshold plus the hysteresis margin. */
+fun resumeSpeedMps(pauseSpeedKmh: Int): Double = (pauseSpeedKmh + AUTO_RESUME_MARGIN_KMH) / MPS_TO_KMH
 
 /** Light/dark override; SYSTEM follows the device setting. */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }

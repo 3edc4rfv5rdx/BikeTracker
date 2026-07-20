@@ -4,8 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
-import xx.biketracker.AUTO_RESUME_SPEED_MPS
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
+import xx.biketracker.settings.AUTO_RESUME_MARGIN_KMH
+import xx.biketracker.settings.DEFAULT_AUTO_PAUSE_SPEED_KMH
+import xx.biketracker.settings.resumeSpeedMps
 
 class LocationValidationTest {
 
@@ -81,17 +83,33 @@ class LocationValidationTest {
 
     @Test
     fun validResumeSpeedFixIsAccepted() {
+        val resumeSpeed = resumeSpeedMps(DEFAULT_AUTO_PAUSE_SPEED_KMH)
         val previous = validateLocationFix(candidate(), previous = null)!!
         val resume = candidate(
             lat = previous.lat + 0.00001,
             elapsedRealtimeNanos = previous.elapsedRealtimeNanos + 1_000_000_000L,
-            speedMps = AUTO_RESUME_SPEED_MPS,
+            speedMps = resumeSpeed,
             altitudeMeters = null,
             bearingDegrees = null,
         )
 
         val validated = validateLocationFix(resume, previous)
         assertNotNull(validated)
-        assertEquals(AUTO_RESUME_SPEED_MPS, validated!!.speedMps!!, 0.0)
+        assertEquals(resumeSpeed, validated!!.speedMps!!, 0.0)
+    }
+
+    @Test
+    fun resumeThresholdSitsOneMarginAboveTheConfiguredPauseSpeed() {
+        assertEquals(
+            (DEFAULT_AUTO_PAUSE_SPEED_KMH + AUTO_RESUME_MARGIN_KMH) / 3.6,
+            resumeSpeedMps(DEFAULT_AUTO_PAUSE_SPEED_KMH),
+            1e-9,
+        )
+        // A raised pause threshold lifts the resume threshold by the same fixed margin.
+        assertEquals(
+            resumeSpeedMps(DEFAULT_AUTO_PAUSE_SPEED_KMH) + AUTO_RESUME_MARGIN_KMH / 3.6,
+            resumeSpeedMps(DEFAULT_AUTO_PAUSE_SPEED_KMH + 1),
+            1e-9,
+        )
     }
 }
