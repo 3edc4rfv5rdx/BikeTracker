@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Speed smoothing no longer bleeds across a pause or GPS outage: each recording segment is averaged on its own.
+- A short pause with movement now correctly splits the track, chart, and distance instead of being drawn as continuous, via a persisted segment-boundary flag.
 - Speed-chart X axis now keeps a bounded, round tick spacing on arbitrarily long rides instead of crowding labels.
 - History summary now totals the current calendar Week, Month, and Year instead of rolling 7/30/365-day windows.
 - The paused Stop button's light grey is now a shared named color.

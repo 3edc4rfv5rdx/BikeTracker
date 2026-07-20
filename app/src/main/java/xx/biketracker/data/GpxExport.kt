@@ -6,7 +6,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import xx.biketracker.isRecordingGap
+import xx.biketracker.isSegmentBoundary
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -50,7 +50,7 @@ fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
     var open = false
     for (i in points.indices) {
         val p = points[i]
-        val startSeg = i == 0 || isRecordingGap(points[i - 1].time, p.time)
+        val startSeg = i == 0 || isSegmentBoundary(points[i - 1].time, p.time, p.segmentStart)
         if (startSeg) {
             if (open) sb.append("    </trkseg>\n")
             sb.append("    <trkseg>\n")

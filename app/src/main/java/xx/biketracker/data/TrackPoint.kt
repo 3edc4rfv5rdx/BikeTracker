@@ -29,4 +29,8 @@ data class TrackPoint(
     val time: Long,               // epoch millis
     val speedMps: Float,          // instantaneous speed reported by the GPS fix
     val altitudeMeters: Double? = null, // GPS altitude if the fix had one, else null (added in schema v2)
+    // True on the first fix after a pause or GPS outage — the recording-segment boundary, so a
+    // short pause splits regardless of the wall-clock gap (added in schema v6). Old rows are 0
+    // and fall back to the wall-time gap heuristic; see isSegmentBoundary.
+    val segmentStart: Boolean = false,
 )

@@ -74,7 +74,7 @@ import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.formatSpeedKmh
 import xx.biketracker.haversineMeters
-import xx.biketracker.isRecordingGap
+import xx.biketracker.isSegmentBoundary
 import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.ScrubBlue
 import xx.biketracker.ui.gestureBuzz
@@ -111,24 +111,42 @@ internal class SpeedSample(
     val timeMillis: Long,
     val movingTimeMillis: Long,
     val speedMps: Float, // smoothed for display
+    val segmentStart: Boolean, // true where a pause/outage breaks the plotted line
 )
 
 internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
     if (route.size < 2) return emptyList()
     val half = SPEED_SMOOTH_WINDOW / 2
+    // Recording-segment id per point: a pause/outage boundary starts a new one, so cumulative
+    // distance/time and the smoothing window never cross it.
+    val segId = IntArray(route.size)
+    for (i in 1 until route.size) {
+        val boundary = isSegmentBoundary(route[i - 1].timeMillis, route[i].timeMillis, route[i].segmentStart)
+        segId[i] = segId[i - 1] + if (boundary) 1 else 0
+    }
+    // First and last index of each segment, so the smoothing window can clamp to the segment.
+    val segFirst = IntArray(segId.last() + 1)
+    val segLast = IntArray(segId.last() + 1)
+    for (i in route.indices) {
+        if (i == 0 || segId[i] != segId[i - 1]) segFirst[segId[i]] = i
+        segLast[segId[i]] = i
+    }
     val samples = ArrayList<SpeedSample>(route.size)
     var distance = 0.0
     var movingMillis = 0L
     for (i in route.indices) {
-        if (i > 0 && !isRecordingGap(route[i - 1].timeMillis, route[i].timeMillis)) {
+        val boundary = i > 0 && segId[i] != segId[i - 1]
+        if (i > 0 && !boundary) {
             distance += haversineMeters(route[i - 1].lat, route[i - 1].lon, route[i].lat, route[i].lon)
             movingMillis += (route[i].timeMillis - route[i - 1].timeMillis).coerceAtLeast(0L)
         }
-        val from = max(0, i - half)
-        val to = min(route.lastIndex, i + half)
+        // Average only within the current segment: a stopped fix before a pause must not drag
+        // the speeds after it, and vice versa.
+        val from = max(segFirst[segId[i]], i - half)
+        val to = min(segLast[segId[i]], i + half)
         var sum = 0f
         for (j in from..to) sum += route[j].speedMps
-        samples += SpeedSample(distance, route[i].timeMillis, movingMillis, sum / (to - from + 1))
+        samples += SpeedSample(distance, route[i].timeMillis, movingMillis, sum / (to - from + 1), boundary)
     }
     return samples
 }
@@ -644,7 +662,7 @@ private fun DrawScope.drawSpeedChart(
     var gapSinceLastVertex = false
     var lastVertex = -1
     for (i in samples.indices) {
-        if (i > 0 && isRecordingGap(samples[i - 1].timeMillis, samples[i].timeMillis)) {
+        if (samples[i].segmentStart) {
             gapSinceLastVertex = true
         }
         if (i != 0 && i != samples.lastIndex && i - lastVertex < vertexStride) continue

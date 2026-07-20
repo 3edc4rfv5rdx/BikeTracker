@@ -9,8 +9,8 @@ import xx.biketracker.GeoPoint
 class SpeedSamplesTest {
 
     /** Points on one parallel, evenly spaced in longitude, so every step covers the same meters. */
-    private fun point(index: Int, timeMillis: Long, speedMps: Float = 5f) =
-        GeoPoint(50.0, 30.0 + index * 1e-4, timeMillis, speedMps)
+    private fun point(index: Int, timeMillis: Long, speedMps: Float = 5f, segmentStart: Boolean = false) =
+        GeoPoint(50.0, 30.0 + index * 1e-4, timeMillis, speedMps, segmentStart)
 
     @Test
     fun fewerThanTwoPointsYieldNoSamples() {
@@ -60,5 +60,47 @@ class SpeedSamplesTest {
         val route = (0..3).map { point(it, timeMillis = 0L) }
         val samples = buildSpeedSamples(route)
         assertTrue(samples.last().distanceMeters > samples[1].distanceMeters)
+    }
+
+    /** A stopped segment, then a fast one split by an explicit boundary two seconds later. */
+    private fun stoppedThenFastRide(): List<GeoPoint> {
+        val stopped = (0..4).map { point(it, it * GPS_INTERVAL_MS, speedMps = 0f) }
+        val resumeAt = 4 * GPS_INTERVAL_MS + 2_000L
+        val fast = (5..9).map {
+            point(it, resumeAt + (it - 5) * GPS_INTERVAL_MS, speedMps = 20f, segmentStart = it == 5)
+        }
+        return stopped + fast
+    }
+
+    @Test
+    fun smoothingNeverCrossesASegmentBoundary() {
+        val samples = buildSpeedSamples(stoppedThenFastRide())
+        // The window stays inside each segment, so the stopped tail and the fast head keep their
+        // own averages instead of bleeding across the pause.
+        assertEquals(0f, samples[4].speedMps, 1e-6f)
+        assertEquals(20f, samples[5].speedMps, 1e-6f)
+    }
+
+    @Test
+    fun flaggedBoundaryBreaksDistanceEvenUnderTheGapThreshold() {
+        val samples = buildSpeedSamples(stoppedThenFastRide())
+        assertTrue(samples[5].segmentStart)
+        // The 2 s gap is under the stale threshold, yet the boundary adds neither distance nor time.
+        assertEquals(samples[4].distanceMeters, samples[5].distanceMeters, 1e-9)
+        assertEquals(samples[4].movingTimeMillis, samples[5].movingTimeMillis)
+    }
+
+    @Test
+    fun segmentShorterThanTheWindowAveragesWithinItself() {
+        // A two-point second segment must average only its own points, not reach into the first.
+        val first = (0..4).map { point(it, it * GPS_INTERVAL_MS, speedMps = 2f) }
+        val resumeAt = 4 * GPS_INTERVAL_MS + 2_000L
+        val second = listOf(
+            point(5, resumeAt, speedMps = 10f, segmentStart = true),
+            point(6, resumeAt + GPS_INTERVAL_MS, speedMps = 10f),
+        )
+        val samples = buildSpeedSamples(first + second)
+        assertEquals(10f, samples[5].speedMps, 1e-6f)
+        assertEquals(10f, samples[6].speedMps, 1e-6f)
     }
 }

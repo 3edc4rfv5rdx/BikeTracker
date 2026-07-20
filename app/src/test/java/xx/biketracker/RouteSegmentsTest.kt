@@ -5,8 +5,8 @@ import org.junit.Test
 
 class RouteSegmentsTest {
 
-    private fun point(index: Int, timeMillis: Long) =
-        GeoPoint(50.0 + index * 1e-4, 30.0 + index * 1e-4, timeMillis)
+    private fun point(index: Int, timeMillis: Long, segmentStart: Boolean = false) =
+        GeoPoint(50.0 + index * 1e-4, 30.0 + index * 1e-4, timeMillis, segmentStart = segmentStart)
 
     /** Points at the normal GPS cadence, then a gap, then more points. */
     private fun rideWithGap(gapMillis: Long): List<GeoPoint> {
@@ -41,6 +41,28 @@ class RouteSegmentsTest {
     fun shortDeliveryHiccupDoesNotSplit() {
         val segments = splitRouteSegments(rideWithGap(gapMillis = GPS_STALE_MS))
         assertEquals(1, segments.size)
+    }
+
+    @Test
+    fun shortPauseWithFlagSplitsRegardlessOfGap() {
+        // Rider pauses, rolls a few meters, resumes within 2 s: the wall gap is under the stale
+        // threshold, so only the explicit boundary flag can split the segment.
+        val before = (0..3).map { point(it, it * GPS_INTERVAL_MS) }
+        val resumeAt = 3 * GPS_INTERVAL_MS + 2_000L
+        val after = (4..7).map { point(it, resumeAt + (it - 4) * GPS_INTERVAL_MS, segmentStart = it == 4) }
+        val segments = splitRouteSegments(before + after)
+        assertEquals(2, segments.size)
+        assertEquals(before, segments[0])
+        assertEquals(after, segments[1])
+    }
+
+    @Test
+    fun sameShortGapWithoutFlagStaysContinuous() {
+        // Identical 2 s gap but no pause: a location-delivery hiccup must not split the ride.
+        val before = (0..3).map { point(it, it * GPS_INTERVAL_MS) }
+        val resumeAt = 3 * GPS_INTERVAL_MS + 2_000L
+        val after = (4..7).map { point(it, resumeAt + (it - 4) * GPS_INTERVAL_MS) }
+        assertEquals(1, splitRouteSegments(before + after).size)
     }
 
     @Test

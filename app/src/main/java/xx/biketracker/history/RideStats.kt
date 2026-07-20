@@ -6,7 +6,7 @@ import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.data.TrackPoint
 import xx.biketracker.elevationGainMeters
 import xx.biketracker.haversineMeters
-import xx.biketracker.isRecordingGap
+import xx.biketracker.isSegmentBoundary
 
 /** Upper bounds (km/h) of the speed-histogram buckets; the last bucket is open-ended, so these
  *  three bounds make four buckets: 0-10, 10-20, 20-30, 30+. */
@@ -60,7 +60,7 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
         if (i > 0) {
             val prev = points[i - 1]
             val dt = (p.time - prev.time).coerceAtLeast(0L)
-            if (isRecordingGap(prev.time, p.time)) {
+            if (isSegmentBoundary(prev.time, p.time, p.segmentStart)) {
                 runMillis += dt // a pause/outage is stopped time, and closes the run around it
                 closeRun()
             } else {

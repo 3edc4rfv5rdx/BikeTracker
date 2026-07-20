@@ -61,7 +61,7 @@ fun MapScreen() {
     LaunchedEffect(selected?.id) {
         selectedRoute = selected?.let { trip ->
             AppDatabase.get(context).tripDao().getPoints(trip.id)
-                .map { GeoPoint(it.lat, it.lon, it.time, it.speedMps) }
+                .map { GeoPoint(it.lat, it.lon, it.time, it.speedMps, it.segmentStart) }
         } ?: emptyList()
     }
 

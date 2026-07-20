@@ -10,7 +10,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-internal const val CURRENT_SCHEMA_VERSION = 5
+internal const val CURRENT_SCHEMA_VERSION = 6
 
 @Database(
     entities = [Trip::class, TrackPoint::class],
@@ -63,8 +63,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v5 -> v6: explicit recording-segment boundary flag (existing points stay 0 and fall
+         *  back to the wall-time gap heuristic; see isSegmentBoundary). */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE track_points ADD COLUMN segmentStart INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         /** Full migration path; internal so the instrumentation tests validate the same objects. */
-        internal val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        internal val MIGRATIONS =
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 
         @Volatile
         private var instance: AppDatabase? = null

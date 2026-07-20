@@ -86,6 +86,17 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate5To6_existingPointsGetNonSegmentStart() {
+        seedV1()
+        helper.runMigrationsAndValidate(TEST_DB, 5, true, *AppDatabase.MIGRATIONS).close()
+        val db = helper.runMigrationsAndValidate(TEST_DB, 6, true, *AppDatabase.MIGRATIONS)
+        db.query("SELECT segmentStart FROM track_points").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+    }
+
+    @Test
     fun migrateAll_fromV1ToCurrentKeepsRows() {
         seedV1()
         val db = helper.runMigrationsAndValidate(

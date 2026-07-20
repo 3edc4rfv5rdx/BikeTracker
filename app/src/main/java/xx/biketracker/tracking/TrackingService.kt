@@ -181,6 +181,9 @@ class TrackingService : Service() {
     private var maxSpeedMps = 0.0
     private var lastPoint: TrackPoint? = null
     private var lastPointElapsedRealtimeNanos: Long? = null
+    // Set when a pause breaks the segment; the next recorded fix marks the boundary explicitly so
+    // a short pause still splits at display time regardless of the wall-clock gap.
+    private var pendingSegmentStart = false
     private var lastTrustedFix: ValidatedLocationFix? = null
     private var lastTrustedFixElapsedRealtime = 0L
     private val points = mutableListOf<TrackPoint>()
@@ -337,6 +340,7 @@ class TrackingService : Service() {
         lastTrustedFixElapsedRealtime = 0L
         lastPoint = null
         lastPointElapsedRealtimeNanos = null
+        pendingSegmentStart = false
         points.clear()
         route.clear()
         distanceMeters = 0.0
@@ -501,6 +505,9 @@ class TrackingService : Service() {
         // A long outage (tunnel, indoors) produces no fixes, so auto-pause can't trigger; without
         // this break the first fix after the gap would add the whole outage to the moving time.
         val gapped = prev != null && dt > GPS_STALE_MS
+        // This fix opens a new recording segment if a pause broke the track or an outage gapped it.
+        val segmentStart = pendingSegmentStart || gapped
+        pendingSegmentStart = false
 
         // Kalman-smooth the fix; the track and the distance both build on filtered points,
         // so standstill jitter neither paints zigzags nor inflates the total.
@@ -525,11 +532,16 @@ class TrackingService : Service() {
             time = fix.wallTimeMillis,
             speedMps = fix.speedMps?.toFloat() ?: 0f,
             altitudeMeters = fix.altitudeMeters,
+            segmentStart = segmentStart,
         )
         points += point
-        // The wall time lets the map split the drawn line at pause/outage gaps; the speed
+        // The segment flag lets the map and chart split at pause/outage boundaries; the speed
         // feeds the live speed chart.
-        route += smoothed.copy(timeMillis = fix.wallTimeMillis, speedMps = fix.speedMps?.toFloat() ?: 0f)
+        route += smoothed.copy(
+            timeMillis = fix.wallTimeMillis,
+            speedMps = fix.speedMps?.toFloat() ?: 0f,
+            segmentStart = segmentStart,
+        )
         lastPoint = point
         lastPointElapsedRealtimeNanos = nowElapsedNanos
         if (points.size - scheduledFlushCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
@@ -569,9 +581,11 @@ class TrackingService : Service() {
         status = TrackingStatus.PAUSED
         pausedAutomatically = automatic
         lowSpeedSince = 0L
-        // Break the segment so the paused gap adds neither distance nor time.
+        // Break the segment so the paused gap adds neither distance nor time, and mark the next
+        // recorded fix as a new segment's start.
         lastPoint = null
         lastPointElapsedRealtimeNanos = null
+        pendingSegmentStart = true
         flushDraft() // checkpoint the ride at every pause
         scheduleAutoSave()
         updateNotification()
