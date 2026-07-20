@@ -103,7 +103,8 @@ class RideStatsTest {
         assertEquals(0, stats.stopCount)
         assertEquals(0L, stats.stoppedMillis)
         assertEquals(2_000L, stats.speedZoneMillis[0]) // the two slow seconds
-        assertEquals(4_000L, stats.speedZoneMillis.sum())
+        // Four points span three 1 s intervals: two slow + one moving.
+        assertEquals(3_000L, stats.speedZoneMillis.sum())
     }
 
     @Test

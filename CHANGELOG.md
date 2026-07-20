@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed an off-by-one in a ride-stats test that expected four intervals from four points instead of three.
 - Fixed the GPX export tests to check track-point times only, not the document's metadata time, which had made three of them fail.
 - Added unit tests for elevation gain, route smoothing, the GPS Kalman filter, and duration/pace formatting, plus a lint runner (05-Lint.sh) and a unit-test runner (06-Test.sh) that print findings as text.
 - Added unit tests for the timing helpers (monotonicStepMillis, isRecordingGap, isSegmentBoundary) and the ride formulas (avgSpeedMps, cyclingMet, caloriesKcal, haversineMeters).
