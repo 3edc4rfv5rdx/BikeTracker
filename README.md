@@ -25,7 +25,7 @@ are the timestamped ZIP backups you create yourself in Settings
   to the track and reads out that point's speed, distance, and clock time, with pinch-zoom
   and one-finger pan after a long-press. Tapping the map near the track moves the marker too.
 - **History** — rides browsed through an expandable year → month → day tree, with
-  rolling 7/30/365-day and all-time summaries and per-ride details (distance, time, pace,
+  calendar week/month/year and all-time summaries and per-ride details (distance, time, pace,
   average and max speed, elevation gain, calorie estimate). Each ride opens its track on the
   Map tab; a per-ride ⋮ menu names/comments the ride, opens extended statistics, or exports
   GPX. The ride currently on the Map tab is marked with an inverted card.

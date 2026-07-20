@@ -80,8 +80,9 @@ const val DAY_MS = 24L * 60L * 60L * 1000L
 
 /**
  * Milliseconds from [nowMillis] to the next local midnight in [timeZone] — the boundary at
- * which day-granular UI (rolling history windows) re-anchors itself. Calendar-based, so DST
- * days of 23/25 hours land on the true midnight; always at least 1 ms to keep timer loops safe.
+ * which day-granular UI (the calendar week/month/year History windows) re-anchors itself.
+ * Calendar-based, so DST days of 23/25 hours land on the true midnight; always at least 1 ms to
+ * keep timer loops safe.
  */
 fun millisUntilNextMidnight(nowMillis: Long, timeZone: TimeZone = TimeZone.getDefault()): Long {
     val calendar = Calendar.getInstance(timeZone).apply {

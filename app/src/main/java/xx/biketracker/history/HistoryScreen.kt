@@ -1,5 +1,9 @@
 package xx.biketracker.history
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,9 +36,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,14 +114,33 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     // calendar week, month, and year, so the labels name real periods rather than rolling spans.
     // The anchor re-arms at every local midnight (all three boundaries fall on a midnight), so the
     // windows advance even when this screen stays alive across a day, week, month, or year rollover;
-    // day granularity keeps the Room flows from being recreated more often than they can change. A
-    // timezone change is picked up at the next rollover (or by recomposition when the tab is revisited).
+    // day granularity keeps the Room flows from being recreated more often than they can change.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
+    // Bumped by the clock-change receiver below to restart the timer against the current timezone.
+    var clockEpoch by remember { mutableIntStateOf(0) }
+    LaunchedEffect(clockEpoch) {
         while (true) {
             delay(millisUntilNextMidnight(System.currentTimeMillis()))
             now = System.currentTimeMillis()
         }
+    }
+    // A timezone or manual clock/date change can move the current week/month/year boundaries with no
+    // rollover ever elapsing, leaving the totals on the old cutoffs. Observe those system broadcasts
+    // while the screen is active and re-anchor immediately, rescheduling the next midnight too.
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                now = System.currentTimeMillis()
+                clockEpoch++
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_DATE_CHANGED)
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
     }
     val empty = RideTotals(0.0, 0, 0)
     val week by remember(now) { dao.observeTotals(startOfWeekMillis(now)) }.collectAsState(initial = empty)
