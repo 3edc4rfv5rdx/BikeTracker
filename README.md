@@ -40,6 +40,9 @@ are the timestamped ZIP backups you create yourself in Settings
 - **GPX export** — a ride's track is written to a GPX file (segments split at pauses, the
   ride name and comment carried into the track) under `Documents/BikeTracker/GPX-export` and
   opened straight into the system share sheet.
+- **GPX import** — a Map top-bar button opens any GPX file and shows its track (drawn in dark
+  green) and derived speed chart on the map, read-only: it is for viewing only and is never
+  saved to your rides.
 - **Settings** — in-app language (English / Ukrainian / Russian) via per-app locales,
   light/dark/system theme, accent color, your weight for the calorie estimate, a Recording
   section to configure auto-pause (speed threshold, hold time, auto-save timeout), and full

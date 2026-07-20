@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- README Features now list the read-only GPX import.
 - The Map tab can now import a GPX file to view its track (drawn in dark green) and speed chart read-only, without saving it; a top-bar button opens the file, and its name and a close button appear like an opened ride.
 - README Recording section now covers the post-long-pause standby and auto-restart behaviour.
 - GPX export now fails safely and cleans up if MediaStore publication doesn't complete, and stamps monotonic point times so a mid-ride clock change can't make exported timestamps run backward.
