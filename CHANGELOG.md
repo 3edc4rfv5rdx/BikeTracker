@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.5.20260720+144
 
 - Speed-chart panel height now tracks the actual window size (correct in split-screen/multi-window) instead of the whole display.
 - Silenced two false-positive lint warnings with documented suppressions (intentional weekday-array caching, application-context offline region).
