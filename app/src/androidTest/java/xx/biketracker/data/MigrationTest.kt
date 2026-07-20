@@ -97,6 +97,17 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate6To7_existingPointsGetNullElapsed() {
+        seedV1()
+        helper.runMigrationsAndValidate(TEST_DB, 6, true, *AppDatabase.MIGRATIONS).close()
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, *AppDatabase.MIGRATIONS)
+        db.query("SELECT elapsedMillis FROM track_points").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertTrue(cursor.isNull(0))
+        }
+    }
+
+    @Test
     fun migrateAll_fromV1ToCurrentKeepsRows() {
         seedV1()
         val db = helper.runMigrationsAndValidate(

@@ -60,7 +60,7 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
         if (i > 0) {
             val prev = points[i - 1]
             val dt = (p.time - prev.time).coerceAtLeast(0L)
-            if (isSegmentBoundary(prev.time, p.time, p.segmentStart)) {
+            if (isSegmentBoundary(prev.time, p.time, p.segmentStart, p.elapsedMillis != null)) {
                 runMillis += dt // a pause/outage is stopped time, and closes the run around it
                 closeRun()
             } else {

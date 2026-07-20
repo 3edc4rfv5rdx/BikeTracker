@@ -76,6 +76,27 @@ class RouteSegmentsTest {
     }
 
     @Test
+    fun forwardClockJumpOnNewRideDoesNotSplit() {
+        // New ride: points carry elapsed metadata and no boundary flag, so a forward wall-clock
+        // jump larger than the stale threshold must not be misread as a pause.
+        val route = listOf(
+            GeoPoint(50.0, 30.0, timeMillis = 1_000L, elapsedMillis = 0L),
+            GeoPoint(50.0001, 30.0001, timeMillis = 3_600_000L, elapsedMillis = 1_000L),
+            GeoPoint(50.0002, 30.0002, timeMillis = 3_601_000L, elapsedMillis = 2_000L),
+        )
+        assertEquals(1, splitRouteSegments(route).size)
+    }
+
+    @Test
+    fun flaggedBoundaryOnNewRideStillSplits() {
+        val route = listOf(
+            GeoPoint(50.0, 30.0, timeMillis = 1_000L, elapsedMillis = 0L),
+            GeoPoint(50.0001, 30.0001, timeMillis = 2_000L, elapsedMillis = 1_000L, segmentStart = true),
+        )
+        assertEquals(2, splitRouteSegments(route).size)
+    }
+
+    @Test
     fun untimedOldRouteStaysOneSegment() {
         val route = (0..5).map { point(it, timeMillis = 0L) }
         assertEquals(listOf(route), splitRouteSegments(route))

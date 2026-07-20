@@ -33,4 +33,8 @@ data class TrackPoint(
     // short pause splits regardless of the wall-clock gap (added in schema v6). Old rows are 0
     // and fall back to the wall-time gap heuristic; see isSegmentBoundary.
     val segmentStart: Boolean = false,
+    // Monotonic elapsed-realtime millis since ride start — the wall-clock-safe basis for the
+    // speed chart's time axis (added in schema v7). NULL on rides recorded before it existed;
+    // those fall back to the epoch time. See buildSpeedSamples.
+    val elapsedMillis: Long? = null,
 )

@@ -10,7 +10,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-internal const val CURRENT_SCHEMA_VERSION = 6
+internal const val CURRENT_SCHEMA_VERSION = 7
 
 @Database(
     entities = [Trip::class, TrackPoint::class],
@@ -71,9 +71,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v6 -> v7: monotonic elapsed-realtime millis per point for a wall-clock-safe time axis
+         *  (nullable; existing points stay NULL and fall back to the epoch time). */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE track_points ADD COLUMN elapsedMillis INTEGER")
+            }
+        }
+
         /** Full migration path; internal so the instrumentation tests validate the same objects. */
-        internal val MIGRATIONS =
-            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        internal val MIGRATIONS = arrayOf(
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+        )
 
         @Volatile
         private var instance: AppDatabase? = null

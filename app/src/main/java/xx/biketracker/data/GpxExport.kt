@@ -50,7 +50,7 @@ fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
     var open = false
     for (i in points.indices) {
         val p = points[i]
-        val startSeg = i == 0 || isSegmentBoundary(points[i - 1].time, p.time, p.segmentStart)
+        val startSeg = i == 0 || isSegmentBoundary(points[i - 1].time, p.time, p.segmentStart, p.elapsedMillis != null)
         if (startSeg) {
             if (open) sb.append("    </trkseg>\n")
             sb.append("    <trkseg>\n")

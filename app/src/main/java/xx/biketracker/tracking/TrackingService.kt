@@ -508,6 +508,8 @@ class TrackingService : Service() {
         // This fix opens a new recording segment if a pause broke the track or an outage gapped it.
         val segmentStart = pendingSegmentStart || gapped
         pendingSegmentStart = false
+        // Monotonic time since ride start; wall-clock-safe basis for the chart's time axis.
+        val elapsedSinceStart = (nowElapsedMillis - startElapsedRealtime).coerceAtLeast(0L)
 
         // Kalman-smooth the fix; the track and the distance both build on filtered points,
         // so standstill jitter neither paints zigzags nor inflates the total.
@@ -533,14 +535,16 @@ class TrackingService : Service() {
             speedMps = fix.speedMps?.toFloat() ?: 0f,
             altitudeMeters = fix.altitudeMeters,
             segmentStart = segmentStart,
+            elapsedMillis = elapsedSinceStart,
         )
         points += point
-        // The segment flag lets the map and chart split at pause/outage boundaries; the speed
-        // feeds the live speed chart.
+        // The segment flag lets the map and chart split at pause/outage boundaries; the elapsed
+        // time drives the chart's monotonic time axis; the speed feeds the live speed chart.
         route += smoothed.copy(
             timeMillis = fix.wallTimeMillis,
             speedMps = fix.speedMps?.toFloat() ?: 0f,
             segmentStart = segmentStart,
+            elapsedMillis = elapsedSinceStart,
         )
         lastPoint = point
         lastPointElapsedRealtimeNanos = nowElapsedNanos

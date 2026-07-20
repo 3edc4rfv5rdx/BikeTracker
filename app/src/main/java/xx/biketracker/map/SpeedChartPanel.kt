@@ -104,15 +104,32 @@ private const val MAX_X_TICKS = 6
  * One chart sample per route point, so a chart index is also an index into the route —
  * the scrub selection travels to the map as that index. [distanceMeters] and
  * [movingTimeMillis] are cumulative along the recorded track; like the trip totals, a
- * pause/outage gap adds nothing to either.
+ * pause/outage gap adds nothing to either. [elapsedMillis] is the monotonic time-since-start
+ * used as the time X axis and the scrub search key; [timeMillis] is the epoch wall time, kept
+ * only for the human-readable clock label so a mid-ride clock change can't distort the axis.
  */
 internal class SpeedSample(
     val distanceMeters: Double,
     val timeMillis: Long,
+    val elapsedMillis: Long,
     val movingTimeMillis: Long,
     val speedMps: Float, // smoothed for display
     val segmentStart: Boolean, // true where a pause/outage breaks the plotted line
 )
+
+/** Monotonic time step (ms) between two consecutive points: the persisted elapsed-realtime delta
+ *  when both points carry it, otherwise the wall-clock delta. Clamped to ≥ 0 so a backward clock
+ *  change can never make cumulative time or the chart's time axis run backward. */
+private fun elapsedStepMillis(prev: GeoPoint, curr: GeoPoint): Long {
+    val prevElapsed = prev.elapsedMillis
+    val currElapsed = curr.elapsedMillis
+    val delta = if (prevElapsed != null && currElapsed != null) {
+        currElapsed - prevElapsed
+    } else {
+        curr.timeMillis - prev.timeMillis
+    }
+    return delta.coerceAtLeast(0L)
+}
 
 internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
     if (route.size < 2) return emptyList()
@@ -121,7 +138,9 @@ internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
     // distance/time and the smoothing window never cross it.
     val segId = IntArray(route.size)
     for (i in 1 until route.size) {
-        val boundary = isSegmentBoundary(route[i - 1].timeMillis, route[i].timeMillis, route[i].segmentStart)
+        val boundary = isSegmentBoundary(
+            route[i - 1].timeMillis, route[i].timeMillis, route[i].segmentStart, route[i].elapsedMillis != null,
+        )
         segId[i] = segId[i - 1] + if (boundary) 1 else 0
     }
     // First and last index of each segment, so the smoothing window can clamp to the segment.
@@ -134,11 +153,14 @@ internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
     val samples = ArrayList<SpeedSample>(route.size)
     var distance = 0.0
     var movingMillis = 0L
+    var elapsed = 0L
     for (i in route.indices) {
         val boundary = i > 0 && segId[i] != segId[i - 1]
+        val step = if (i == 0) 0L else elapsedStepMillis(route[i - 1], route[i])
+        elapsed += step // includes pauses, so the axis spans the whole ride; always monotonic
         if (i > 0 && !boundary) {
             distance += haversineMeters(route[i - 1].lat, route[i - 1].lon, route[i].lat, route[i].lon)
-            movingMillis += (route[i].timeMillis - route[i - 1].timeMillis).coerceAtLeast(0L)
+            movingMillis += step // a boundary's pause step is excluded, so this stays moving time
         }
         // Average only within the current segment: a stopped fix before a pause must not drag
         // the speeds after it, and vice versa.
@@ -146,7 +168,14 @@ internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
         val to = min(segLast[segId[i]], i + half)
         var sum = 0f
         for (j in from..to) sum += route[j].speedMps
-        samples += SpeedSample(distance, route[i].timeMillis, movingMillis, sum / (to - from + 1), boundary)
+        samples += SpeedSample(
+            distanceMeters = distance,
+            timeMillis = route[i].timeMillis,
+            elapsedMillis = elapsed,
+            movingTimeMillis = movingMillis,
+            speedMps = sum / (to - from + 1),
+            segmentStart = boundary,
+        )
     }
     return samples
 }
@@ -501,9 +530,9 @@ private fun scrubFraction(samples: List<SpeedSample>, axisDistance: Boolean, scr
         val last = samples.last().distanceMeters
         if (last <= 0.0) 0.0 else sample.distanceMeters / last
     } else {
-        val t0 = samples.first().timeMillis
-        val span = (samples.last().timeMillis - t0).toDouble()
-        if (span <= 0.0) 0.0 else (sample.timeMillis - t0) / span
+        val t0 = samples.first().elapsedMillis
+        val span = (samples.last().elapsedMillis - t0).toDouble()
+        if (span <= 0.0) 0.0 else (sample.elapsedMillis - t0) / span
     }
     return frac.toFloat().coerceIn(0f, 1f)
 }
@@ -541,8 +570,8 @@ private fun scrubTo(
     val index = if (axisDistance) {
         nearestSampleIndex(samples, samples.last().distanceMeters * fraction) { it.distanceMeters }
     } else {
-        val t0 = samples.first().timeMillis
-        nearestSampleIndex(samples, t0 + (samples.last().timeMillis - t0) * fraction) { it.timeMillis.toDouble() }
+        val t0 = samples.first().elapsedMillis
+        nearestSampleIndex(samples, t0 + (samples.last().elapsedMillis - t0) * fraction) { it.elapsedMillis.toDouble() }
     }
     onScrub(index)
 }
@@ -603,12 +632,12 @@ private fun DrawScope.drawSpeedChart(
     val yMaxKmh = max(ceil(max(maxKmh, 1.0) / step) * step, step)
 
     // Visible X window in domain units; both domains are non-decreasing over the samples.
-    val t0 = samples.first().timeMillis
-    val xDomain = if (axisDistance) samples.last().distanceMeters else (samples.last().timeMillis - t0).toDouble()
+    val t0 = samples.first().elapsedMillis
+    val xDomain = if (axisDistance) samples.last().distanceMeters else (samples.last().elapsedMillis - t0).toDouble()
     val windowStart = viewStart * xDomain
     val windowSpan = (viewWidth * xDomain).coerceAtLeast(1e-9)
     fun domainOf(s: SpeedSample): Double =
-        if (axisDistance) s.distanceMeters else (s.timeMillis - t0).toDouble()
+        if (axisDistance) s.distanceMeters else (s.elapsedMillis - t0).toDouble()
     fun xOf(s: SpeedSample): Float =
         hPad + ((domainOf(s) - windowStart) / windowSpan * plotWidth).toFloat()
     fun yOf(speedMps: Float): Float =

@@ -9,8 +9,13 @@ import xx.biketracker.GeoPoint
 class SpeedSamplesTest {
 
     /** Points on one parallel, evenly spaced in longitude, so every step covers the same meters. */
-    private fun point(index: Int, timeMillis: Long, speedMps: Float = 5f, segmentStart: Boolean = false) =
-        GeoPoint(50.0, 30.0 + index * 1e-4, timeMillis, speedMps, segmentStart)
+    private fun point(
+        index: Int,
+        timeMillis: Long,
+        speedMps: Float = 5f,
+        segmentStart: Boolean = false,
+        elapsedMillis: Long? = null,
+    ) = GeoPoint(50.0, 30.0 + index * 1e-4, timeMillis, speedMps, segmentStart, elapsedMillis)
 
     @Test
     fun fewerThanTwoPointsYieldNoSamples() {
@@ -88,6 +93,46 @@ class SpeedSamplesTest {
         // The 2 s gap is under the stale threshold, yet the boundary adds neither distance nor time.
         assertEquals(samples[4].distanceMeters, samples[5].distanceMeters, 1e-9)
         assertEquals(samples[4].movingTimeMillis, samples[5].movingTimeMillis)
+    }
+
+    @Test
+    fun timeAxisIsMonotonicDespiteBackwardClockJump() {
+        // New ride carrying persisted elapsed time; the epoch clock steps backward mid-ride.
+        val route = listOf(
+            point(0, 100_000L, elapsedMillis = 0L),
+            point(1, 40_000L, elapsedMillis = 1_000L),
+            point(2, 41_000L, elapsedMillis = 2_000L),
+            point(3, 42_000L, elapsedMillis = 3_000L),
+        )
+        val samples = buildSpeedSamples(route)
+        for (i in 1 until samples.size) {
+            assertTrue(samples[i].elapsedMillis >= samples[i - 1].elapsedMillis)
+        }
+        assertEquals(3_000L, samples.last().elapsedMillis)
+    }
+
+    @Test
+    fun forwardClockJumpWithinSegmentDoesNotInflateMovingTimeOrSplit() {
+        val route = listOf(
+            point(0, 1_000L, elapsedMillis = 0L),
+            point(1, 3_600_000L, elapsedMillis = 1_000L), // +1 h clock jump, no real pause
+            point(2, 3_601_000L, elapsedMillis = 2_000L),
+        )
+        val samples = buildSpeedSamples(route)
+        // Moving time follows the monotonic elapsed clock, not the inflated epoch delta.
+        assertEquals(2_000L, samples.last().movingTimeMillis)
+        // And the jump is not misread as a segment boundary.
+        assertTrue(samples.none { it.segmentStart })
+    }
+
+    @Test
+    fun oldRideWithoutElapsedClampsBackwardEpochJump() {
+        // No elapsed metadata: the axis is rebuilt from epoch deltas, clamped so it never reverses.
+        val route = listOf(point(0, 100_000L), point(1, 40_000L), point(2, 41_000L))
+        val samples = buildSpeedSamples(route)
+        for (i in 1 until samples.size) {
+            assertTrue(samples[i].elapsedMillis >= samples[i - 1].elapsedMillis)
+        }
     }
 
     @Test

@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Speed-chart time axis and scrubbing now use a monotonic elapsed-time clock, so a mid-ride wall-clock change can't distort riding time or the axis.
 - Speed smoothing no longer bleeds across a pause or GPS outage: each recording segment is averaged on its own.
 - A short pause with movement now correctly splits the track, chart, and distance instead of being drawn as continuous, via a persisted segment-boundary flag.
 - Speed-chart X axis now keeps a bounded, round tick spacing on arbitrarily long rides instead of crowding labels.

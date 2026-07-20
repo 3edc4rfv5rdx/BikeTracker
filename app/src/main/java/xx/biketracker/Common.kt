@@ -140,17 +140,20 @@ fun startOfYearMillis(nowMillis: Long, timeZone: TimeZone = TimeZone.getDefault(
 const val PREFS_NAME = "biketracker_prefs"
 
 /** A latitude/longitude pair; the live route and stored track are ordered lists of these.
- *  [timeMillis] is the recording wall time (epoch), 0 when unknown. [speedMps] is the GPS speed
- *  of the fix (0 when the fix had none), carried so the speed chart can plot live and stored
- *  tracks alike. [segmentStart] is true on the first fix after a manual/auto pause or a GPS
- *  outage — the explicit recording-segment boundary ([isSegmentBoundary]); it is persisted, so
- *  short pauses split correctly regardless of the wall-clock gap. */
+ *  [timeMillis] is the recording wall time (epoch), 0 when unknown — kept for clock labels only.
+ *  [speedMps] is the GPS speed of the fix (0 when the fix had none), carried so the speed chart
+ *  can plot live and stored tracks alike. [segmentStart] is true on the first fix after a
+ *  manual/auto pause or a GPS outage — the explicit recording-segment boundary
+ *  ([isSegmentBoundary]); it is persisted, so short pauses split correctly regardless of the
+ *  wall-clock gap. [elapsedMillis] is monotonic time since ride start (from elapsed-realtime),
+ *  the wall-clock-safe basis for the chart's time axis; null on rides recorded before it existed. */
 data class GeoPoint(
     val lat: Double,
     val lon: Double,
     val timeMillis: Long = 0L,
     val speedMps: Float = 0f,
     val segmentStart: Boolean = false,
+    val elapsedMillis: Long? = null,
 )
 
 fun mpsToKmh(mps: Double): Double = mps * MPS_TO_KMH
@@ -252,12 +255,18 @@ fun isRecordingGap(prevTimeMillis: Long, timeMillis: Long): Boolean =
 /**
  * The boundary between two consecutive recorded fixes. A recording segment ends and a new one
  * begins at the first fix after a manual/auto pause or a GPS outage. New rides carry that
- * boundary explicitly ([segmentStart]), so a pause shorter than [GPS_STALE_MS] with movement
- * still splits; old rides (recorded before the flag existed) fall back to the wall-time gap
- * heuristic ([isRecordingGap]). Pass the two points' epoch times and the later point's flag.
+ * boundary explicitly ([segmentStart]) and are the authority — the wall-time gap is ignored, so
+ * a forward clock change can't be misread as a pause. Old rides (recorded before the flag, with
+ * no elapsed metadata) fall back to the wall-time gap heuristic ([isRecordingGap]). Pass the two
+ * points' epoch times, the later point's flag, and whether it carries elapsed metadata.
  */
-fun isSegmentBoundary(prevTimeMillis: Long, timeMillis: Long, segmentStart: Boolean): Boolean =
-    segmentStart || isRecordingGap(prevTimeMillis, timeMillis)
+fun isSegmentBoundary(
+    prevTimeMillis: Long,
+    timeMillis: Long,
+    segmentStart: Boolean,
+    hasElapsedMetadata: Boolean,
+): Boolean =
+    segmentStart || (!hasElapsedMetadata && isRecordingGap(prevTimeMillis, timeMillis))
 
 /**
  * Split a route into the segments that were actually recorded: drawing across a boundary
@@ -269,7 +278,7 @@ fun splitRouteSegments(route: List<GeoPoint>): List<List<GeoPoint>> {
     for (i in 1 until route.size) {
         val prev = route[i - 1]
         val point = route[i]
-        if (isSegmentBoundary(prev.timeMillis, point.timeMillis, point.segmentStart)) {
+        if (isSegmentBoundary(prev.timeMillis, point.timeMillis, point.segmentStart, point.elapsedMillis != null)) {
             segments += mutableListOf(point)
         } else {
             segments.last() += point
