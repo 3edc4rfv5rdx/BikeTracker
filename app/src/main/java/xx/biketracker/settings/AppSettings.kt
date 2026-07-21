@@ -15,7 +15,7 @@ const val DEFAULT_WEIGHT_KG = 73
 
 /** Auto-pause / auto-save defaults, mirroring the tracker's original hard-coded behaviour. */
 const val DEFAULT_AUTO_PAUSE_SPEED_KMH = 2
-const val DEFAULT_AUTO_PAUSE_HOLD_SEC = 10
+const val DEFAULT_AUTO_PAUSE_HOLD_SEC = 15
 const val DEFAULT_AUTO_SAVE_MIN = 10
 /** Auto-resume speed is derived, not stored: this much above the pause threshold (hysteresis). */
 const val AUTO_RESUME_MARGIN_KMH = 1

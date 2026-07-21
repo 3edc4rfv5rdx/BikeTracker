@@ -394,7 +394,7 @@ private fun SpeedChart(
     val style = ChartStyle(
         textMeasurer = textMeasurer,
         labelStyle = TextStyle(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
-        gridColor = MaterialTheme.colorScheme.outlineVariant,
+        gridColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         lineColor = AccentOrange,
         dotColor = ScrubBlue,
         axisColor = MaterialTheme.colorScheme.onSurfaceVariant,

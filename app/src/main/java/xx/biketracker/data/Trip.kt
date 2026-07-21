@@ -2,6 +2,7 @@ package xx.biketracker.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import xx.biketracker.formatRideStamp
 
 /**
  * One completed ride.
@@ -34,3 +35,8 @@ data class Trip(
     val title: String? = null,
     val note: String? = null,
 )
+
+/** The ride's display name: the rider's own title when set, else its start-time stamp. Shared by
+ *  the GPX track name and the map's ride label so both read identically. */
+fun Trip.displayName(): String =
+    title?.takeIf { it.isNotBlank() } ?: formatRideStamp(startTime)

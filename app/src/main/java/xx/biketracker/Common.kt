@@ -463,6 +463,11 @@ fun formatDayLabel(epochMillis: Long, weekdayNames: List<String>): String {
     return "${cal.get(Calendar.DAY_OF_MONTH)} ${weekdayNames[cal.get(Calendar.DAY_OF_WEEK) - 1]}"
 }
 
+/** Sortable date-time stamp "yyyy-MM-dd HH:mm" — a ride's default label and its GPX track name.
+ *  Locale.US keeps it identical to the exported/imported GPX name (the digits are locale-neutral). */
+fun formatRideStamp(epochMillis: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(epochMillis))
+
 /** Wall-clock time of day, "HH:mm" or "HH:mm:ss". */
 fun formatClock(epochMillis: Long, withSeconds: Boolean = false): String =
     SimpleDateFormat(if (withSeconds) "HH:mm:ss" else "HH:mm", Locale.getDefault())

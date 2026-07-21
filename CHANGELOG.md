@@ -3,6 +3,13 @@
 Newest entries on top.
 
 ## Unreleased
+
+- The map's ride label now uses the same name as the GPX track (rider's title, else a "yyyy-MM-dd HH:mm" stamp), shared with export/import.
+- Top-bar action icons are now plain icons without the surrounding circle frame.
+- Raised the default auto-pause hold time from 10 to 15 seconds.
+- Speed-chart gridlines are now brighter for easier reading.
+- The top-bar tab title no longer wraps letter-by-letter into a column when the actions are wide.
+
 ## v0.5.20260720+144
 
 - Speed-chart panel height now tracks the actual window size (correct in split-screen/multi-window) instead of the whole display.

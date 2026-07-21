@@ -36,7 +36,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -56,6 +55,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,6 +76,7 @@ import xx.biketracker.data.recoveryJob
 import xx.biketracker.data.DatabaseRestoreCoordinator
 import xx.biketracker.data.RestoreOperationState
 import xx.biketracker.data.Trip
+import xx.biketracker.data.displayName
 import xx.biketracker.history.HistoryCommands
 import xx.biketracker.history.HistoryScreen
 import xx.biketracker.history.RideStatsScreen
@@ -241,7 +242,14 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                 return@Scaffold
             }
             TopAppBar(
-                title = { Text(stringResource(id = (currentTab ?: Destination.Tracking).labelRes())) },
+                title = {
+                    Text(
+                        stringResource(id = (currentTab ?: Destination.Tracking).labelRes()),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     if (onTrackingTab) {
                         IconButton(onClick = ::onExitRequested) {
@@ -261,7 +269,7 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                         when {
                             selectedTrip != null -> {
                                 Text(
-                                    text = "${formatDate(selectedTrip!!.startTime)} · ${formatClock(selectedTrip!!.startTime)}",
+                                    text = selectedTrip!!.displayName(),
                                     style = MaterialTheme.typography.bodyLarge,
                                 )
                                 IconButton(onClick = { MapSelection.clear() }) {
@@ -422,13 +430,10 @@ private fun TopBarClock() {
     )
 }
 
-/** Outlined top-bar icon action: framed so it reads as a button, not a plain label. */
+/** Plain top-bar icon action: a bare icon with no surrounding frame. */
 @Composable
 private fun TopBarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
-    OutlinedIconButton(
-        onClick = onClick,
-        modifier = Modifier.padding(end = 8.dp),
-    ) {
+    IconButton(onClick = onClick) {
         Icon(icon, contentDescription = contentDescription)
     }
 }
