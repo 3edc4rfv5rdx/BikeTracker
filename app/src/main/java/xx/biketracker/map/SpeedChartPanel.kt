@@ -642,7 +642,7 @@ private fun DrawScope.drawSpeedChart(
     var grid = step
     while (grid <= yMaxKmh) {
         val y = yOf((grid / MPS_TO_KMH).toFloat())
-        drawLine(style.gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
+        drawLine(style.gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1.dp.toPx())
         val label = style.textMeasurer.measure(AnnotatedString(grid.toInt().toString()), style.labelStyle)
         drawText(label, topLeft = Offset(labelPad, y - label.size.height - 1f))
         grid += step
@@ -665,6 +665,8 @@ private fun DrawScope.drawSpeedChart(
     var tick = ceil(windowStart / tickStep) * tickStep
     while (tick <= windowStart + windowSpan) {
         val x = hPad + ((tick - windowStart) / windowSpan * plotWidth).toFloat()
+        // Vertical gridline up through the plot, matched to the axis tick below it.
+        drawLine(style.gridColor, Offset(x, topPad), Offset(x, axisY), strokeWidth = 1.dp.toPx())
         drawLine(style.axisColor, Offset(x, axisY), Offset(x, axisY + tickLen), strokeWidth = 1.dp.toPx())
         val text = if (axisDistance) {
             formatKm(tick, decimals = if (tickStep < 1000.0) 1 else 0)
