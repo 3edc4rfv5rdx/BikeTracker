@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Renamed the helper scripts 00-DebugWiFiConn.sh and 01-MakeDebug.sh to 02- and 03-.
 - The map's ride label now uses the same name as the GPX track (rider's title, else a "yyyy-MM-dd HH:mm" stamp), shared with export/import.
 - Top-bar action icons are now plain icons without the surrounding circle frame.
 - Raised the default auto-pause hold time from 10 to 15 seconds.
