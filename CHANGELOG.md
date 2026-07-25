@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The History ride menu (⋮) now has a Delete action, with the same confirmation as the ride's summary dialog.
+- Opening the History tab now scrolls to the ride currently shown on the Map (the highlighted row).
 - Renamed the helper scripts 00-DebugWiFiConn.sh and 01-MakeDebug.sh to 02- and 03-.
 - The map's ride label now uses the same name as the GPX track (rider's title, else a "yyyy-MM-dd HH:mm" stamp), shared with export/import.
 - Top-bar action icons are now plain icons without the surrounding circle frame.

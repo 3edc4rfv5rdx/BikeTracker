@@ -15,12 +15,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import android.widget.Toast
 import xx.biketracker.R
 import xx.biketracker.avgSpeedMps
-import xx.biketracker.data.AppDatabase
-import xx.biketracker.data.DatabaseMaintenance
 import xx.biketracker.data.Trip
 import xx.biketracker.formatClock
 import xx.biketracker.formatDate
@@ -28,7 +24,6 @@ import xx.biketracker.formatDuration
 import xx.biketracker.formatKm
 import xx.biketracker.formatPace
 import xx.biketracker.formatSpeedKmh
-import xx.biketracker.map.MapSelection
 import xx.biketracker.ui.DialogButton
 import xx.biketracker.ui.DialogButtonRow
 import xx.biketracker.ui.Stat
@@ -113,17 +108,7 @@ fun RideDialog(trip: Trip, onDismiss: () -> Unit, onDeleted: () -> Unit) {
                     destructive = true,
                     onClick = {
                         confirmDelete = false
-                        scope.launch {
-                            val deleted = DatabaseMaintenance.tryWrite {
-                                AppDatabase.get(context).tripDao().deleteTrip(trip)
-                            }
-                            if (deleted) {
-                                MapSelection.clearIf(trip.id) // the Map tab must not keep a deleted ride
-                                onDeleted()
-                            } else {
-                                Toast.makeText(context, databaseBusyMessage, Toast.LENGTH_LONG).show()
-                            }
-                        }
+                        launchTripDelete(context, scope, trip, databaseBusyMessage, onDeleted)
                     },
                 )
             },

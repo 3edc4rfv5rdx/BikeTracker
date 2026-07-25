@@ -21,12 +21,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -76,6 +78,7 @@ import xx.biketracker.formatKm
 import xx.biketracker.formatMonthName
 import xx.biketracker.formatSpeedKmh
 import xx.biketracker.map.MapSelection
+import xx.biketracker.ui.DialogButton
 import java.util.Calendar
 
 @Composable
@@ -85,6 +88,7 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     val scope = rememberCoroutineScope()
     val gpxShareTitle = stringResource(R.string.gpx_export)
     val gpxFailedMessage = stringResource(R.string.gpx_export_failed)
+    val databaseBusyMessage = stringResource(R.string.database_busy)
 
     // Read once per context (i.e. re-read after a locale change recreates the activity), so the
     // grouping isn't invalidated by the fresh array getStringArray hands back each recomposition.
@@ -105,6 +109,9 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
 
     // Tapping "Edit" on a ride's menu opens the name/comment editor over the tree.
     var editingTrip by remember { mutableStateOf<Trip?>(null) }
+
+    // Tapping "Delete" on a ride's menu asks for confirmation before removing the ride.
+    var deletingTrip by remember { mutableStateOf<Trip?>(null) }
 
     // The Records top-bar button (in the activity) toggles this; the dialog reduces over `trips`.
     var showRecords by remember { mutableStateOf(false) }
@@ -203,6 +210,18 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
         scrollTargetKey = null
     }
 
+    // Entering History with a ride shown on the Map tab (the inverted "white" row): open its day
+    // branch and scroll to it, so the highlighted ride is in view without hunting for it. Runs once
+    // per visit — the plain flag resets when leaving the tab disposes this composition.
+    var scrolledToMapped by remember { mutableStateOf(false) }
+    LaunchedEffect(years, mappedTrip) {
+        val trip = mappedTrip
+        if (scrolledToMapped || trip == null || years.isEmpty()) return@LaunchedEffect
+        scrolledToMapped = true
+        expanded.addAll(dayNodeKeys(trip.startTime).filterNot(expanded::contains))
+        scrollTargetKey = "t-${trip.id}"
+    }
+
     LazyColumn(
         state = listState,
         modifier = Modifier
@@ -275,6 +294,7 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
                                         onExport = {
                                             launchGpxShare(context, scope, trip, gpxShareTitle, gpxFailedMessage)
                                         },
+                                        onDelete = { deletingTrip = trip },
                                         onShowOnMap = { onShowRideOnMap(trip) },
                                     )
                                 }
@@ -299,6 +319,27 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
             trip = trip,
             onDismiss = { editingTrip = null },
             onSaved = { editingTrip = null },
+        )
+    }
+
+    deletingTrip?.let { trip ->
+        AlertDialog(
+            onDismissRequest = { deletingTrip = null },
+            title = { Text(stringResource(R.string.delete_title)) },
+            text = { Text(stringResource(R.string.delete_text)) },
+            confirmButton = {
+                DialogButton(
+                    text = stringResource(R.string.action_delete),
+                    destructive = true,
+                    onClick = {
+                        deletingTrip = null
+                        launchTripDelete(context, scope, trip, databaseBusyMessage, onDeleted = {})
+                    },
+                )
+            },
+            dismissButton = {
+                DialogButton(stringResource(R.string.action_cancel), onClick = { deletingTrip = null })
+            },
         )
     }
 
@@ -487,6 +528,7 @@ private fun RideRow(
     onShowStats: () -> Unit,
     onEdit: () -> Unit,
     onExport: () -> Unit,
+    onDelete: () -> Unit,
     onShowOnMap: () -> Unit,
 ) {
     Card(
@@ -525,7 +567,13 @@ private fun RideRow(
                     contentDescription = stringResource(R.string.history_show_on_map),
                 )
             }
-            RideActionsMenu(onSummary = onClick, onShowStats = onShowStats, onEdit = onEdit, onExport = onExport)
+            RideActionsMenu(
+                onSummary = onClick,
+                onShowStats = onShowStats,
+                onEdit = onEdit,
+                onExport = onExport,
+                onDelete = onDelete,
+            )
         }
     }
 }
@@ -534,7 +582,13 @@ private fun RideRow(
  *  statistics and GPX export (map has its own button; more actions land here as they arrive). The
  *  menu's container is a high tonal surface so it reads clearly against the tinted rows behind it. */
 @Composable
-private fun RideActionsMenu(onSummary: () -> Unit, onShowStats: () -> Unit, onEdit: () -> Unit, onExport: () -> Unit) {
+private fun RideActionsMenu(
+    onSummary: () -> Unit,
+    onShowStats: () -> Unit,
+    onEdit: () -> Unit,
+    onExport: () -> Unit,
+    onDelete: () -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box(modifier = Modifier.padding(end = 4.dp)) {
         IconButton(onClick = { open = true }) {
@@ -578,6 +632,25 @@ private fun RideActionsMenu(onSummary: () -> Unit, onShowStats: () -> Unit, onEd
                 onClick = {
                     open = false
                     onExport()
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    open = false
+                    onDelete()
                 },
             )
         }
