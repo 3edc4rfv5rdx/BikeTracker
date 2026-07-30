@@ -735,9 +735,11 @@ class TrackingService : Service() {
         vibrate(longArrayOf(0, 200, 150, 200))
     }
 
-    /** Single buzz on auto-resume, so it reads as clearly different from the double auto-pause. */
+    /** Single buzz on auto-resume, so it reads as clearly different from the double auto-pause.
+     *  Longer than one auto-pause pulse: this one fires while the bike is already moving again,
+     *  where a short buzz is lost in the road vibration. */
     private fun vibrateAutoResume() {
-        vibrate(longArrayOf(0, 200))
+        vibrate(longArrayOf(0, 400))
     }
 
     private fun vibrate(timings: LongArray) {
