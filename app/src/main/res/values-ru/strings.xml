@@ -76,6 +76,7 @@
     <string name="autopause_hold">Время удержания</string>
     <string name="autopause_autosave">Авто-сохранение поездки через</string>
     <string name="autopause_resume_hint">Возобновление на 1 км/ч выше порога</string>
+    <string name="autopause_autosave_hint">0 — авто-сохранение выключено, поездку завершает только Стоп</string>
 
     <string name="settings_map_section">Карта</string>
     <string name="map_offline_title">Офлайн-карта</string>

@@ -807,10 +807,14 @@ class TrackingService : Service() {
 
     private fun scheduleAutoSave() {
         cancelAutoSave()
+        // Auto-save turned off: the pause lasts as long as the rider wants it to.
+        if (AppSettings.autoSaveMin.value <= 0) return
         // Runs on the main thread so this can't race with a resume or recordLocation mutating
         // status/points; a resume's cancelAutoSave() aborts it at either suspension point.
         autoSaveJob = scope.launch(Dispatchers.Main) {
             delay(AppSettings.autoSaveMin.value * 60_000L)
+            // Turning auto-save off mid-pause must call this one off too.
+            if (AppSettings.autoSaveMin.value <= 0) return@launch
             // Closing the ride is only defensible when the tracker can see that the rider really
             // is standing still. A pause that started with the signal jammed proves nothing, so
             // wait for the fixes to come back and let one of them decide: movement auto-resumes

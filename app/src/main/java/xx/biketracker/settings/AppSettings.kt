@@ -56,8 +56,9 @@ object AppSettings {
     val riderWeightKg: StateFlow<Int> = _riderWeightKg.asStateFlow()
 
     // Auto-pause: pause a ride once the speed stays below [autoPauseSpeedKmh] for [autoPauseHoldSec];
-    // resume [AUTO_RESUME_MARGIN_KMH] above that. A pause longer than [autoSaveMin] is saved. The
-    // tracking service reads these live, so a change takes effect on the next fix without a restart.
+    // resume [AUTO_RESUME_MARGIN_KMH] above that. A pause longer than [autoSaveMin] is saved, unless
+    // that is 0 — then nothing but the rider's Stop ever ends a ride. The tracking service reads
+    // these live, so a change takes effect on the next fix without a restart.
     private val _autoPauseEnabled = MutableStateFlow(true)
     val autoPauseEnabled: StateFlow<Boolean> = _autoPauseEnabled.asStateFlow()
     private val _autoPauseSpeedKmh = MutableStateFlow(DEFAULT_AUTO_PAUSE_SPEED_KMH)
@@ -107,8 +108,9 @@ object AppSettings {
         prefs(context).edit { putInt(KEY_AUTOPAUSE_HOLD_SEC, clamped) }
     }
 
+    /** [minutes] of 0 turns auto-save off: a pause then lasts until the rider ends the ride. */
     fun setAutoSaveMin(context: Context, minutes: Int) {
-        val clamped = minutes.coerceIn(1, 120)
+        val clamped = minutes.coerceIn(0, 120)
         _autoSaveMin.value = clamped
         prefs(context).edit { putInt(KEY_AUTOSAVE_MIN, clamped) }
     }

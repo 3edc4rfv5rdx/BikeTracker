@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Auto-save can now be turned off by setting it to 0 minutes, so nothing but Stop ever ends a ride.
 - The ride timer no longer runs on through a GPS outage and then jumps backwards when the signal returns; it stops where recording stops counting.
 - Fixes with a horizontal accuracy of 25-50 m are now recorded instead of dropped, and shown as "Weak GPS signal"; only above 50 m is a fix discarded.
 - Auto-pause no longer fires on the first fix after a gap in the signal, so a jammed or blocked GPS can't pause a moving bike.

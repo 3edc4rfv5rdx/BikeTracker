@@ -76,6 +76,7 @@
     <string name="autopause_hold">Hold time</string>
     <string name="autopause_autosave">Auto-save ride after</string>
     <string name="autopause_resume_hint">Resumes 1 km/h above the threshold</string>
+    <string name="autopause_autosave_hint">Auto-save off at 0 — only Stop ends the ride</string>
 
     <string name="settings_map_section">Map</string>
     <string name="map_offline_title">Offline map</string>

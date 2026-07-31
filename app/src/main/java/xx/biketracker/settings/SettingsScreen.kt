@@ -323,7 +323,7 @@ private fun WeightRow(weightKg: Int, onChange: (Int) -> Unit) {
 
 /** Auto-pause settings behind a Settings row: the toggle plus speed / hold / auto-save numbers,
  *  each applied live. Speed and hold grey out while auto-pause is off; auto-save still applies to a
- *  manual pause, so it stays active. */
+ *  manual pause, so it stays active, and 0 turns it off on its own. */
 @Composable
 private fun AutoPauseDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -366,7 +366,8 @@ private fun AutoPauseDialog(onDismiss: () -> Unit) {
                     onValueChange = { AppSettings.setAutoSaveMin(context, it) },
                 )
                 Text(
-                    text = stringResource(R.string.autopause_resume_hint),
+                    text = stringResource(R.string.autopause_resume_hint) + ".\n" +
+                        stringResource(R.string.autopause_autosave_hint) + ".",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
