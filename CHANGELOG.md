@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixed two anchor-distance tests that moved their fix 200 m in one second, which the validator rightly called a jump.
 - An auto-paused ride now resumes (and standby starts a new one) as soon as the rider has left the spot, even if the fixes report no speed at all — a jammed signal could previously leave a ride paused for the whole trip and then auto-save it as a few metres.
 - Auto-pause no longer triggers while the recorded positions are still covering ground, however slow the fixes read.
 - Fixed the build failing on a missing import in the tracking service.

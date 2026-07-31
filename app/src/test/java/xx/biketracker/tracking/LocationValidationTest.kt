@@ -143,12 +143,13 @@ class LocationValidationTest {
         assertEquals(FixValidation.Rejected, validateLocationFix(stale, previous))
     }
 
-    /** ~111 m per 0.001 degree of latitude here, so this converts a distance into a candidate. */
+    /** A candidate [meters] north of [anchor] (~111 km per degree of latitude), a minute later so
+     *  the distance implies a cycling speed rather than a jump the validator would reject. */
     private fun metersNorthOf(anchor: ValidatedLocationFix, meters: Double, accuracyMeters: Float) =
         candidate(
             lat = anchor.lat + meters / 111_320.0,
             accuracyMeters = accuracyMeters,
-            elapsedRealtimeNanos = anchor.elapsedRealtimeNanos + 1_000_000_000L,
+            elapsedRealtimeNanos = anchor.elapsedRealtimeNanos + 60_000_000_000L,
         )
 
     @Test
