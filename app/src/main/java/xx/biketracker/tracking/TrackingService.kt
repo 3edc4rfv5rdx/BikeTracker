@@ -48,6 +48,7 @@ import xx.biketracker.GeoPoint
 import xx.biketracker.LEFT_ANCHOR_DISTANCE_M
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.MPS_TO_KMH
+import xx.biketracker.SPEED_CORROBORATION_FRACTION
 import xx.biketracker.STANDBY_GPS_INTERVAL_MS
 import xx.biketracker.STANDBY_GPS_MIN_INTERVAL_MS
 import xx.biketracker.STANDBY_RESUME_HOLD_MS
@@ -90,6 +91,19 @@ internal fun elapsedMillisBetween(previousNanos: Long, currentNanos: Long): Long
     if (deltaNanos <= 0) return null
     val deltaMillis = deltaNanos / 1_000_000L
     return deltaMillis.takeIf { it > 0 }
+}
+
+/**
+ * The reported speed of a fix if the track backs it up, otherwise null. A fix carries whatever
+ * speed the receiver believes, and under jamming that is routinely tens of km/h for a bike at a
+ * standstill — enough to stand as the ride's maximum for the rest of the day. Ground actually
+ * covered between the two points is the second opinion: [stepMeters] is the recorded step (the
+ * same one that feeds the distance), [dtMillis] the time it took.
+ */
+internal fun corroboratedSpeedMps(reportedMps: Double?, stepMeters: Double, dtMillis: Long): Double? {
+    if (reportedMps == null || dtMillis <= 0L) return null
+    val stepSpeed = stepMeters / (dtMillis / 1000.0)
+    return reportedMps.takeIf { stepSpeed >= it * SPEED_CORROBORATION_FRACTION }
 }
 
 internal data class LocationFixCandidate(
@@ -638,11 +652,15 @@ class TrackingService : Service() {
             speedMps = fix.speedMps ?: 0.0,
         )
         if (prev != null && !gapped) {
-            distanceMeters += haversineMeters(prev.lat, prev.lon, smoothed.lat, smoothed.lon)
+            val stepMeters = haversineMeters(prev.lat, prev.lon, smoothed.lat, smoothed.lon)
+            distanceMeters += stepMeters
             movingTimeMillis += dt
+            // Only a fix that continues an unbroken track can be corroborated at all: across a gap
+            // the recording covers no ground, so the claimed speed would have nothing to back it.
+            corroboratedSpeedMps(fix.speedMps, stepMeters, dt)?.let {
+                maxSpeedMps = max(maxSpeedMps, it)
+            }
         }
-
-        fix.speedMps?.let { maxSpeedMps = max(maxSpeedMps, it) }
 
         val point = TrackPoint(
             tripId = 0,

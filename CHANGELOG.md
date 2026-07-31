@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A ride's maximum speed is now only taken from fixes whose speed the recorded track backs up, so the tens of km/h a jammed receiver invents for a standing bike no longer become the ride's top speed.
 - The ride timer now runs no further than the next fix is due, so with fixes tens of seconds apart it no longer climbs ten seconds and falls back on every one.
 - Fixed two anchor-distance tests that moved their fix 200 m in one second, which the validator rightly called a jump.
 - An auto-paused ride now resumes (and standby starts a new one) as soon as the rider has left the spot, even if the fixes report no speed at all — a jammed signal could previously leave a ride paused for the whole trip and then auto-save it as a few metres.

@@ -55,6 +55,13 @@ const val ACCURACY_THRESHOLD_M = 25f
 const val ACCURACY_LIMIT_M = 50f
 /** Drop a segment implying a speed above this (m/s ≈ 108 km/h) — almost surely a GPS jump. */
 const val MAX_PLAUSIBLE_SPEED_MPS = 30.0
+/**
+ * The recorded track must cover at least this fraction of the ground a reported speed implies
+ * before that speed can stand as the ride's maximum. A receiver's speed is Doppler-derived and
+ * legitimately runs a little ahead of the smoothed track, hence well below 1; the speeds a jammed
+ * receiver invents for a bike standing still fall far short of it.
+ */
+const val SPEED_CORROBORATION_FRACTION = 0.5
 
 // --- Stopped-speed threshold ---
 // Defaults for "the rider is stopped"; the live auto-pause thresholds are user settings in
