@@ -112,38 +112,36 @@ internal data class ValidatedLocationFix(
     val bearingDegrees: Float?,
 )
 
+/** The verdict on a fix: sound and consistent, unusable, or sound but implausibly far from the
+ *  reference it was checked against (see [shouldReanchor]). */
+internal sealed interface FixValidation {
+    data class Accepted(val fix: ValidatedLocationFix) : FixValidation
+    data class Jumped(val fix: ValidatedLocationFix) : FixValidation
+    data object Rejected : FixValidation
+}
+
 /** Validate a fix completely before it can mutate tracking state. */
 internal fun validateLocationFix(
     candidate: LocationFixCandidate,
     previous: ValidatedLocationFix?,
-): ValidatedLocationFix? {
-    if (!candidate.lat.isFinite() || candidate.lat !in -90.0..90.0) return null
-    if (!candidate.lon.isFinite() || candidate.lon !in -180.0..180.0) return null
-    if (candidate.wallTimeMillis <= 0 || candidate.elapsedRealtimeNanos <= 0) return null
+): FixValidation {
+    if (!candidate.lat.isFinite() || candidate.lat !in -90.0..90.0) return FixValidation.Rejected
+    if (!candidate.lon.isFinite() || candidate.lon !in -180.0..180.0) return FixValidation.Rejected
+    if (candidate.wallTimeMillis <= 0 || candidate.elapsedRealtimeNanos <= 0) return FixValidation.Rejected
 
-    val accuracy = candidate.accuracyMeters ?: return null
-    if (!accuracy.isFinite() || accuracy < 0f || accuracy > ACCURACY_THRESHOLD_M) return null
+    val accuracy = candidate.accuracyMeters ?: return FixValidation.Rejected
+    if (!accuracy.isFinite() || accuracy < 0f || accuracy > ACCURACY_THRESHOLD_M) return FixValidation.Rejected
 
     val speed = candidate.speedMps
-    if (speed != null && (!speed.isFinite() || speed < 0.0 || speed > MAX_PLAUSIBLE_SPEED_MPS)) return null
-    if (candidate.altitudeMeters?.isFinite() == false) return null
-    if (candidate.bearingDegrees?.let { !it.isFinite() || it < 0f || it >= 360f } == true) return null
-
-    if (previous != null) {
-        val dtMillis = elapsedMillisBetween(
-            previousNanos = previous.elapsedRealtimeNanos,
-            currentNanos = candidate.elapsedRealtimeNanos,
-        ) ?: return null
-        val coordinateSpeed = haversineMeters(
-            previous.lat,
-            previous.lon,
-            candidate.lat,
-            candidate.lon,
-        ) / (dtMillis / 1000.0)
-        if (!coordinateSpeed.isFinite() || coordinateSpeed > MAX_PLAUSIBLE_SPEED_MPS) return null
+    if (speed != null && (!speed.isFinite() || speed < 0.0 || speed > MAX_PLAUSIBLE_SPEED_MPS)) {
+        return FixValidation.Rejected
+    }
+    if (candidate.altitudeMeters?.isFinite() == false) return FixValidation.Rejected
+    if (candidate.bearingDegrees?.let { !it.isFinite() || it < 0f || it >= 360f } == true) {
+        return FixValidation.Rejected
     }
 
-    return ValidatedLocationFix(
+    val fix = ValidatedLocationFix(
         lat = candidate.lat,
         lon = candidate.lon,
         wallTimeMillis = candidate.wallTimeMillis,
@@ -153,7 +151,35 @@ internal fun validateLocationFix(
         altitudeMeters = candidate.altitudeMeters,
         bearingDegrees = candidate.bearingDegrees,
     )
+
+    if (previous != null) {
+        // Duplicate or out-of-order provider data says nothing about the reference's validity,
+        // so it is dropped outright rather than offered as a re-anchor.
+        val dtMillis = elapsedMillisBetween(
+            previousNanos = previous.elapsedRealtimeNanos,
+            currentNanos = candidate.elapsedRealtimeNanos,
+        ) ?: return FixValidation.Rejected
+        val coordinateSpeed = haversineMeters(
+            previous.lat,
+            previous.lon,
+            candidate.lat,
+            candidate.lon,
+        ) / (dtMillis / 1000.0)
+        if (!coordinateSpeed.isFinite()) return FixValidation.Rejected
+        if (coordinateSpeed > MAX_PLAUSIBLE_SPEED_MPS) return FixValidation.Jumped(fix)
+    }
+
+    return FixValidation.Accepted(fix)
 }
+
+/**
+ * Whether a [FixValidation.Jumped] fix should be trusted over the reference it disagrees with.
+ * One of the two is wrong, and the reference is the one with nothing to show for itself: it has
+ * gone [FIX_REANCHOR_MS] without a single accepted successor. Staying with it means recording
+ * nothing at all (see the constant), so the tracker takes the new fix and opens a fresh segment.
+ */
+internal fun shouldReanchor(previous: ValidatedLocationFix, fix: ValidatedLocationFix): Boolean =
+    fix.elapsedRealtimeNanos - previous.elapsedRealtimeNanos >= FIX_REANCHOR_MS * 1_000_000L
 
 /**
  * Foreground service that records a ride: it pulls GPS fixes from the fused
@@ -507,7 +533,18 @@ class TrackingService : Service() {
             bearingDegrees = location.bearing.takeIf { location.hasBearing() },
         )
         // Rejected fixes do not refresh GPS freshness or overwrite the last trusted telemetry.
-        val fix = validateLocationFix(candidate, lastTrustedFix) ?: return
+        val previous = lastTrustedFix
+        val fix = when (val validation = validateLocationFix(candidate, previous)) {
+            is FixValidation.Accepted -> validation.fix
+            // A fix that contradicts a reference which has itself gone silent for too long wins:
+            // the alternative is rejecting every genuine fix for hours (see shouldReanchor).
+            is FixValidation.Jumped -> {
+                if (previous == null || !shouldReanchor(previous, validation.fix)) return
+                reanchor()
+                validation.fix
+            }
+            FixValidation.Rejected -> return
+        }
         lastTrustedFix = fix
         lastTrustedFixElapsedRealtime = fix.elapsedRealtimeNanos / 1_000_000L
 
@@ -527,6 +564,16 @@ class TrackingService : Service() {
             TrackingStatus.IDLE -> return
         }
         publish()
+    }
+
+    /** Drop everything derived from a reference the tracker has just disowned: the filter estimate
+     *  and the track's continuity. The next recorded fix opens a new segment, so the leap to the
+     *  new anchor is never drawn as a line nor counted as distance. */
+    private fun reanchor() {
+        kalman.reset()
+        lastPoint = null
+        lastPointElapsedRealtimeNanos = null
+        pendingSegmentStart = true
     }
 
     private fun recordLocation(fix: ValidatedLocationFix) {

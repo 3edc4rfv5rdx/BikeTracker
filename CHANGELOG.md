@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Recording now recovers from a bogus reference fix (GPS spoofing): a fix that contradicts a reference which has had no accepted successor for 30 s re-anchors the track instead of being rejected for hours.
 - The auto-resume buzz is now 400 ms instead of 200, so it is felt once the bike is already moving.
 - The History ride menu (⋮) now has a Delete action, with the same confirmation as the ride's summary dialog.
 - Opening the History tab now scrolls to the ride currently shown on the Map (the highlighted row).

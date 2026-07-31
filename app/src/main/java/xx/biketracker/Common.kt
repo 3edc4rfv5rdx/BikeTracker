@@ -62,6 +62,15 @@ const val AUTO_PAUSE_DEBOUNCE_MS = 10_000L
 /** No fix for this long while tracking means the GPS signal is effectively lost. Also breaks
  *  the recorded segment: a longer gap (tunnel, indoors) adds neither distance nor moving time. */
 const val GPS_STALE_MS = 10_000L
+/**
+ * How long the reference fix may go without a single accepted successor before a fix that
+ * disagrees with it is trusted over it instead. The plausible-speed test compares every fix
+ * against the last accepted one, and a rejected fix never replaces that reference — so a bogus
+ * reference (a spoofed fix, common wherever GPS is jammed) would reject every genuine fix for as
+ * long as it takes the allowed distance to catch up, hours for a spoof that lands far away. Past
+ * this age the reference has no claim to be current and the tracker re-anchors on the new fix.
+ */
+const val FIX_REANCHOR_MS = 30_000L
 
 // --- Draft persistence ---
 /** Flush recorded points to the draft trip every this many points (~30 s at GPS cadence). */
