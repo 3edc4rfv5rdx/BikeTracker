@@ -6,6 +6,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import xx.biketracker.ACCURACY_LIMIT_M
+import xx.biketracker.ACCURACY_THRESHOLD_M
 import xx.biketracker.FIX_REANCHOR_MS
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.settings.AUTO_RESUME_MARGIN_KMH
@@ -43,9 +45,26 @@ class LocationValidationTest {
 
     @Test
     fun inaccurateOrIncompleteFixesAreRejected() {
-        assertNull(accept(candidate(accuracyMeters = 26f)))
+        assertNull(accept(candidate(accuracyMeters = ACCURACY_LIMIT_M + 1f)))
         assertNull(accept(candidate(accuracyMeters = null)))
         assertNull(accept(candidate(elapsedRealtimeNanos = 0L)))
+    }
+
+    @Test
+    fun aRoughFixIsRecordedAndReportedAsWeakRatherThanDropped() {
+        val weak = ACCURACY_THRESHOLD_M + 1f
+        val fix = accept(candidate(accuracyMeters = weak))
+
+        assertNotNull(fix)
+        assertEquals(weak, fix!!.accuracyMeters, 0f)
+        // Recorded, but the UI must still call the signal out as degraded.
+        assertTrue(
+            TrackingSnapshot(
+                status = TrackingStatus.RECORDING,
+                gpsAccuracyMeters = weak,
+                lastTrustedFixElapsedRealtime = 1_000L,
+            ).hasGpsTrouble(nowElapsedRealtime = 1_000L)
+        )
     }
 
     @Test

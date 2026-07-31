@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixes with a horizontal accuracy of 25-50 m are now recorded instead of dropped, and shown as "Weak GPS signal"; only above 50 m is a fix discarded.
 - Auto-pause no longer fires on the first fix after a gap in the signal, so a jammed or blocked GPS can't pause a moving bike.
 - The long-pause auto-save now waits for the GPS to come back before closing the ride, so a lost signal alone can never end a recording.
 - Recording now recovers from a bogus reference fix (GPS spoofing): a fix that contradicts a reference which has had no accepted successor for 30 s re-anchors the track instead of being rejected for hours.

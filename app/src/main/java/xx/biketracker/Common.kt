@@ -45,8 +45,14 @@ const val STANDBY_GPS_INTERVAL_MS = 4_000L
 const val STANDBY_GPS_MIN_INTERVAL_MS = 2_000L
 
 // --- Point filtering ---
-/** Drop fixes whose reported horizontal accuracy is worse than this (meters). */
+/** Above this reported horizontal accuracy (meters) a fix is recorded but flagged as weak: the
+ *  position is rough, and the UI says so. The Kalman filter weights every fix by its accuracy,
+ *  so a weak one nudges the track instead of yanking it. */
 const val ACCURACY_THRESHOLD_M = 25f
+/** Above this accuracy (meters) a fix is dropped outright — too vague to place a bike with.
+ *  Kept well clear of [ACCURACY_THRESHOLD_M]: where the signal is jammed or blocked, a rough
+ *  fix still beats recording nothing at all. */
+const val ACCURACY_LIMIT_M = 50f
 /** Drop a segment implying a speed above this (m/s ≈ 108 km/h) — almost surely a GPS jump. */
 const val MAX_PLAUSIBLE_SPEED_MPS = 30.0
 

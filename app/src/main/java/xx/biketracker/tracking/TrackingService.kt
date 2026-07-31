@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import xx.biketracker.ACCURACY_THRESHOLD_M
+import xx.biketracker.ACCURACY_LIMIT_M
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
 import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
 import xx.biketracker.elevationGainBySegment
@@ -130,7 +130,7 @@ internal fun validateLocationFix(
     if (candidate.wallTimeMillis <= 0 || candidate.elapsedRealtimeNanos <= 0) return FixValidation.Rejected
 
     val accuracy = candidate.accuracyMeters ?: return FixValidation.Rejected
-    if (!accuracy.isFinite() || accuracy < 0f || accuracy > ACCURACY_THRESHOLD_M) return FixValidation.Rejected
+    if (!accuracy.isFinite() || accuracy < 0f || accuracy > ACCURACY_LIMIT_M) return FixValidation.Rejected
 
     val speed = candidate.speedMps
     if (speed != null && (!speed.isFinite() || speed < 0.0 || speed > MAX_PLAUSIBLE_SPEED_MPS)) {
