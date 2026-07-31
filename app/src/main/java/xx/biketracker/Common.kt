@@ -63,6 +63,14 @@ const val MAX_PLAUSIBLE_SPEED_MPS = 30.0
 const val AUTO_PAUSE_SPEED_MPS = 2.0 / MPS_TO_KMH
 /** A stopped stretch must last at least this long to count. */
 const val AUTO_PAUSE_DEBOUNCE_MS = 10_000L
+/**
+ * Distance from the spot where the rider was last seen standing that means they have left,
+ * whatever speed the fixes claim. A jammed or obstructed receiver reports a speed of 0 — or no
+ * speed at all — for a bike that is moving, so speed alone can leave a ride paused for the whole
+ * trip; the position is the one signal that still means something. Cleared with the two fixes'
+ * own error circles on top, so noise cannot fake it.
+ */
+const val LEFT_ANCHOR_DISTANCE_M = 60.0
 
 // --- GPS signal quality ---
 /** No fix for this long while tracking means the GPS signal is effectively lost. Also breaks

@@ -45,6 +45,7 @@ import xx.biketracker.GPS_INTERVAL_MS
 import xx.biketracker.GPS_MIN_INTERVAL_MS
 import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
+import xx.biketracker.LEFT_ANCHOR_DISTANCE_M
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.STANDBY_GPS_INTERVAL_MS
@@ -174,6 +175,21 @@ internal fun validateLocationFix(
 }
 
 /**
+ * Whether [fix] sits far enough from [anchor] — the spot where the rider was last seen standing —
+ * that they must have left it, whatever speed the fixes report (see [LEFT_ANCHOR_DISTANCE_M]).
+ * Both fixes' error circles are added to the threshold, so a pair of vague positions can't fake
+ * the departure between them.
+ */
+internal fun hasLeftAnchor(anchor: ValidatedLocationFix?, fix: ValidatedLocationFix): Boolean {
+    if (anchor == null) return false
+    val threshold = max(
+        LEFT_ANCHOR_DISTANCE_M,
+        (anchor.accuracyMeters + fix.accuracyMeters).toDouble(),
+    )
+    return haversineMeters(anchor.lat, anchor.lon, fix.lat, fix.lon) > threshold
+}
+
+/**
  * Whether a [FixValidation.Jumped] fix should be trusted over the reference it disagrees with.
  * One of the two is wrong, and the reference is the one with nothing to show for itself: it has
  * gone [FIX_REANCHOR_MS] without a single accepted successor. Staying with it means recording
@@ -219,6 +235,11 @@ class TrackingService : Service() {
     private val kalman = GpsKalmanFilter()
     private var pausedAutomatically = false
     private var lowSpeedSince = 0L
+    // Where the low-speed streak began; a streak that covers ground is not a standstill.
+    private var lowSpeedAnchor: ValidatedLocationFix? = null
+    // Where the rider was last seen standing (the pause / standby position). Movement away from it
+    // resumes the ride even when the reported speeds say otherwise; see [hasLeftAnchor].
+    private var standstillAnchor: ValidatedLocationFix? = null
     private var autoSaveJob: Job? = null
     // Standby (post-auto-save) bookkeeping: when the rider started moving again, and the
     // watchdog that shuts the service down after a long, motionless standby.
@@ -389,8 +410,9 @@ class TrackingService : Service() {
         gpsAccuracyMeters = null
         bearingDegrees = null
         pausedAutomatically = false
-        lowSpeedSince = 0L
+        clearLowSpeedStreak()
         movingSince = 0L
+        standstillAnchor = null
         draftPersistence = null
         draftStartJob = null
         startTime = System.currentTimeMillis()
@@ -554,7 +576,7 @@ class TrackingService : Service() {
         if (previous == null ||
             fix.elapsedRealtimeNanos - previous.elapsedRealtimeNanos > GPS_STALE_MS * 1_000_000L
         ) {
-            lowSpeedSince = 0L
+            clearLowSpeedStreak()
             movingSince = 0L
         }
         lastTrustedFix = fix
@@ -571,7 +593,7 @@ class TrackingService : Service() {
 
         when (status) {
             TrackingStatus.RECORDING -> recordLocation(fix)
-            TrackingStatus.PAUSED -> fix.speedMps?.let(::maybeAutoResume)
+            TrackingStatus.PAUSED -> maybeAutoResume(fix)
             TrackingStatus.STANDBY -> maybeStandbyStart(fix)
             TrackingStatus.IDLE -> return
         }
@@ -646,33 +668,44 @@ class TrackingService : Service() {
         if (points.size - scheduledFlushCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
 
         updateNotification()
-        fix.speedMps?.let { evaluateAutoPause(it, nowElapsedMillis) }
+        fix.speedMps?.let { evaluateAutoPause(fix, it, nowElapsedMillis) }
     }
 
-    private fun evaluateAutoPause(speed: Double, now: Long) {
+    private fun evaluateAutoPause(fix: ValidatedLocationFix, speed: Double, now: Long) {
         if (!AppSettings.autoPauseEnabled.value) {
-            lowSpeedSince = 0L
+            clearLowSpeedStreak()
             return
         }
         val thresholdMps = AppSettings.autoPauseSpeedKmh.value / MPS_TO_KMH
         val holdMillis = AppSettings.autoPauseHoldSec.value * 1000L
-        if (speed < thresholdMps) {
-            if (lowSpeedSince == 0L) {
-                lowSpeedSince = now
-            } else if (now - lowSpeedSince >= holdMillis) {
-                pauseTracking(automatic = true)
-            }
-        } else {
-            lowSpeedSince = 0L
+        if (speed >= thresholdMps) {
+            clearLowSpeedStreak()
+            return
         }
+        // A hold that covers real ground is not a standstill however slow the fixes read: a jammed
+        // receiver reports 0 for a moving bike, and the distance is what gives it away. Restarting
+        // the streak from here also keeps a rescued ride from flapping straight back into a pause.
+        if (lowSpeedSince == 0L || hasLeftAnchor(lowSpeedAnchor, fix)) {
+            lowSpeedSince = now
+            lowSpeedAnchor = fix
+            return
+        }
+        if (now - lowSpeedSince >= holdMillis) pauseTracking(automatic = true)
+    }
+
+    private fun clearLowSpeedStreak() {
+        lowSpeedSince = 0L
+        lowSpeedAnchor = null
     }
 
     // Only an automatic pause resumes by itself; a manual one waits for the button.
-    private fun maybeAutoResume(speedMps: Double) {
+    private fun maybeAutoResume(fix: ValidatedLocationFix) {
+        if (!pausedAutomatically) return
         val resumeMps = resumeSpeedMps(AppSettings.autoPauseSpeedKmh.value)
-        if (pausedAutomatically && speedMps >= resumeMps) {
-            resumeTracking(automatic = true)
-        }
+        val movingBySpeed = fix.speedMps != null && fix.speedMps >= resumeMps
+        // Leaving the spot counts as movement even when the fix claims otherwise: that is what
+        // rescues a ride from a pause the jamming caused rather than the rider.
+        if (movingBySpeed || hasLeftAnchor(standstillAnchor, fix)) resumeTracking(automatic = true)
     }
 
     private fun pauseTracking(automatic: Boolean) {
@@ -680,6 +713,7 @@ class TrackingService : Service() {
         status = TrackingStatus.PAUSED
         pausedAutomatically = automatic
         lowSpeedSince = 0L
+        standstillAnchor = lastTrustedFix
         // Break the segment so the paused gap adds neither distance nor time, and mark the next
         // recorded fix as a new segment's start.
         lastPoint = null
@@ -697,6 +731,7 @@ class TrackingService : Service() {
         if (status != TrackingStatus.PAUSED) return
         status = TrackingStatus.RECORDING
         pausedAutomatically = false
+        standstillAnchor = null
         cancelAutoSave()
         updateNotification()
         publish()
@@ -707,6 +742,12 @@ class TrackingService : Service() {
     // Standby: after the long-pause auto-save the ride is already stored, so movement here opens
     // a brand-new ride rather than resuming the finished one.
     private fun maybeStandbyStart(fix: ValidatedLocationFix) {
+        // Having left the spot needs no hold time: the distance is already proof of a trip under
+        // way, and it is the only proof a jammed receiver leaves.
+        if (hasLeftAnchor(standstillAnchor, fix)) {
+            startRideFromStandby(automatic = true)
+            return
+        }
         val speed = fix.speedMps ?: return
         val startMps = resumeSpeedMps(AppSettings.autoPauseSpeedKmh.value)
         val now = fix.elapsedRealtimeNanos / 1_000_000L
@@ -721,7 +762,11 @@ class TrackingService : Service() {
     /** Keep the service alive after the auto-save, listening at a lighter GPS cadence for the
      *  rider to set off again; a long, motionless standby then shuts everything down. */
     private fun enterStandby() {
+        // Survives the reset below: the ride is over, but where it ended is what tells the tracker
+        // the rider has set off again.
+        val anchor = lastTrustedFix
         resetRideState()
+        standstillAnchor = anchor
         status = TrackingStatus.STANDBY
         scheduleStandbyTimeout()
         updateNotification()

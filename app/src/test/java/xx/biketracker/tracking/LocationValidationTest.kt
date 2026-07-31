@@ -143,6 +143,32 @@ class LocationValidationTest {
         assertEquals(FixValidation.Rejected, validateLocationFix(stale, previous))
     }
 
+    /** ~111 m per 0.001 degree of latitude here, so this converts a distance into a candidate. */
+    private fun metersNorthOf(anchor: ValidatedLocationFix, meters: Double, accuracyMeters: Float) =
+        candidate(
+            lat = anchor.lat + meters / 111_320.0,
+            accuracyMeters = accuracyMeters,
+            elapsedRealtimeNanos = anchor.elapsedRealtimeNanos + 1_000_000_000L,
+        )
+
+    @Test
+    fun leavingTheAnchorIsMovementWhateverTheFixesClaim() {
+        val anchor = accept(candidate())!!
+        val away = accept(metersNorthOf(anchor, meters = 200.0, accuracyMeters = 5f), anchor)!!
+
+        assertTrue(hasLeftAnchor(anchor, away))
+    }
+
+    @Test
+    fun jitterWithinTheErrorCirclesIsNotMovement() {
+        val anchor = accept(candidate(accuracyMeters = 40f))!!
+        // Beyond the plain distance threshold, but not beyond what two vague fixes can invent.
+        val jitter = accept(metersNorthOf(anchor, meters = 70.0, accuracyMeters = 40f), anchor)!!
+
+        assertFalse(hasLeftAnchor(anchor, jitter))
+        assertFalse(hasLeftAnchor(anchor = null, fix = jitter))
+    }
+
     @Test
     fun validResumeSpeedFixIsAccepted() {
         val resumeSpeed = resumeSpeedMps(DEFAULT_AUTO_PAUSE_SPEED_KMH)

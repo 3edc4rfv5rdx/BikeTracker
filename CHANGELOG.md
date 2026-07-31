@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- An auto-paused ride now resumes (and standby starts a new one) as soon as the rider has left the spot, even if the fixes report no speed at all — a jammed signal could previously leave a ride paused for the whole trip and then auto-save it as a few metres.
+- Auto-pause no longer triggers while the recorded positions are still covering ground, however slow the fixes read.
 - Fixed the build failing on a missing import in the tracking service.
 - Auto-save can now be turned off by setting it to 0 minutes, so nothing but Stop ever ends a ride.
 - The ride timer no longer runs on through a GPS outage and then jumps backwards when the signal returns; it stops where recording stops counting.
