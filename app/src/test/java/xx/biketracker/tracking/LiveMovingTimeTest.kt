@@ -2,7 +2,7 @@ package xx.biketracker.tracking
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import xx.biketracker.GPS_STALE_MS
+import xx.biketracker.GPS_INTERVAL_MS
 
 class LiveMovingTimeTest {
 
@@ -20,22 +20,24 @@ class LiveMovingTimeTest {
 
     @Test
     fun theTimerTicksLocallyBetweenFixes() {
-        assertEquals(62_000L, recording().liveMovingTimeMillis(nowElapsedRealtime = 102_000L))
+        assertEquals(
+            60_000L + 1_000L,
+            recording().liveMovingTimeMillis(nowElapsedRealtime = 101_000L),
+        )
     }
 
     @Test
-    fun theTimerStopsWhereRecordingStopsCounting() {
+    fun theTimerRunsNoFurtherThanTheNextFixIsDue() {
         val snapshot = recording()
 
-        // Still inside the gap the recorder will credit.
         assertEquals(
-            60_000L + GPS_STALE_MS,
-            snapshot.liveMovingTimeMillis(nowElapsedRealtime = 100_000L + GPS_STALE_MS),
+            60_000L + GPS_INTERVAL_MS,
+            snapshot.liveMovingTimeMillis(nowElapsedRealtime = 100_000L + GPS_INTERVAL_MS),
         )
-        // Past it the outage counts for nothing, so the display must not run on and then
-        // jump backwards when the signal returns.
+        // A fix that never came credits nothing, so the display must not run up and then fall
+        // back when the next one finally lands.
         assertEquals(
-            60_000L + GPS_STALE_MS,
+            60_000L + GPS_INTERVAL_MS,
             snapshot.liveMovingTimeMillis(nowElapsedRealtime = 400_000L),
         )
     }
