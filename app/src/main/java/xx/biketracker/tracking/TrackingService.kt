@@ -39,6 +39,7 @@ import kotlinx.coroutines.withContext
 import xx.biketracker.ACCURACY_LIMIT_M
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
 import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
+import xx.biketracker.FIX_REANCHOR_MS
 import xx.biketracker.elevationGainBySegment
 import xx.biketracker.GPS_INTERVAL_MS
 import xx.biketracker.GPS_MIN_INTERVAL_MS
