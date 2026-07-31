@@ -6,6 +6,7 @@ import xx.biketracker.GeoPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.min
 
 enum class TrackingStatus { IDLE, RECORDING, PAUSED, STANDBY }
 
@@ -48,11 +49,19 @@ fun TrackingSnapshot.hasGpsTrouble(nowElapsedRealtime: Long): Boolean =
             gpsAccuracyMeters == null ||
             gpsAccuracyMeters > ACCURACY_THRESHOLD_M)
 
-/** Moving time ticking locally between GPS updates; frozen while paused or idle. */
+/**
+ * Moving time ticking locally between GPS updates; frozen while paused or idle.
+ *
+ * The tick stops [GPS_STALE_MS] past the last accepted fix — exactly where recording itself stops
+ * counting, since a longer gap adds no moving time. Without that cap the display ran on through
+ * an outage and then jumped backwards by its whole length the moment a fix returned, which on a
+ * jammed signal looked like the ride timer resetting every few seconds while the total ran on.
+ */
 fun TrackingSnapshot.liveMovingTimeMillis(nowElapsedRealtime: Long): Long =
     movingTimeMillis +
         if (status == TrackingStatus.RECORDING) {
-            (nowElapsedRealtime - updatedAtElapsedRealtime).coerceAtLeast(0L)
+            (min(nowElapsedRealtime, lastTrustedFixElapsedRealtime + GPS_STALE_MS) -
+                updatedAtElapsedRealtime).coerceAtLeast(0L)
         } else {
             0L
         }
