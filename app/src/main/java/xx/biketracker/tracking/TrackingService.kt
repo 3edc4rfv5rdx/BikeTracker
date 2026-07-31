@@ -545,6 +545,17 @@ class TrackingService : Service() {
             }
             FixValidation.Rejected -> return
         }
+        // Both hold timers below (auto-pause, standby auto-start) measure an unbroken stretch of
+        // observed speed. Across a gap in the fix stream the tracker saw nothing of what the rider
+        // did — jamming and blocked signal look exactly like a standstill — and the first fix back
+        // routinely reports a speed of 0. Without this reset that one fix would satisfy a hold
+        // measured from before the outage and pause a moving bike.
+        if (previous == null ||
+            fix.elapsedRealtimeNanos - previous.elapsedRealtimeNanos > GPS_STALE_MS * 1_000_000L
+        ) {
+            lowSpeedSince = 0L
+            movingSince = 0L
+        }
         lastTrustedFix = fix
         lastTrustedFixElapsedRealtime = fix.elapsedRealtimeNanos / 1_000_000L
 
@@ -796,16 +807,25 @@ class TrackingService : Service() {
 
     private fun scheduleAutoSave() {
         cancelAutoSave()
-        autoSaveJob = scope.launch {
+        // Runs on the main thread so this can't race with a resume or recordLocation mutating
+        // status/points; a resume's cancelAutoSave() aborts it at either suspension point.
+        autoSaveJob = scope.launch(Dispatchers.Main) {
             delay(AppSettings.autoSaveMin.value * 60_000L)
-            // Decide and stop on the main thread so this can't race with a resume or
-            // recordLocation mutating status/points; a resume's cancelAutoSave() then
-            // aborts here before the check.
-            withContext(Dispatchers.Main) {
-                if (status == TrackingStatus.PAUSED) saveAndEnterStandby()
+            // Closing the ride is only defensible when the tracker can see that the rider really
+            // is standing still. A pause that started with the signal jammed proves nothing, so
+            // wait for the fixes to come back and let one of them decide: movement auto-resumes
+            // and cancels this job, a genuine standstill falls through to the save below.
+            while (status == TrackingStatus.PAUSED && !hasFreshFix()) {
+                delay(AUTO_SAVE_GPS_RECHECK_MS)
             }
+            if (status == TrackingStatus.PAUSED) saveAndEnterStandby()
         }
     }
+
+    /** Whether a fix was accepted recently enough to still describe where the rider is. */
+    private fun hasFreshFix(): Boolean =
+        lastTrustedFixElapsedRealtime > 0L &&
+            SystemClock.elapsedRealtime() - lastTrustedFixElapsedRealtime <= GPS_STALE_MS
 
     private fun cancelAutoSave() {
         autoSaveJob?.cancel()
@@ -1097,6 +1117,9 @@ class TrackingService : Service() {
     companion object {
         private const val CHANNEL_ID = "ride_tracking"
         private const val NOTIFICATION_ID = 1
+        /** How often the elapsed auto-save re-checks for the GPS to come back before closing
+         *  the ride; short enough that the save follows the returning signal closely. */
+        private const val AUTO_SAVE_GPS_RECHECK_MS = 15_000L
 
         const val ACTION_START = "xx.biketracker.action.START"
         const val ACTION_PAUSE = "xx.biketracker.action.PAUSE"
