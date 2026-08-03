@@ -24,4 +24,9 @@ for path in files:
 print(f"\nTotal: tests={tot['tests']} failures={tot['failures']} "
       f"errors={tot['errors']} skipped={tot['skipped']}")
 PY
+
+sleep 3
+
 exit "${status:-0}"
+
+
