@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.5.20260803+156
 
 - The unit-test runner now waits three seconds before exiting.
 - A ride's maximum speed now also counts the pace of the recorded track, so a receiver that reports no speed at all can no longer leave the maximum below the ride's average.
