@@ -94,16 +94,21 @@ internal fun elapsedMillisBetween(previousNanos: Long, currentNanos: Long): Long
 }
 
 /**
- * The reported speed of a fix if the track backs it up, otherwise null. A fix carries whatever
- * speed the receiver believes, and under jamming that is routinely tens of km/h for a bike at a
- * standstill — enough to stand as the ride's maximum for the rest of the day. Ground actually
- * covered between the two points is the second opinion: [stepMeters] is the recorded step (the
- * same one that feeds the distance), [dtMillis] the time it took.
+ * The speed this step may contribute to the ride's maximum, or null when there is no step to
+ * judge. Two opinions are weighed. The ground actually covered is the floor: [stepMeters] over
+ * [dtMillis] is the same step that feeds the distance, so the ride demonstrably went that fast,
+ * and counting it keeps the maximum from landing below the average — where the signal is jammed
+ * the receiver reports no speed at all (or a flat zero) for a whole ride, while the track keeps
+ * covering kilometres. The receiver's own Doppler reading is the more precise of the two and
+ * legitimately runs a little ahead of the smoothed track, so it is taken whenever the track backs
+ * it up; the tens of km/h invented for a bike at a standstill fall far short of that and are left
+ * out, contributing only the centimetres the track really moved.
  */
 internal fun corroboratedSpeedMps(reportedMps: Double?, stepMeters: Double, dtMillis: Long): Double? {
-    if (reportedMps == null || dtMillis <= 0L) return null
+    if (dtMillis <= 0L) return null
     val stepSpeed = stepMeters / (dtMillis / 1000.0)
-    return reportedMps.takeIf { stepSpeed >= it * SPEED_CORROBORATION_FRACTION }
+    val corroborated = reportedMps?.takeIf { stepSpeed >= it * SPEED_CORROBORATION_FRACTION }
+    return max(stepSpeed, corroborated ?: 0.0)
 }
 
 internal data class LocationFixCandidate(

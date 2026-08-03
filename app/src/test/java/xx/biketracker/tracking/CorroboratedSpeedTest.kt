@@ -28,13 +28,33 @@ class CorroboratedSpeedTest {
 
     @Test
     fun aSpeedInventedForAStandingBikeIsDropped() {
-        // 35 km/h claimed while the track moved 30 cm — jamming noise, not a sprint.
-        assertNull(corroboratedSpeedMps(reportedMps = 9.7, stepMeters = 0.3, dtMillis = 1_500L))
+        // 35 km/h claimed while the track moved 30 cm — jamming noise, not a sprint. Only the
+        // 30 cm the bike actually covered counts.
+        assertEquals(
+            0.2,
+            corroboratedSpeedMps(reportedMps = 9.7, stepMeters = 0.3, dtMillis = 1_500L)!!,
+            1e-9,
+        )
     }
 
     @Test
-    fun nothingIsCorroboratedWithoutASpeedOrATimeStep() {
-        assertNull(corroboratedSpeedMps(reportedMps = null, stepMeters = 15.0, dtMillis = 1_500L))
+    fun theTrackStandsInForAReceiverThatReportsNoSpeed() {
+        // Jamming routinely leaves the speed blank (or a flat zero) for a whole ride, while the
+        // track keeps covering ground — the ride's pace is then the only evidence there is.
+        assertEquals(
+            10.0,
+            corroboratedSpeedMps(reportedMps = null, stepMeters = 15.0, dtMillis = 1_500L)!!,
+            1e-9,
+        )
+        assertEquals(
+            10.0,
+            corroboratedSpeedMps(reportedMps = 0.0, stepMeters = 15.0, dtMillis = 1_500L)!!,
+            1e-9,
+        )
+    }
+
+    @Test
+    fun nothingIsCorroboratedWithoutATimeStep() {
         assertNull(corroboratedSpeedMps(reportedMps = 10.0, stepMeters = 15.0, dtMillis = 0L))
     }
 
