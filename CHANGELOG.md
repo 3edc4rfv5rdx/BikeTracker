@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- The track on the map is now marked with small chevrons pointing the way you rode.
 - A ride's maximum speed is now only taken from fixes whose speed the recorded track backs up, so the tens of km/h a jammed receiver invents for a standing bike no longer become the ride's top speed.
 - The ride timer now runs no further than the next fix is due, so with fixes tens of seconds apart it no longer climbs ten seconds and falls back on every one.
 - Fixed two anchor-distance tests that moved their fix 200 m in one second, which the validator rightly called a jump.

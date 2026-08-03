@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="18dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Points right: with symbol-placement "line" MapLibre lays the icon along the line the way
+         it lays text, so the icon's reading direction (right), not its top, is the way of travel.
+         Dark halo first, so the chevron stays readable where it overhangs the track line. -->
+    <path
+        android:strokeColor="#59000000"
+        android:strokeWidth="6.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M8.5,5.5 L15,12 L8.5,18.5" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M8.5,5.5 L15,12 L8.5,18.5" />
+</vector>

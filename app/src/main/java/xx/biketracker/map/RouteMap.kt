@@ -58,6 +58,7 @@ import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
@@ -81,6 +82,15 @@ private const val ROUTE_SOURCE_ID = "ride-route"
 private const val ROUTE_LAYER_ID = "ride-route-line"
 private const val ROUTE_LINE_WIDTH = 4f
 private const val ROUTE_BOUNDS_PADDING_PX = 64
+
+// Direction chevrons laid along the track line: MapLibre places them every
+// DIRECTION_SPACING screen pixels and rotates each one to the local direction of the line.
+// Track points are chronological, so that direction is the direction of travel.
+private const val DIRECTION_LAYER_ID = "ride-route-direction"
+private const val DIRECTION_IMAGE_ID = "ride-route-chevron"
+private const val DIRECTION_SPACING = 56f
+// Zoomed further out the track is a squiggle the arrows would only clutter.
+private const val DIRECTION_MIN_ZOOM = 13f
 
 // Live-position puck: an arrow at the current fix, rotated to the heading of travel.
 private const val PUCK_SOURCE_ID = "ride-puck"
@@ -204,7 +214,12 @@ fun RouteMap(
     LaunchedEffect(mapInstance) {
         val map = mapInstance ?: return@LaunchedEffect
         map.setStyle(Style.Builder().fromUri(MAP_STYLE_URL)) { style ->
-            style.addSource(GeoJsonSource(ROUTE_SOURCE_ID))
+            // The source maxzoom matches the camera ceiling: past a source's own maxzoom tiles
+            // are overscaled, and the overscale factor divides symbol spacing — the direction
+            // chevrons would bunch up at the highest zooms (same trap as centerOnRoute).
+            style.addSource(
+                GeoJsonSource(ROUTE_SOURCE_ID, GeoJsonOptions().withMaxZoom(MAX_ZOOM.toInt()))
+            )
             style.addLayer(
                 LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
                     PropertyFactory.lineColor(lineColor.toArgb()),
@@ -212,6 +227,22 @@ fun RouteMap(
                     PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                     PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
                 )
+            )
+            // Direction chevrons riding on the same line data, drawn over it.
+            styleBitmap(context, R.drawable.ic_map_direction)?.let {
+                style.addImage(DIRECTION_IMAGE_ID, it)
+            }
+            style.addLayer(
+                SymbolLayer(DIRECTION_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
+                    PropertyFactory.iconImage(DIRECTION_IMAGE_ID),
+                    PropertyFactory.symbolPlacement(Property.SYMBOL_PLACEMENT_LINE),
+                    PropertyFactory.symbolSpacing(DIRECTION_SPACING),
+                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                    // Never let map labels (or a doubled-back track) suppress an arrow, and
+                    // never let an arrow push a label away.
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                ).apply { minZoom = DIRECTION_MIN_ZOOM }
             )
             // Scrub marker above the track but under the puck.
             style.addSource(GeoJsonSource(MARKER_SOURCE_ID))
@@ -229,7 +260,7 @@ fun RouteMap(
             // symbol every animation frame and leak native memory at ~500 MB/s until the OS
             // killed the app.
             PuckState.entries.forEach { state ->
-                puckBitmap(context, state.drawableRes)?.let { style.addImage(state.imageId, it) }
+                styleBitmap(context, state.drawableRes)?.let { style.addImage(state.imageId, it) }
             }
             style.addSource(GeoJsonSource(PUCK_SOURCE_ID))
             style.addLayer(
@@ -443,8 +474,8 @@ private fun nearestRoutePoint(route: List<GeoPoint>, lat: Double, lon: Double): 
     return bestIndex to bestMeters
 }
 
-/** Rasterize a puck vector drawable into a bitmap the MapLibre style can register as an image. */
-private fun puckBitmap(context: android.content.Context, drawableRes: Int): Bitmap? {
+/** Rasterize a vector drawable into a bitmap the MapLibre style can register as an image. */
+private fun styleBitmap(context: android.content.Context, drawableRes: Int): Bitmap? {
     val drawable = ContextCompat.getDrawable(context, drawableRes) ?: return null
     val bitmap = createBitmap(
         drawable.intrinsicWidth,
