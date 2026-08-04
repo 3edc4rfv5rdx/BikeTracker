@@ -52,7 +52,7 @@ import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.isRideWorthSaving
 import xx.biketracker.RECORDING_OUTAGE_MS
-import xx.biketracker.SPEED_CORROBORATION_FRACTION
+import xx.biketracker.MAX_SPEED_WINDOW_MS
 import xx.biketracker.STANDBY_DEPARTURE_HOLD_MS
 import xx.biketracker.STANDBY_GPS_INTERVAL_MS
 import xx.biketracker.STANDBY_GPS_MIN_INTERVAL_MS
@@ -99,21 +99,50 @@ internal fun elapsedMillisBetween(previousNanos: Long, currentNanos: Long): Long
 }
 
 /**
- * The speed this step may contribute to the ride's maximum, or null when there is no step to
- * judge. Two opinions are weighed. The ground actually covered is the floor: [stepMeters] over
- * [dtMillis] is the same step that feeds the distance, so the ride demonstrably went that fast,
- * and counting it keeps the maximum from landing below the average — where the signal is jammed
- * the receiver reports no speed at all (or a flat zero) for a whole ride, while the track keeps
- * covering kilometres. The receiver's own Doppler reading is the more precise of the two and
- * legitimately runs a little ahead of the smoothed track, so it is taken whenever the track backs
- * it up; the tens of km/h invented for a bike at a standstill fall far short of that and are left
- * out, contributing only the centimetres the track really moved.
+ * The fastest the ride ever actually got somewhere.
+ *
+ * A maximum read off a single step is a maximum read off a single fix's error: the jump filter
+ * admits any step under [MAX_PLAUSIBLE_SPEED_MPS], and one fix landing just inside that would leave
+ * a bicycle credited with 100 km/h. The Kalman filter damps such a fix hard at a standstill, where
+ * its process noise is low — but at riding speed the noise dominates, the gain approaches 1, and the
+ * jump passes almost intact. A speed therefore only counts once the ride held it for
+ * [MAX_SPEED_WINDOW_MS].
+ *
+ * It is measured as the ground put between the window's ends, not the track walked between them: an
+ * excursion that goes out and comes straight back covers plenty of track and no ground, which is
+ * exactly the shape of a noisy fix. Over the seconds of a window the two barely differ for real
+ * riding, so a genuine sprint is reported in full.
+ *
+ * The window is fed the same smoothed positions the distance is built from and knows nothing of the
+ * speed the receiver reports, so a ride recorded under a signal jammed hard enough to blank the
+ * speed entirely still gets a maximum out of the ground it covered.
+ *
+ * [reset] wherever the recording breaks: across a pause or an outage the window's two ends are not
+ * connected by anything the tracker saw.
  */
-internal fun corroboratedSpeedMps(reportedMps: Double?, stepMeters: Double, dtMillis: Long): Double? {
-    if (dtMillis <= 0L) return null
-    val stepSpeed = stepMeters / (dtMillis / 1000.0)
-    val corroborated = reportedMps?.takeIf { stepSpeed >= it * SPEED_CORROBORATION_FRACTION }
-    return max(stepSpeed, corroborated ?: 0.0)
+internal class SpeedWindow(private val windowMillis: Long = MAX_SPEED_WINDOW_MS) {
+
+    private class Sample(val timeMillis: Long, val lat: Double, val lon: Double)
+
+    private val samples = ArrayDeque<Sample>()
+
+    fun reset() = samples.clear()
+
+    /**
+     * Feed one recorded position, on a monotonic clock. Returns the speed the ride demonstrably
+     * held over the window ending here, or null while the recording does not span one yet.
+     */
+    fun observe(timeMillis: Long, lat: Double, lon: Double): Double? {
+        samples.addLast(Sample(timeMillis, lat, lon))
+        // Keep the tightest window that still spans the minimum; a wider one only dilutes a peak.
+        while (samples.size >= 2 && samples[1].timeMillis <= timeMillis - windowMillis) {
+            samples.removeFirst()
+        }
+        val from = samples.first()
+        val spanMillis = timeMillis - from.timeMillis
+        if (spanMillis < windowMillis) return null
+        return haversineMeters(from.lat, from.lon, lat, lon) / (spanMillis / 1000.0)
+    }
 }
 
 /**
@@ -318,6 +347,7 @@ class TrackingService : Service() {
     private val route = mutableListOf<GeoPoint>()
 
     private val kalman = GpsKalmanFilter()
+    private val speedWindow = SpeedWindow()
     private var pausedAutomatically = false
     private var lowSpeedSince = 0L
     // Where the low-speed streak began; a streak that covers ground is not a standstill.
@@ -479,6 +509,7 @@ class TrackingService : Service() {
     private fun resetRideState() {
         stopping.set(false)
         kalman.reset()
+        speedWindow.reset()
         flushJobs.clear()
         scheduledFlushCount = 0
         persistenceFailed = false
@@ -729,11 +760,13 @@ class TrackingService : Service() {
         if (prev != null && !gapped) {
             distanceMeters += stepMeters
             movingTimeMillis += dt
-            // Only a fix that continues an unbroken track can be corroborated at all: across a gap
-            // the recording covers no ground, so the claimed speed would have nothing to back it.
-            corroboratedSpeedMps(fix.speedMps, stepMeters, dt)?.let {
-                maxSpeedMps = max(maxSpeedMps, it)
-            }
+        } else {
+            // Nothing the tracker saw connects this fix to the last one, so no window may span the
+            // two: the ground between them was never ridden under observation.
+            speedWindow.reset()
+        }
+        speedWindow.observe(nowElapsedMillis, smoothed.lat, smoothed.lon)?.let {
+            maxSpeedMps = max(maxSpeedMps, it)
         }
 
         val point = TrackPoint(
