@@ -30,4 +30,5 @@ for i in issues:
 print(f"\n{len(issues)} issue(s). HTML: {sys.argv[1].replace('.xml', '.html')}")
 PY
 
+sleep 3
 exit "${status:-0}"

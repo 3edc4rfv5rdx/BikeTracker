@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The lint script now pauses at the end instead of reporting a missing `delay` command.
+
 - The debug and release build scripts now run from their own directory, so launching them from anywhere no longer misses the wrapper and starts a fresh build number.
 
 - Cancelling an offline map download now takes effect while the area is still being prepared, instead of leaving the dialog stuck at 0% and starting the download anyway; deleting all areas no longer leaves a freshly created one behind.
