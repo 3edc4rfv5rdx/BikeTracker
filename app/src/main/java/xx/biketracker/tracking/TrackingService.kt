@@ -38,6 +38,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import xx.biketracker.ACCURACY_LIMIT_M
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
+import xx.biketracker.AUTO_SAVE_GPS_WAIT_MS
 import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
 import xx.biketracker.FIX_REANCHOR_MS
 import xx.biketracker.elevationGainBySegment
@@ -166,6 +167,15 @@ internal class ObservationHold(private val holdMillis: Long) {
         return nowMillis - start >= holdMillis
     }
 }
+
+/**
+ * Whether the elapsed auto-save may close the ride now: either a fix has come back to confirm the
+ * standstill it is about to record, or the wait for one has run out (see [AUTO_SAVE_GPS_WAIT_MS],
+ * which also explains why giving up costs little). [waitedMillis] is measured from the moment the
+ * configured auto-save period elapsed, on the monotonic clock, so time asleep counts.
+ */
+internal fun autoSaveMayClose(hasFreshFix: Boolean, waitedMillis: Long, limitMillis: Long): Boolean =
+    hasFreshFix || waitedMillis >= limitMillis
 
 internal data class LocationFixCandidate(
     val lat: Double,
@@ -943,11 +953,24 @@ class TrackingService : Service() {
             // Closing the ride is only defensible when the tracker can see that the rider really
             // is standing still. A pause that started with the signal jammed proves nothing, so
             // wait for the fixes to come back and let one of them decide: movement auto-resumes
-            // and cancels this job, a genuine standstill falls through to the save below.
-            while (status == TrackingStatus.PAUSED && !hasFreshFix()) {
+            // and cancels this job, a genuine standstill falls through to the save below. The wait
+            // is bounded — on a phone left without a signal nothing ever settles it.
+            val waitStart = SystemClock.elapsedRealtime()
+            while (status == TrackingStatus.PAUSED &&
+                AppSettings.autoSaveMin.value > 0 &&
+                !autoSaveMayClose(
+                    hasFreshFix = hasFreshFix(),
+                    waitedMillis = SystemClock.elapsedRealtime() - waitStart,
+                    limitMillis = AUTO_SAVE_GPS_WAIT_MS,
+                )
+            ) {
                 delay(AUTO_SAVE_GPS_RECHECK_MS)
             }
-            if (status == TrackingStatus.PAUSED) saveAndEnterStandby()
+            // Turning auto-save off during the wait calls the save off with it, exactly as it does
+            // during the period before it.
+            if (status == TrackingStatus.PAUSED && AppSettings.autoSaveMin.value > 0) {
+                saveAndEnterStandby()
+            }
         }
     }
 

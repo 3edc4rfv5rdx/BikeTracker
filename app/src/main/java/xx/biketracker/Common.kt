@@ -36,6 +36,18 @@ const val GPS_MIN_INTERVAL_MS = 1000L
 
 // --- Standby after a long-pause auto-save ---
 // The ride is saved but the service stays alive, listening for the rider to set off again.
+/**
+ * How long the elapsed auto-save waits for the GPS to come back before closing the ride anyway.
+ * Closing it is only defensible while the tracker can see that the rider really is standing still,
+ * so a pause that began under a jammed signal waits for a fix to settle the question — but not
+ * forever: an unbounded wait leaves the service and its location request running for as long as the
+ * phone sits somewhere without a signal, which is the one place the wait can never end on its own.
+ *
+ * Giving up costs little. A fix stream this dead recorded nothing either, so the ride being closed
+ * is already complete up to its last fix; the worst case is a trip stored as two, with standby
+ * picking the second half up as soon as the signal returns.
+ */
+const val AUTO_SAVE_GPS_WAIT_MS = 15L * 60L * 1000L
 /** How long standby waits for movement before shutting the service down for good. */
 const val STANDBY_TIMEOUT_MS = 30L * 60L * 1000L
 /** Movement must hold above the resume threshold this long to auto-start a ride from standby. */

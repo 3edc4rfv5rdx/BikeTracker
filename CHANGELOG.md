@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- A paused ride waiting for the GPS to come back before it auto-saves now gives up after fifteen minutes and saves anyway, instead of holding the tracker open indefinitely on a phone left without a signal.
+- Setting auto-save to 0 now also calls off a save that is already waiting for the signal, not only one still counting down.
 - An imported GPX is now labelled with the track's own name, falling back to the file's; the name of whoever exported the file can no longer end up on it.
 - An imported GPX is now segmented only where the file itself says the recording stopped, so a track logged once every few minutes is drawn as the one ride it is instead of vanishing; a step nobody could have ridden still breaks the line, and no longer sets the speed chart's whole scale.
 - Standby now recognises that you have set off again even where the signal is poor enough that fixes arrive tens of seconds apart; it could previously never confirm it, and shut down after half an hour instead of recording the ride.
