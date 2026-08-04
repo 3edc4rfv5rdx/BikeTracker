@@ -89,15 +89,29 @@ private fun documentSize(resolver: ContentResolver, uri: Uri): Long? = try {
  */
 fun parseGpx(input: InputStream, maxPoints: Int = MAX_IMPORTED_POINTS): ParsedGpx? {
     val handler = GpxHandler(maxPoints)
+    val stream = input.buffered(PROLOG_SCAN_BYTES * 2)
     try {
+        // Refuse a document type declaration ourselves rather than trust a parser to. Every
+        // entity a file could point us at, external or expanding, has to be declared in a DTD, and
+        // a DTD has to be in the prolog — so refusing one there closes the whole class. The parser
+        // features below say the same thing, but a parser is free not to recognise a feature name
+        // and carry on regardless: the check that fails closed is the one made here.
+        stream.mark(PROLOG_SCAN_BYTES)
+        // readNBytes, not read: a single read is free to hand back less than it has, and a
+        // declaration straddling that boundary would go unnoticed.
+        val prolog = stream.readNBytes(PROLOG_SCAN_BYTES)
+        stream.reset()
+        if (declaresDoctype(prolog)) return null
+
         SAXParserFactory.newInstance().apply {
             isNamespaceAware = true
-            // Harden against XXE: the file is user-supplied and never needs a DTD. The handler
-            // resolves every entity to nothing, in case a parser refuses one of these features.
+            // Not every implementation recognises these — Android's does not take the first — so
+            // they are a second lock, never the only one. The handler resolves every entity to
+            // nothing for the same reason.
             runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
             runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
             runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
-        }.newSAXParser().parse(input, handler)
+        }.newSAXParser().parse(stream, handler)
     } catch (_: PointLimitReached) {
         // The start of the track is worth showing; the caller says so on screen.
     } catch (_: Exception) {
@@ -113,6 +127,29 @@ fun parseGpx(input: InputStream, maxPoints: Int = MAX_IMPORTED_POINTS): ParsedGp
 
 /** Thrown to stop the parse once [MAX_IMPORTED_POINTS] have been read; not a failure. */
 private class PointLimitReached : SAXException()
+
+/** How much of a document's start is searched for a document type declaration. A prolog is a
+ *  handful of lines; this is room enough for a wildly commented one. */
+private const val PROLOG_SCAN_BYTES = 8 * 1024
+
+/**
+ * Whether these opening bytes declare a document type. Read as bytes on purpose: this runs before
+ * any parser has decided what the file's encoding is. The declaration is matched as plain ASCII,
+ * and again with zero bytes dropped, which is what the same ASCII looks like in UTF-16 — the two
+ * shapes a GPX file ever arrives in.
+ */
+internal fun declaresDoctype(prolog: ByteArray): Boolean {
+    val text = String(prolog, Charsets.ISO_8859_1)
+    return DOCTYPE in text || DOCTYPE in text.filterNot { it == '\u0000' }
+}
+
+private const val DOCTYPE = "<!DOCTYPE"
+
+/** A coordinate a track can really be at. [toDoubleOrNull] alone accepts "NaN", "Infinity" and
+ *  999, and one of those poisons every distance, bound and chart scale drawn from the track
+ *  afterwards — a range check refuses all three, since nothing compares in range to NaN. */
+private fun coordinate(text: String?, limit: Double): Double? =
+    text?.toDoubleOrNull()?.takeIf { it in -limit..limit }
 
 /** The namespaces a GPX element may be in. The empty one is a file that declares none. */
 private val GPX_NAMESPACES = setOf(
@@ -215,9 +252,10 @@ private class GpxHandler(private val maxPoints: Int) : DefaultHandler() {
         }
     }
 
+    /** A point whose coordinates are unusable is skipped; the rest of the track is still a track. */
     private fun startPoint(attributes: Attributes) {
-        val lat = attribute(attributes, "lat")?.toDoubleOrNull() ?: return
-        val lon = attribute(attributes, "lon")?.toDoubleOrNull() ?: return
+        val lat = coordinate(attribute(attributes, "lat"), 90.0) ?: return
+        val lon = coordinate(attribute(attributes, "lon"), 180.0) ?: return
         pointLat = lat
         pointLon = lon
         pointTimeMillis = 0L

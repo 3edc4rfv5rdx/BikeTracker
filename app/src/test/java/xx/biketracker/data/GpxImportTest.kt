@@ -294,6 +294,95 @@ class GpxImportTest {
         assertTrue(parsed.truncated)
     }
 
+    // --- Hardening ---
+
+    @Test
+    fun aDocumentTypeDeclarationIsRefusedOutright() {
+        // Every entity a file could point us at has to be declared in a DTD, and a DTD has to be
+        // in the prolog. No GPX needs one; refusing it closes the whole class of attack without
+        // depending on a parser feature that some implementations do not recognise.
+        assertNull(
+            parse(
+                """<?xml version="1.0"?>
+                   <!DOCTYPE gpx [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+                   <gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+                     <trkpt lat="50.0" lon="30.0"><name>&xxe;</name></trkpt>
+                   </trkseg></trk></gpx>"""
+            )
+        )
+    }
+
+    @Test
+    fun aHarmlessDocumentTypeDeclarationIsRefusedToo() {
+        // Nothing distinguishes a harmless DTD from a hostile one cheaply, and no GPX file needs
+        // either, so the answer to both is the same one.
+        assertNull(parse("""<!DOCTYPE gpx>${gpx("<trk>$oneSegment</trk>")}"""))
+    }
+
+    @Test
+    fun theDoctypeScanReadsBytesRatherThanTrustingAnEncoding() {
+        assertTrue(declaresDoctype("<!DOCTYPE gpx>".toByteArray()))
+        // The same ASCII as UTF-16 sees it, either byte order.
+        assertTrue(declaresDoctype("<!DOCTYPE gpx>".toByteArray(Charsets.UTF_16LE)))
+        assertTrue(declaresDoctype("<!DOCTYPE gpx>".toByteArray(Charsets.UTF_16BE)))
+        assertFalse(declaresDoctype("<?xml version=\"1.0\"?><gpx/>".toByteArray()))
+        assertFalse(declaresDoctype(ByteArray(0)))
+    }
+
+    @Test
+    fun aCoordinateNoPointCanBeAtIsSkipped() {
+        // NaN and infinities pass toDoubleOrNull, and a latitude of 999 passes everything: one of
+        // them reaching a distance, a map bound or a chart scale poisons every figure drawn from
+        // the track. The points around them are still a track, so they are kept.
+        val parsed = parse(
+            gpx(
+                """<trk><trkseg>
+                     <trkpt lat="50.0000000" lon="30.0000000"/>
+                     <trkpt lat="NaN" lon="30.0000000"/>
+                     <trkpt lat="50.0010000" lon="Infinity"/>
+                     <trkpt lat="999.0" lon="30.0000000"/>
+                     <trkpt lat="50.0010000" lon="-190.0"/>
+                     <trkpt lat="50.0020000" lon="30.0000000"/>
+                   </trkseg></trk>"""
+            )
+        )!!
+
+        assertEquals(listOf(50.0, 50.002), parsed.route.map { it.lat })
+        assertTrue(parsed.route.all { it.lat.isFinite() && it.lon.isFinite() })
+    }
+
+    @Test
+    fun aTrackOfNothingButUnusableCoordinatesIsNoTrack() {
+        assertNull(
+            parse(
+                gpx(
+                    """<trk><trkseg>
+                         <trkpt lat="NaN" lon="NaN"/>
+                         <trkpt lat="91.0" lon="30.0"/>
+                       </trkseg></trk>"""
+                )
+            )
+        )
+    }
+
+    @Test
+    fun theSegmentFlagLandsOnTheFirstPointThatCanBeUsed() {
+        // The segment starts where the track starts, not where an unusable point was written.
+        val parsed = parse(
+            gpx(
+                """<trk><trkseg>
+                     <trkpt lat="50.0" lon="30.0"/>
+                   </trkseg><trkseg>
+                     <trkpt lat="1e400" lon="30.0"/>
+                     <trkpt lat="51.0" lon="31.0"/>
+                   </trkseg></trk>"""
+            )
+        )!!
+
+        assertEquals(listOf(50.0, 51.0), parsed.route.map { it.lat })
+        assertEquals(listOf(true, true), parsed.route.map { it.segmentStart })
+    }
+
     // --- Namespaces ---
 
     private val prefixed =
