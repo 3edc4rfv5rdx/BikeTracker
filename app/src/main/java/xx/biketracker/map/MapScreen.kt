@@ -55,7 +55,8 @@ internal fun mapRecenterKey(selectedTripId: Long?, liveRideStartElapsedRealtime:
 fun MapScreen() {
     val context = LocalContext.current
     val snapshot by TrackingState.snapshot.collectAsState()
-    val selected by MapSelection.trip.collectAsState()
+    // Read from the database rather than held as a copy, so a rename or a deletion reaches the map.
+    val selected = rememberSelectedTrip()
     val imported by MapSelection.imported.collectAsState()
 
     // Stored track of the selected ride, loaded when the selection changes. The GPS speed

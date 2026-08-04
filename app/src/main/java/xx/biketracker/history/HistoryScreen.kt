@@ -101,7 +101,7 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     val years = remember(trips, weekdayNames) { groupByDate(trips, weekdayNames) }
 
     // The ride currently shown on the Map tab, so its row can be told apart from the rest.
-    val mappedTrip by MapSelection.trip.collectAsState()
+    val mappedTripId by MapSelection.selectedTripId.collectAsState()
 
     // Tapping a ride opens its details as a dialog over this screen (no navigation, so Back
     // just dismisses the dialog). The Trip already carries every figure the dialog shows.
@@ -214,8 +214,8 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     // branch and scroll to it, so the highlighted ride is in view without hunting for it. Runs once
     // per visit — the plain flag resets when leaving the tab disposes this composition.
     var scrolledToMapped by remember { mutableStateOf(false) }
-    LaunchedEffect(years, mappedTrip) {
-        val trip = mappedTrip
+    LaunchedEffect(years, mappedTripId) {
+        val trip = mappedTripId?.let { id -> trips.firstOrNull { it.id == id } }
         if (scrolledToMapped || trip == null || years.isEmpty()) return@LaunchedEffect
         scrolledToMapped = true
         expanded.addAll(dayNodeKeys(trip.startTime).filterNot(expanded::contains))
@@ -287,7 +287,7 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
                                 items(dayNode.trips, key = { "t-${it.id}" }) { trip ->
                                     RideRow(
                                         trip = trip,
-                                        onMap = trip.id == mappedTrip?.id,
+                                        onMap = trip.id == mappedTripId,
                                         onClick = { selectedTrip = trip },
                                         onShowStats = { onShowRideStats(trip) },
                                         onEdit = { editingTrip = trip },

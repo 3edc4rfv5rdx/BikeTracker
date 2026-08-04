@@ -68,8 +68,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import xx.biketracker.data.AppDatabase
 import xx.biketracker.data.finalizeAbandonedTrips
 import xx.biketracker.data.GPX_MIME
 import xx.biketracker.data.GpxImportOutcome
@@ -84,6 +86,7 @@ import xx.biketracker.history.HistoryScreen
 import xx.biketracker.history.RideStatsScreen
 import xx.biketracker.map.MapScreen
 import xx.biketracker.map.MapSelection
+import xx.biketracker.map.rememberSelectedTrip
 import xx.biketracker.settings.AppSettings
 import xx.biketracker.settings.SettingsScreen
 import xx.biketracker.tracking.TrackingScreen
@@ -168,10 +171,20 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     // The About button lives only on the Settings tab.
     var showAbout by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+
     // The extended-stats screen (opened from a History row) is a full-screen overlay above the
     // tab content, not a nav destination: the bottom bar stays live, and switching tabs closes
     // it (see navigateTo). Null means it is not shown.
     var statsTrip by remember { mutableStateOf<Trip?>(null) }
+    // Follow the ride it is showing: a rename reaches the overlay, and a deletion closes it
+    // instead of leaving figures on screen for a ride that no longer exists.
+    statsTrip?.id?.let { statsTripId ->
+        val storedStatsTrip by remember(statsTripId) {
+            AppDatabase.get(context).tripDao().observeTrip(statsTripId).distinctUntilChanged()
+        }.collectAsState(initial = statsTrip)
+        LaunchedEffect(storedStatsTrip) { statsTrip = storedStatsTrip }
+    }
 
     // Exit is blocked while a ride is active: the task would disappear yet the foreground
     // service would keep recording, which reads as either a lost ride or a stuck app.
@@ -199,7 +212,6 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
 
     // Import a GPX file to view on the map (read-only, never stored). Reading and parsing run off
     // the main thread; anything that goes wrong shows a toast and leaves the current view untouched.
-    val context = LocalContext.current
     val importScope = rememberCoroutineScope()
     val importFailedMessage = stringResource(id = R.string.map_import_failed)
     val importTooLargeMessage = stringResource(id = R.string.map_import_too_large)
@@ -268,7 +280,7 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                     if (currentTab == Destination.Map) {
                         // What's shown on the map is named here, off the map itself: a stored ride,
                         // an imported GPX track, or — when neither — the live ride's stats.
-                        val selectedTrip by MapSelection.trip.collectAsState()
+                        val selectedTrip = rememberSelectedTrip()
                         val importedTrack by MapSelection.imported.collectAsState()
                         when {
                             selectedTrip != null -> {

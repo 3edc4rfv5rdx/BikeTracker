@@ -41,6 +41,11 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE id = :tripId")
     suspend fun getTrip(tripId: Long): Trip?
 
+    /** One ride as it stands: re-emitted when it is edited, and null once it is deleted — so a
+     *  screen showing a ride never outlives the row it is showing. */
+    @Query("SELECT * FROM trips WHERE id = :tripId")
+    fun observeTrip(tripId: Long): Flow<Trip?>
+
     /** Route points of one trip in recorded order — used for the map, stats, and GPX export. */
     @Query("SELECT * FROM track_points WHERE tripId = :tripId ORDER BY id ASC")
     suspend fun getPoints(tripId: Long): List<TrackPoint>
