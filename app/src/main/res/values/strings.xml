@@ -65,7 +65,10 @@
     <string name="map_imported_track">Imported track</string>
     <string name="map_import_failed">Couldn\'t read that GPX file</string>
     <string name="map_import_too_large">That file is too large to be a GPX track</string>
-    <string name="map_import_truncated">Track shown cut short at its first %1$d points</string>
+    <plurals name="map_import_truncated">
+        <item quantity="one">Track cut short at its first %1$d point</item>
+        <item quantity="other">Track cut short at its first %1$d points</item>
+    </plurals>
     <string name="map_zoom_in">Zoom in</string>
     <string name="map_zoom_out">Zoom out</string>
     <string name="map_follow_heading">Rotate map with direction of travel</string>

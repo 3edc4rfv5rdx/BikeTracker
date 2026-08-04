@@ -65,7 +65,12 @@
     <string name="map_imported_track">Импортированный трек</string>
     <string name="map_import_failed">Не удалось прочитать этот файл GPX</string>
     <string name="map_import_too_large">Этот файл слишком велик для трека GPX</string>
-    <string name="map_import_truncated">Трек показан обрезанным на первых %1$d точках</string>
+    <plurals name="map_import_truncated">
+        <item quantity="one">Трек обрезан до %1$d точки</item>
+        <item quantity="few">Трек обрезан до %1$d точек</item>
+        <item quantity="many">Трек обрезан до %1$d точек</item>
+        <item quantity="other">Трек обрезан до %1$d точек</item>
+    </plurals>
     <string name="map_zoom_in">Приблизить</string>
     <string name="map_zoom_out">Отдалить</string>
     <string name="map_follow_heading">Поворачивать карту по направлению движения</string>

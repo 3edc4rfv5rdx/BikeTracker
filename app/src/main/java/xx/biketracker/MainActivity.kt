@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -215,7 +216,8 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     val importScope = rememberCoroutineScope()
     val importFailedMessage = stringResource(id = R.string.map_import_failed)
     val importTooLargeMessage = stringResource(id = R.string.map_import_too_large)
-    val importTruncatedMessage = stringResource(R.string.map_import_truncated, MAX_IMPORTED_POINTS)
+    val importTruncatedMessage =
+        pluralStringResource(R.plurals.map_import_truncated, MAX_IMPORTED_POINTS, MAX_IMPORTED_POINTS)
     val gpxPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         importScope.launch {
