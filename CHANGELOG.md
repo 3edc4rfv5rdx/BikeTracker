@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- Importing a GPX now offers GPX and XML files rather than everything on the device, turns down a file far too large to be a track, and reads it as a stream instead of holding the whole document twice over; a track past 100 000 points is shown cut short and says so.
+- A GPX whose elements carry a namespace prefix now imports like any other file; it was refused outright before.
 - A long ride no longer costs more battery the longer it gets: the Map tab re-derives only what each new fix added instead of the whole track and chart, and the chart builds nothing at all while it is pulled down.
 - A ride that fails to open no longer leaves the tracker running invisibly behind it, and pressing anything but Stop while a ride opens from standby now returns to standby instead of shutting the tracker down.
 - Start now says why it refused instead of doing nothing at all: a backup or restore in progress, or missing location permission, each get their own message, and a second refused tap is reported like the first.

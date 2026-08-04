@@ -1,14 +1,21 @@
 package xx.biketracker.data
 
-import org.w3c.dom.Document
-import org.w3c.dom.Element
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
+import org.xml.sax.Attributes
 import org.xml.sax.InputSource
+import org.xml.sax.SAXException
+import org.xml.sax.helpers.DefaultHandler
 import xx.biketracker.GeoPoint
+import xx.biketracker.MAX_GPX_FILE_BYTES
+import xx.biketracker.MAX_IMPORTED_POINTS
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.haversineMeters
+import java.io.InputStream
 import java.io.StringReader
 import java.time.OffsetDateTime
-import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.parsers.SAXParserFactory
 
 /**
  * Read-only GPX import for the "view a track on the map" feature — the reverse of [buildGpx], but
@@ -16,59 +23,221 @@ import javax.xml.parsers.DocumentBuilderFactory
  * segment (its first point flagged [GeoPoint.segmentStart]) so the map and chart split where the
  * file says the recording stopped, while the per-point speed and elapsed offset the chart needs are
  * derived from the timestamps ([withDerivedMetadata]).
+ *
+ * [truncated] says the file held more points than [MAX_IMPORTED_POINTS] and only its start is here.
  */
-class ParsedGpx(val name: String?, val route: List<GeoPoint>)
+class ParsedGpx(val name: String?, val route: List<GeoPoint>, val truncated: Boolean = false)
 
-/** Parse [xml] into a track, or null when it is not GPX we can read or carries no points. */
-fun parseGpx(xml: String): ParsedGpx? {
-    val doc = try {
-        DocumentBuilderFactory.newInstance().apply {
-            isNamespaceAware = false // GPX uses a default namespace; match tag names literally
-            // Harden against XXE: the file is user-supplied and never needs a DTD.
-            runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
-            runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
-            runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
-            isExpandEntityReferences = false
-        }.newDocumentBuilder().parse(InputSource(StringReader(xml)))
+/** What came of trying to import a document the user picked. */
+sealed interface GpxImportOutcome {
+    class Imported(val track: ParsedGpx) : GpxImportOutcome
+
+    /** Bigger than any GPX track is, so it was never read: the pick was a mistake, not a track. */
+    data object TooLarge : GpxImportOutcome
+
+    /** Unreadable, not XML, not GPX, or GPX carrying no points at all. */
+    data object Failed : GpxImportOutcome
+}
+
+/** Whether a document of [sizeBytes] is worth opening; a provider that will not say its size
+ *  (null) is trusted, since the reading below is streamed and bounded by its own point cap. */
+fun isImportableGpxSize(sizeBytes: Long?): Boolean =
+    sizeBytes == null || sizeBytes <= MAX_GPX_FILE_BYTES
+
+/** Import the document at [uri] for viewing. Blocking: call it off the main thread. */
+fun importGpx(resolver: ContentResolver, uri: Uri): GpxImportOutcome {
+    if (!isImportableGpxSize(documentSize(resolver, uri))) return GpxImportOutcome.TooLarge
+    val track = try {
+        resolver.openInputStream(uri)?.use { parseGpx(it) }
     } catch (_: Exception) {
-        return null
+        // Deliberately not runCatching: an OutOfMemoryError is not a failed import to report and
+        // carry on from, and swallowing one would leave the process in a state it may not survive.
+        null
     }
+    return if (track == null) GpxImportOutcome.Failed else GpxImportOutcome.Imported(track)
+}
 
-    val route = ArrayList<GeoPoint>()
-    val segments = doc.getElementsByTagName("trkseg")
-    for (s in 0 until segments.length) {
-        val seg = segments.item(s) as? Element ?: continue
-        val points = seg.getElementsByTagName("trkpt")
-        for (p in 0 until points.length) {
-            val pt = points.item(p) as? Element ?: continue
-            val lat = pt.getAttribute("lat").toDoubleOrNull() ?: continue
-            val lon = pt.getAttribute("lon").toDoubleOrNull() ?: continue
-            route += GeoPoint(
-                lat = lat,
-                lon = lon,
-                timeMillis = childText(pt, "time")?.let(::parseIsoMillis) ?: 0L,
-                segmentStart = p == 0, // first point of each recording segment
-            )
-        }
+/** The document's size as its provider reports it, or null when it reports none. */
+private fun documentSize(resolver: ContentResolver, uri: Uri): Long? = try {
+    resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+        val column = cursor.getColumnIndex(OpenableColumns.SIZE)
+        if (column >= 0 && cursor.moveToFirst() && !cursor.isNull(column)) cursor.getLong(column) else null
     }
-    if (route.isEmpty()) return null
-    return ParsedGpx(name = trackName(doc), route = withDerivedMetadata(route))
+} catch (_: Exception) {
+    null
 }
 
 /**
- * The name to label the imported track with. `<trk><name>` is the track's own and the only one that
- * names what is actually drawn; the file-level name — `<metadata><name>` in GPX 1.1, a `<name>`
- * straight under `<gpx>` in 1.0 — stands in when the track has none.
+ * Parse [input] into a track, or null when it is not GPX we can read or carries no points.
  *
- * Only direct children count. `<author><name>` sits inside `<metadata>` right beside the file's own
- * name, so a document-wide search for the first `<name>` will label a ride with whoever exported it.
+ * Read as a stream, an element at a time: a picked file may be anything on the device, and holding
+ * a whole document — as text and then again as a tree — is memory the app has no reason to spend
+ * and no way to bound. Only the route survives the pass, and never more than [maxPoints] of it.
+ *
+ * The parser is namespace-aware, so the GPX elements are matched on their local name whatever
+ * prefix a file gives them (`<gpx:trkpt>` is as valid as `<trkpt>`), while an element of some other
+ * namespace that merely shares a local name — an extension's own `<name>`, say — is not mistaken
+ * for one of GPX's own. A file that declares no namespace at all is read as GPX too, since that is
+ * what many exporters write.
  */
-private fun trackName(doc: Document): String? {
-    val root = doc.documentElement ?: return null
-    val track = doc.getElementsByTagName("trk").item(0) as? Element
-    track?.let { directChildText(it, "name") }?.let { return it }
-    directChild(root, "metadata")?.let { directChildText(it, "name") }?.let { return it }
-    return directChildText(root, "name")
+fun parseGpx(input: InputStream, maxPoints: Int = MAX_IMPORTED_POINTS): ParsedGpx? {
+    val handler = GpxHandler(maxPoints)
+    try {
+        SAXParserFactory.newInstance().apply {
+            isNamespaceAware = true
+            // Harden against XXE: the file is user-supplied and never needs a DTD. The handler
+            // resolves every entity to nothing, in case a parser refuses one of these features.
+            runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+            runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
+            runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+        }.newSAXParser().parse(input, handler)
+    } catch (_: PointLimitReached) {
+        // The start of the track is worth showing; the caller says so on screen.
+    } catch (_: Exception) {
+        return null
+    }
+    if (handler.route.isEmpty()) return null
+    return ParsedGpx(
+        name = handler.trackName ?: handler.metadataName ?: handler.rootName,
+        route = withDerivedMetadata(handler.route),
+        truncated = handler.truncated,
+    )
+}
+
+/** Thrown to stop the parse once [MAX_IMPORTED_POINTS] have been read; not a failure. */
+private class PointLimitReached : SAXException()
+
+/** The namespaces a GPX element may be in. The empty one is a file that declares none. */
+private val GPX_NAMESPACES = setOf(
+    "",
+    "http://www.topografix.com/GPX/1/1",
+    "http://www.topografix.com/GPX/1/0",
+)
+
+/** Marks an element belonging to some other namespace, so nothing inside it is read as GPX. */
+private const val FOREIGN = "?foreign" // "?" cannot start an XML name, so no element collides
+
+/** Which element's text is being collected, and where it belongs when the element ends. */
+private enum class Capture { NONE, TRACK_NAME, METADATA_NAME, ROOT_NAME, POINT_TIME }
+
+/**
+ * Builds the route as the document streams past. GPX nests shallowly and rigidly, so each element
+ * is placed by its depth and the elements open above it — `<name>` means three different things
+ * depending on where it sits, and only the ones directly under `<trk>`, `<metadata>` and `<gpx>`
+ * name anything (an `<author><name>` would otherwise label a ride with whoever exported it).
+ */
+private class GpxHandler(private val maxPoints: Int) : DefaultHandler() {
+    val route = ArrayList<GeoPoint>()
+    var truncated = false
+        private set
+    var trackName: String? = null
+        private set
+    var metadataName: String? = null
+        private set
+    var rootName: String? = null
+        private set
+
+    /** Local names of the elements open right now, the root first. */
+    private val open = ArrayList<String>()
+    private var isGpx = false
+    private var tracks = 0
+    private var inTrack = false
+    private var inSegment = false
+    private var inMetadata = false
+    private var segmentStart = false
+
+    private var capture = Capture.NONE
+    private val text = StringBuilder()
+
+    /** True between a `<trkpt>` with usable coordinates and its end tag. */
+    private var pointOpen = false
+    private var pointLat = 0.0
+    private var pointLon = 0.0
+    private var pointTimeMillis = 0L
+
+    /** Nothing outside the document is ever fetched, whatever it declares. */
+    override fun resolveEntity(publicId: String?, systemId: String?): InputSource =
+        InputSource(StringReader(""))
+
+    override fun startElement(uri: String?, localName: String?, qName: String?, attributes: Attributes) {
+        val name = if (uri.orEmpty() in GPX_NAMESPACES) localName.orEmpty() else FOREIGN
+        // An element inside one whose text was being collected ends that collection: the text of
+        // a name is its own, not its children's.
+        capture = Capture.NONE
+        open += name
+        when (open.size) {
+            1 -> isGpx = name == "gpx"
+            2 -> if (isGpx) when (name) {
+                "trk" -> { tracks++; inTrack = true }
+                "metadata" -> inMetadata = true
+                "name" -> capture = Capture.ROOT_NAME // GPX 1.0 puts the file's name here
+            }
+            3 -> when {
+                // Only the first <trk> names the track, which is the one whose name is shown.
+                inTrack && name == "name" && tracks == 1 -> capture = Capture.TRACK_NAME
+                inTrack && name == "trkseg" -> { inSegment = true; segmentStart = true }
+                inMetadata && name == "name" -> capture = Capture.METADATA_NAME
+            }
+            4 -> if (inSegment && name == "trkpt") startPoint(attributes)
+            5 -> if (pointOpen && name == "time") capture = Capture.POINT_TIME
+        }
+        if (capture != Capture.NONE) text.setLength(0)
+    }
+
+    override fun characters(ch: CharArray, start: Int, length: Int) {
+        if (capture != Capture.NONE) text.appendRange(ch, start, start + length)
+    }
+
+    override fun endElement(uri: String?, localName: String?, qName: String?) {
+        when (capture) {
+            Capture.TRACK_NAME -> trackName = trackName ?: captured()
+            Capture.METADATA_NAME -> metadataName = metadataName ?: captured()
+            Capture.ROOT_NAME -> rootName = rootName ?: captured()
+            Capture.POINT_TIME -> pointTimeMillis = captured()?.let(::parseIsoMillis) ?: 0L
+            Capture.NONE -> {}
+        }
+        capture = Capture.NONE
+        val name = open.removeAt(open.lastIndex)
+        when {
+            open.size == 1 && name == "trk" -> inTrack = false
+            open.size == 1 && name == "metadata" -> inMetadata = false
+            open.size == 2 && name == "trkseg" -> inSegment = false
+            open.size == 3 && name == "trkpt" && pointOpen -> endPoint()
+        }
+    }
+
+    private fun startPoint(attributes: Attributes) {
+        val lat = attribute(attributes, "lat")?.toDoubleOrNull() ?: return
+        val lon = attribute(attributes, "lon")?.toDoubleOrNull() ?: return
+        pointLat = lat
+        pointLon = lon
+        pointTimeMillis = 0L
+        pointOpen = true
+    }
+
+    private fun endPoint() {
+        pointOpen = false
+        // Judged before adding, so a file that ends exactly on the cap is whole rather than
+        // reported as shortened.
+        if (route.size == maxPoints) {
+            truncated = true
+            throw PointLimitReached()
+        }
+        route += GeoPoint(
+            lat = pointLat,
+            lon = pointLon,
+            timeMillis = pointTimeMillis,
+            segmentStart = segmentStart,
+        )
+        segmentStart = false
+    }
+
+    /** An unprefixed attribute carries no namespace; the qualified name is the fallback for a
+     *  parser that reports it that way. */
+    private fun attribute(attributes: Attributes, name: String): String? =
+        attributes.getValue("", name) ?: attributes.getValue(name)
+
+    private fun captured(): String? = text.toString().trim().takeIf { it.isNotEmpty() }
 }
 
 /**
@@ -118,22 +287,3 @@ private fun withDerivedMetadata(route: List<GeoPoint>): List<GeoPoint> {
 
 private fun parseIsoMillis(text: String): Long? =
     runCatching { OffsetDateTime.parse(text.trim()).toInstant().toEpochMilli() }.getOrNull()
-
-private fun childText(element: Element, tag: String): String? {
-    val nodes = element.getElementsByTagName(tag)
-    return if (nodes.length > 0) nodes.item(0).textContent?.trim()?.takeIf { it.isNotEmpty() } else null
-}
-
-/** First direct child element of [element] with this tag; descendants are deliberately not searched. */
-private fun directChild(element: Element, tag: String): Element? {
-    val children = element.childNodes
-    for (i in 0 until children.length) {
-        val child = children.item(i)
-        if (child is Element && child.tagName == tag) return child
-    }
-    return null
-}
-
-/** Trimmed text of [directChild], or null when it is absent or blank. */
-private fun directChildText(element: Element, tag: String): String? =
-    directChild(element, tag)?.textContent?.trim()?.takeIf { it.isNotEmpty() }

@@ -5,9 +5,15 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import xx.biketracker.MAX_GPX_FILE_BYTES
+import xx.biketracker.MAX_IMPORTED_POINTS
 import xx.biketracker.splitRouteSegments
 
 class GpxImportTest {
+
+    /** Every test parses from bytes, as the import does; the parser never sees a whole document. */
+    private fun parse(xml: String, maxPoints: Int = MAX_IMPORTED_POINTS) =
+        parseGpx(xml.byteInputStream(), maxPoints)
 
     private fun gpx(body: String) =
         """<?xml version="1.0" encoding="UTF-8"?>
@@ -17,7 +23,7 @@ class GpxImportTest {
 
     @Test
     fun parsesPointsAndName() {
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><name>Morning loop</name><trkseg>
                      <trkpt lat="50.1000000" lon="30.2000000"><ele>120.5</ele></trkpt>
@@ -33,7 +39,7 @@ class GpxImportTest {
 
     @Test
     fun eachSegmentAfterTheFirstStartsANewSegment() {
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><trkseg>
                      <trkpt lat="50.0" lon="30.0"/>
@@ -50,7 +56,7 @@ class GpxImportTest {
 
     @Test
     fun derivesSpeedFromTimestampsWithinASegment() {
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><trkseg>
                      <trkpt lat="50.0000000" lon="30.0000000"><time>2026-07-20T10:00:00Z</time></trkpt>
@@ -65,7 +71,7 @@ class GpxImportTest {
 
     @Test
     fun missingTimeLeavesSpeedAtZero() {
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><trkseg>
                      <trkpt lat="50.0" lon="30.0"/>
@@ -82,7 +88,7 @@ class GpxImportTest {
         // Plenty of apps log a trackpoint every few minutes. The file says nothing about a break —
         // one <trkseg>, five minutes apart, ~1.1 km each — so it is one coarse ride, not a row of
         // single points with no line to draw between them.
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><trkseg>
                      <trkpt lat="50.0000000" lon="30.0000000"><time>2026-07-20T10:00:00Z</time></trkpt>
@@ -100,7 +106,7 @@ class GpxImportTest {
     fun aStepNobodyCouldHaveRiddenSplitsAndCarriesNoSpeed() {
         // Half a degree of latitude in two seconds: a glitch in the file, not a journey. Splitting
         // keeps the map from drawing a line across it, and the speed it implies is not plotted.
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><trkseg>
                      <trkpt lat="50.0000000" lon="30.0000000"><time>2026-07-20T10:00:00Z</time></trkpt>
@@ -115,7 +121,7 @@ class GpxImportTest {
 
     @Test
     fun elapsedOffsetsFollowTheTimestamps() {
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><trkseg>
                      <trkpt lat="50.0000000" lon="30.0000000"><time>2026-07-20T10:00:00Z</time></trkpt>
@@ -131,7 +137,7 @@ class GpxImportTest {
 
     @Test
     fun aBackwardTimestampNeverRewindsTheElapsedOffset() {
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><trkseg>
                      <trkpt lat="50.0000000" lon="30.0000000"><time>2026-07-20T10:00:20Z</time></trkpt>
@@ -146,7 +152,7 @@ class GpxImportTest {
 
     @Test
     fun anUntimedTrackCarriesNoElapsedTimeAndNeverSplits() {
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx(
                 """<trk><trkseg>
                      <trkpt lat="50.0" lon="30.0"/>
@@ -170,7 +176,7 @@ class GpxImportTest {
 
     @Test
     fun theTracksOwnNameWins() {
-        val parsed = parseGpx(
+        val parsed = parse(
             gpx("${metadata("bike-2026-07-20.gpx")}<trk><name>Morning loop</name>$oneSegment</trk>")
         )!!
         assertEquals("Morning loop", parsed.name)
@@ -178,7 +184,7 @@ class GpxImportTest {
 
     @Test
     fun theFileNameStandsInWhenTheTrackHasNone() {
-        val parsed = parseGpx(gpx("${metadata("bike-2026-07-20.gpx")}<trk>$oneSegment</trk>"))!!
+        val parsed = parse(gpx("${metadata("bike-2026-07-20.gpx")}<trk>$oneSegment</trk>"))!!
         assertEquals("bike-2026-07-20.gpx", parsed.name)
     }
 
@@ -186,24 +192,127 @@ class GpxImportTest {
     fun theAuthorIsNeverMistakenForTheTrackName() {
         // <author><name> sits right beside the file's own name; a document-wide search for the
         // first <name> would label the ride with whoever exported it.
-        val parsed = parseGpx(gpx("${metadata(null)}<trk>$oneSegment</trk>"))!!
+        val parsed = parse(gpx("${metadata(null)}<trk>$oneSegment</trk>"))!!
         assertNull(parsed.name)
     }
 
     @Test
     fun gpxOneDotZeroKeepsItsFileNameDirectlyUnderTheRoot() {
-        val parsed = parseGpx(gpx("<name>Old export</name><trk>$oneSegment</trk>"))!!
+        val parsed = parse(gpx("<name>Old export</name><trk>$oneSegment</trk>"))!!
         assertEquals("Old export", parsed.name)
     }
 
     @Test
     fun malformedXmlReturnsNull() {
-        assertNull(parseGpx("<gpx><trk><trkseg>"))
+        assertNull(parse("<gpx><trk><trkseg>"))
+    }
+
+    @Test
+    fun somethingThatIsNotXmlAtAllReturnsNull() {
+        // The picker hands over whole files, and the wrong one is an easy pick.
+        assertNull(parse("just some text"))
+        assertNull(parse("PK\u0003\u0004 something that is not a document"))
+        assertNull(parse(""))
+    }
+
+    @Test
+    fun xmlThatIsNotGpxReturnsNull() {
+        assertNull(parse("<html><body><trkpt lat=\"50.0\" lon=\"30.0\"/></body></html>"))
+        assertNull(parse("<?xml version=\"1.0\"?><rss><channel><title>Not a ride</title></channel></rss>"))
     }
 
     @Test
     fun aTrackWithNoPointsReturnsNull() {
-        assertNull(parseGpx(gpx("<trk><name>Empty</name></trk>")))
+        assertNull(parse(gpx("<trk><name>Empty</name></trk>")))
+    }
+
+    // --- Size and point caps ---
+
+    @Test
+    fun onlyAPlausiblySizedDocumentIsOpenedAtAll() {
+        assertTrue(isImportableGpxSize(1_024L))
+        assertTrue(isImportableGpxSize(MAX_GPX_FILE_BYTES))
+        assertFalse(isImportableGpxSize(MAX_GPX_FILE_BYTES + 1))
+        // A provider that will not say leaves it to the point cap below.
+        assertTrue(isImportableGpxSize(null))
+    }
+
+    private fun trackOf(points: Int) = gpx(
+        "<trk><trkseg>" +
+            (0 until points).joinToString("") { "<trkpt lat=\"50.${it % 100}\" lon=\"30.0\"/>" } +
+            "</trkseg></trk>"
+    )
+
+    @Test
+    fun aTrackEndingExactlyOnTheCapIsWhole() {
+        val parsed = parse(trackOf(20), maxPoints = 20)!!
+        assertEquals(20, parsed.route.size)
+        assertFalse(parsed.truncated)
+    }
+
+    @Test
+    fun aTrackPastTheCapIsCutShortAndSaysSo() {
+        val parsed = parse(trackOf(50), maxPoints = 20)!!
+        assertEquals(20, parsed.route.size)
+        assertTrue(parsed.truncated)
+    }
+
+    // --- Namespaces ---
+
+    private val prefixed =
+        """<?xml version="1.0" encoding="UTF-8"?>
+           <g:gpx version="1.1" xmlns:g="http://www.topografix.com/GPX/1/1">
+             <g:metadata><g:name>File</g:name></g:metadata>
+             <g:trk><g:name>Prefixed loop</g:name><g:trkseg>
+               <g:trkpt lat="50.0000000" lon="30.0000000"><g:time>2026-07-20T10:00:00Z</g:time></g:trkpt>
+               <g:trkpt lat="50.0010000" lon="30.0000000"><g:time>2026-07-20T10:00:10Z</g:time></g:trkpt>
+             </g:trkseg></g:trk>
+           </g:gpx>"""
+
+    @Test
+    fun elementsCarryingANamespacePrefixReadTheSame() {
+        // Equally valid GPX; matching qualified names literally refused this whole class of file.
+        val twin = parse(
+            gpx(
+                """<metadata><name>File</name></metadata>
+                   <trk><name>Prefixed loop</name><trkseg>
+                     <trkpt lat="50.0000000" lon="30.0000000"><time>2026-07-20T10:00:00Z</time></trkpt>
+                     <trkpt lat="50.0010000" lon="30.0000000"><time>2026-07-20T10:00:10Z</time></trkpt>
+                   </trkseg></trk>"""
+            )
+        )!!
+        val parsed = parse(prefixed)!!
+
+        assertEquals(twin.name, parsed.name)
+        assertEquals(twin.route.map { it.lat to it.timeMillis }, parsed.route.map { it.lat to it.timeMillis })
+        assertEquals("Prefixed loop", parsed.name)
+    }
+
+    @Test
+    fun aDocumentWithNoNamespaceAtAllStillReads() {
+        val parsed = parse("<gpx><trk><name>Bare</name>$oneSegment</trk></gpx>")!!
+        assertEquals("Bare", parsed.name)
+        assertEquals(2, parsed.route.size)
+    }
+
+    @Test
+    fun elementsFromAnotherNamespaceAreNotMistakenForGpx() {
+        // Extensions bring their own <name>s and even their own <trkpt>-alikes; only GPX's own count.
+        val parsed = parse(
+            """<?xml version="1.0" encoding="UTF-8"?>
+               <g:gpx version="1.1" xmlns:g="http://www.topografix.com/GPX/1/1"
+                      xmlns:x="http://example.com/other">
+                 <g:trk><x:name>Extension name</x:name><g:name>Real name</g:name><g:trkseg>
+                   <g:trkpt lat="50.0" lon="30.0"/>
+                   <x:trkpt lat="1.0" lon="2.0"/>
+                   <g:trkpt lat="50.001" lon="30.0"><x:time>nonsense</x:time></g:trkpt>
+                 </g:trkseg></g:trk>
+               </g:gpx>"""
+        )!!
+
+        assertEquals("Real name", parsed.name)
+        assertEquals(listOf(50.0, 50.001), parsed.route.map { it.lat })
+        assertEquals(0L, parsed.route[1].timeMillis)
     }
 
     @Test
@@ -221,7 +330,7 @@ class GpxImportTest {
             TrackPoint(tripId = 1, lat = 50.1240000, lon = 30.7660000, time = 0, speedMps = 0f, elapsedMillis = 1_000),
             TrackPoint(tripId = 1, lat = 50.2000000, lon = 30.8000000, time = 0, speedMps = 0f, elapsedMillis = 2_000, segmentStart = true),
         )
-        val parsed = parseGpx(buildGpx(trip, points))!!
+        val parsed = parse(buildGpx(trip, points))!!
         assertEquals("Ride & ride", parsed.name)
         assertEquals(3, parsed.route.size)
         assertEquals(50.1234567, parsed.route[0].lat, 1e-9)

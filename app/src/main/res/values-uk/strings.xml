@@ -64,6 +64,8 @@
     <string name="map_import_gpx">Імпортувати GPX для перегляду</string>
     <string name="map_imported_track">Імпортований трек</string>
     <string name="map_import_failed">Не вдалося прочитати цей файл GPX</string>
+    <string name="map_import_too_large">Цей файл завеликий для треку GPX</string>
+    <string name="map_import_truncated">Трек показано обрізаним на перших %1$d точках</string>
     <string name="map_zoom_in">Наблизити</string>
     <string name="map_zoom_out">Віддалити</string>
     <string name="map_follow_heading">Повертати карту за напрямком руху</string>

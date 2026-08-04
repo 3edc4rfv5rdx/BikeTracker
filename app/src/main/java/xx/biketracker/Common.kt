@@ -149,6 +149,14 @@ const val ROUTE_SIMPLIFY_CHUNK = 384
 /** Meters per degree of latitude — good enough for the local planar math below. */
 private const val METERS_PER_DEGREE = 111_320.0
 
+// --- GPX import ---
+/** Refuse a document larger than this without reading it: the picker hands over whole files, and
+ *  no GPX track is anywhere near this big (the point cap below is roughly a tenth of it). */
+const val MAX_GPX_FILE_BYTES = 32L * 1024L * 1024L
+/** Most points an imported track may hold — about forty hours of once-a-second logging. Past this
+ *  the track is shown cut short rather than left to fill memory with a file nobody can ride. */
+const val MAX_IMPORTED_POINTS = 100_000
+
 // --- Time windows ---
 const val DAY_MS = 24L * 60L * 60L * 1000L
 

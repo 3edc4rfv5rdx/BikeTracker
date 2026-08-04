@@ -71,7 +71,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xx.biketracker.data.finalizeAbandonedTrips
-import xx.biketracker.data.parseGpx
+import xx.biketracker.data.GPX_MIME
+import xx.biketracker.data.GpxImportOutcome
+import xx.biketracker.data.importGpx
 import xx.biketracker.data.recoveryJob
 import xx.biketracker.data.DatabaseRestoreCoordinator
 import xx.biketracker.data.RestoreOperationState
@@ -196,23 +198,25 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
     }
 
     // Import a GPX file to view on the map (read-only, never stored). Reading and parsing run off
-    // the main thread; a parse failure shows a toast and leaves the current view untouched.
+    // the main thread; anything that goes wrong shows a toast and leaves the current view untouched.
     val context = LocalContext.current
     val importScope = rememberCoroutineScope()
     val importFailedMessage = stringResource(id = R.string.map_import_failed)
+    val importTooLargeMessage = stringResource(id = R.string.map_import_too_large)
+    val importTruncatedMessage = stringResource(R.string.map_import_truncated, MAX_IMPORTED_POINTS)
     val gpxPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         importScope.launch {
-            val parsed = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                }.getOrNull()?.let(::parseGpx)
+            val outcome = withContext(Dispatchers.IO) { importGpx(context.contentResolver, uri) }
+            val message = when (outcome) {
+                is GpxImportOutcome.Imported -> {
+                    MapSelection.showImported(outcome.track.name, outcome.track.route)
+                    importTruncatedMessage.takeIf { outcome.track.truncated }
+                }
+                GpxImportOutcome.TooLarge -> importTooLargeMessage
+                GpxImportOutcome.Failed -> importFailedMessage
             }
-            if (parsed != null) {
-                MapSelection.showImported(parsed.name, parsed.route)
-            } else {
-                Toast.makeText(context, importFailedMessage, Toast.LENGTH_LONG).show()
-            }
+            message?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
         }
     }
 
@@ -288,7 +292,11 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                             rideActive -> MapLiveStats(trackingSnapshot)
                         }
                         TopBarButton(Icons.Default.FileOpen, stringResource(id = R.string.map_import_gpx)) {
-                            gpxPicker.launch(arrayOf("*/*"))
+                            // The GPX type first, then what real providers actually report for a
+                            // .gpx file; anything narrower and the file cannot be picked at all.
+                            gpxPicker.launch(
+                                arrayOf(GPX_MIME, "application/xml", "text/xml", "application/octet-stream")
+                            )
                         }
                     }
                     if (currentTab == Destination.History) {
