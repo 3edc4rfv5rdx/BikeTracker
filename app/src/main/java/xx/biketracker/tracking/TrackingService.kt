@@ -45,6 +45,7 @@ import xx.biketracker.GPS_INTERVAL_MS
 import xx.biketracker.GPS_MIN_INTERVAL_MS
 import xx.biketracker.GPS_STALE_MS
 import xx.biketracker.GeoPoint
+import xx.biketracker.isRecordingGap
 import xx.biketracker.LEFT_ANCHOR_DISTANCE_M
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.MPS_TO_KMH
@@ -644,12 +645,6 @@ class TrackingService : Service() {
             val prevElapsed = lastPointElapsedRealtimeNanos ?: return
             dt = elapsedMillisBetween(prevElapsed, nowElapsedNanos) ?: return
         }
-        // A long outage (tunnel, indoors) produces no fixes, so auto-pause can't trigger; without
-        // this break the first fix after the gap would add the whole outage to the moving time.
-        val gapped = prev != null && dt > GPS_STALE_MS
-        // This fix opens a new recording segment if a pause broke the track or an outage gapped it.
-        val segmentStart = pendingSegmentStart || gapped
-        pendingSegmentStart = false
         // Monotonic time since ride start; wall-clock-safe basis for the chart's time axis.
         val elapsedSinceStart = (nowElapsedMillis - startElapsedRealtime).coerceAtLeast(0L)
 
@@ -662,8 +657,17 @@ class TrackingService : Service() {
             timeMs = nowElapsedMillis,
             speedMps = fix.speedMps ?: 0.0,
         )
+        // Whether the recording carried on between the two fixes, judged on the step rather than
+        // the interval alone: fixes tens of seconds apart are routine where the signal is jammed,
+        // and the ride they describe is real. A true outage (tunnel, indoors) produces no fixes at
+        // all, and its stretch must add neither distance nor moving time.
+        val stepMeters = if (prev == null) 0.0 else haversineMeters(prev.lat, prev.lon, smoothed.lat, smoothed.lon)
+        val gapped = prev != null && isRecordingGap(dt, stepMeters)
+        // This fix opens a new recording segment if a pause broke the track or an outage gapped it.
+        val segmentStart = pendingSegmentStart || gapped
+        pendingSegmentStart = false
+
         if (prev != null && !gapped) {
-            val stepMeters = haversineMeters(prev.lat, prev.lon, smoothed.lat, smoothed.lon)
             distanceMeters += stepMeters
             movingTimeMillis += dt
             // Only a fix that continues an unbroken track can be corroborated at all: across a gap

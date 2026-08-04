@@ -32,8 +32,8 @@ class RouteSegmentsTest {
     }
 
     @Test
-    fun gpsOutageJustAboveStaleThresholdSplits() {
-        val segments = splitRouteSegments(rideWithGap(gapMillis = GPS_STALE_MS + 1))
+    fun gpsOutageJustAboveTheOutageWindowSplits() {
+        val segments = splitRouteSegments(rideWithGap(gapMillis = RECORDING_OUTAGE_MS + 1))
         assertEquals(2, segments.size)
     }
 
@@ -41,6 +41,25 @@ class RouteSegmentsTest {
     fun shortDeliveryHiccupDoesNotSplit() {
         val segments = splitRouteSegments(rideWithGap(gapMillis = GPS_STALE_MS))
         assertEquals(1, segments.size)
+    }
+
+    @Test
+    fun sparseSamplingKeepsTheTrackWhole() {
+        // A jammed or obstructed receiver delivers fixes tens of seconds apart. The ~13 m between
+        // these points is ground a bike plainly covered, so the track must stay drawable rather
+        // than collapsing into undrawable one-point segments.
+        val route = (0..9).map { point(it, it * 30_000L) }
+        assertEquals(listOf(route), splitRouteSegments(route))
+    }
+
+    @Test
+    fun aStepNobodyCouldHaveRiddenSplits() {
+        // Two seconds apart, half a degree of latitude — a jump, not a ride.
+        val route = listOf(
+            GeoPoint(50.0, 30.0, timeMillis = 1_000L),
+            GeoPoint(50.5, 30.0, timeMillis = 3_000L),
+        )
+        assertEquals(2, splitRouteSegments(route).size)
     }
 
     @Test
@@ -67,9 +86,9 @@ class RouteSegmentsTest {
 
     @Test
     fun repeatedOutagesProduceOneSegmentEach() {
-        val route = rideWithGap(gapMillis = 60_000L)
+        val route = rideWithGap(gapMillis = 3 * 60_000L)
         val lastTime = route.last().timeMillis
-        val third = (8..10).map { point(it, lastTime + 120_000L + (it - 8) * GPS_INTERVAL_MS) }
+        val third = (8..10).map { point(it, lastTime + 5 * 60_000L + (it - 8) * GPS_INTERVAL_MS) }
         val segments = splitRouteSegments(route + third)
         assertEquals(3, segments.size)
         assertEquals(third, segments[2])
@@ -124,7 +143,7 @@ class RouteSegmentsTest {
 
     @Test
     fun isolatedPointBetweenOutagesBecomesItsOwnSegment() {
-        val route = listOf(point(0, 1_000L), point(1, 61_000L), point(2, 121_000L))
+        val route = listOf(point(0, 1_000L), point(1, 181_000L), point(2, 361_000L))
         assertEquals(3, splitRouteSegments(route).size)
     }
 }

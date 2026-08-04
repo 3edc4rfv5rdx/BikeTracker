@@ -81,8 +81,8 @@ class RideStatsTest {
             listOf(
                 tp(time = 0, speedMps = 5f, elapsedMillis = null),
                 tp(time = 1_000, speedMps = 5f, elapsedMillis = null),
-                tp(time = 61_000, speedMps = 5f, elapsedMillis = null),
-                tp(time = 62_000, speedMps = 5f, elapsedMillis = null),
+                tp(time = 181_000, speedMps = 5f, elapsedMillis = null),
+                tp(time = 182_000, speedMps = 5f, elapsedMillis = null),
             )
         )
         assertEquals(0, stats.stopCount)

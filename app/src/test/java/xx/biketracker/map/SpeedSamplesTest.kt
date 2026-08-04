@@ -49,6 +49,17 @@ class SpeedSamplesTest {
     }
 
     @Test
+    fun sparseSamplingStillAccumulatesDistanceAndTime() {
+        // A jammed receiver delivers fixes 30 s apart. The chart must plot the ride they describe,
+        // not a row of boundaries with a zero-width domain.
+        val route = (0..4).map { point(it, it * 30_000L) }
+        val samples = buildSpeedSamples(route)
+        assertTrue(samples.none { it.segmentStart })
+        assertTrue(samples.last().distanceMeters > 0.0)
+        assertEquals(4 * 30_000L, samples.last().movingTimeMillis)
+    }
+
+    @Test
     fun speedsAreMovingAveraged() {
         // Three points fit entirely inside the smoothing window, so every
         // sample carries the plain average of all raw speeds.

@@ -55,9 +55,10 @@ fun TrackingSnapshot.hasGpsTrouble(nowElapsedRealtime: Long): Boolean =
  *
  * The tick only ever runs as far as the next fix is due ([GPS_INTERVAL_MS] past the last one).
  * Anything past that is a guess about time nobody has measured yet, and a guess the recorder may
- * refuse — a gap longer than [GPS_STALE_MS] adds no moving time at all — so the display would run
- * up and then fall back every time a fix landed. On a jammed signal, where fixes arrive tens of
- * seconds apart, that sawtooth is what reads as the ride timer resetting over and over.
+ * refuse — a stretch it judges an outage adds no moving time at all — so the display would run up
+ * and then fall back every time a fix landed. On a jammed signal, where fixes arrive tens of
+ * seconds apart, that sawtooth is what reads as the ride timer resetting over and over. The timer
+ * therefore lags a sparse fix stream and catches up in steps; it never runs ahead of the record.
  */
 fun TrackingSnapshot.liveMovingTimeMillis(nowElapsedRealtime: Long): Long =
     movingTimeMillis +

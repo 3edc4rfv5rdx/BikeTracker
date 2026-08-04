@@ -41,12 +41,13 @@ class ElevationGainTest {
 
     @Test
     fun jumpAcrossALegacyOutageGapIsNotAClimb() {
-        // No elapsed metadata plus a > 10 s wall gap is a boundary via the legacy heuristic.
+        // No elapsed metadata plus a silence past the outage window is a boundary via the legacy
+        // heuristic — nothing the tracker saw connects the 100 m of altitude across it.
         val pts = listOf(
             tp(0, 100.0, elapsedMillis = null),
             tp(1_000, 102.0, elapsedMillis = null),
-            tp(20_000, 130.0, elapsedMillis = null),
-            tp(21_000, 133.0, elapsedMillis = null),
+            tp(200_000, 130.0, elapsedMillis = null),
+            tp(201_000, 133.0, elapsedMillis = null),
         )
         assertEquals(3.0, elevationGainBySegment(pts), 1e-9)
     }

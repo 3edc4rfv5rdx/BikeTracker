@@ -93,9 +93,20 @@ const val AUTO_PAUSE_DEBOUNCE_MS = 10_000L
 const val LEFT_ANCHOR_DISTANCE_M = 60.0
 
 // --- GPS signal quality ---
-/** No fix for this long while tracking means the GPS signal is effectively lost. Also breaks
- *  the recorded segment: a longer gap (tunnel, indoors) adds neither distance nor moving time. */
+/** No fix for this long while tracking means the GPS signal is effectively lost — the UI says so
+ *  and the live timer stops speculating. It does not by itself break the recorded segment: fixes
+ *  this far apart are routine where the signal is jammed, and the ride goes on. See
+ *  [RECORDING_OUTAGE_MS] for the rule that does decide a break. */
 const val GPS_STALE_MS = 10_000L
+/**
+ * Silence longer than this between two consecutive fixes is a recording outage whatever the step
+ * between them looks like: nothing the tracker observed connects the two points, so the stretch
+ * adds neither distance nor moving time and no line may be drawn across it. Deliberately far above
+ * [GPS_STALE_MS] — a receiver that is jammed, indoors, or under trees still delivers usable fixes,
+ * just tens of seconds apart, and calling every one of those a break is what would record a ride
+ * that covered kilometres as zero distance in zero time, drawn as nothing at all.
+ */
+const val RECORDING_OUTAGE_MS = 120_000L
 /**
  * How long the reference fix may go without a single accepted successor before a fix that
  * disagrees with it is trusted over it instead. The plausible-speed test compares every fix
@@ -331,29 +342,49 @@ fun isRideWorthSaving(
     (!automatic || distanceMeters >= MIN_AUTO_SAVED_DISTANCE_M)
 
 /**
- * A wall-time gap above [GPS_STALE_MS] between two consecutive fixes is a recording
- * discontinuity — no points are written during a pause or a GPS outage — so it adds neither
- * distance nor moving time, and a track must not be drawn across it. Fixes without a timestamp
- * (0, old data recorded before times reached the route) never gap, so such routes stay whole.
+ * Whether the stretch between two consecutive recorded fixes is a recording discontinuity — a
+ * pause or a GPS outage — rather than a coarsely sampled piece of the ride. [dtMillis] is the time
+ * between the fixes, [stepMeters] the ground between them.
+ *
+ * Time alone cannot tell the two apart. Where the signal is jammed or obstructed the receiver keeps
+ * delivering usable fixes, just tens of seconds apart, and treating every such step as a break is
+ * what would record a real ride as zero distance in zero time. What separates the cases is whether
+ * the step is explicable: ground a bike could actually have covered in the time is a real, if
+ * coarsely sampled, movement however long the interval. A step nobody could have ridden
+ * ([MAX_PLAUSIBLE_SPEED_MPS]), or a silence past [RECORDING_OUTAGE_MS] that no sampling interval
+ * accounts for, is the true break — and only then does the stretch add nothing.
+ *
+ * A backward or zero step in time is never a gap: there is no stretch to judge.
  */
-fun isRecordingGap(prevTimeMillis: Long, timeMillis: Long): Boolean =
-    prevTimeMillis > 0 && timeMillis > 0 && timeMillis - prevTimeMillis > GPS_STALE_MS
+fun isRecordingGap(dtMillis: Long, stepMeters: Double): Boolean {
+    if (dtMillis <= 0L) return false
+    if (dtMillis > RECORDING_OUTAGE_MS) return true
+    return stepMeters / (dtMillis / 1000.0) > MAX_PLAUSIBLE_SPEED_MPS
+}
 
 /**
  * The boundary between two consecutive recorded fixes. A recording segment ends and a new one
- * begins at the first fix after a manual/auto pause or a GPS outage. New rides carry that
- * boundary explicitly ([segmentStart]) and are the authority — the wall-time gap is ignored, so
- * a forward clock change can't be misread as a pause. Old rides (recorded before the flag, with
- * no elapsed metadata) fall back to the wall-time gap heuristic ([isRecordingGap]). Pass the two
- * points' epoch times, the later point's flag, and whether it carries elapsed metadata.
+ * begins at the first fix after a manual/auto pause or a GPS outage. New rides carry that boundary
+ * explicitly ([segmentStart]) and are the authority — the wall time is ignored entirely, so a
+ * forward clock change can't be misread as a pause. Old rides (recorded before the flag, with no
+ * elapsed metadata) have only their epoch times to go on and fall back to [isRecordingGap]; points
+ * without a timestamp (0, old data recorded before times reached the route) can't be measured
+ * against each other at all and never split.
+ *
+ * [stepMeters] is evaluated only on that legacy path, so callers may compute the distance lazily.
  */
-fun isSegmentBoundary(
+inline fun isSegmentBoundary(
     prevTimeMillis: Long,
     timeMillis: Long,
     segmentStart: Boolean,
     hasElapsedMetadata: Boolean,
-): Boolean =
-    segmentStart || (!hasElapsedMetadata && isRecordingGap(prevTimeMillis, timeMillis))
+    stepMeters: () -> Double,
+): Boolean {
+    if (segmentStart) return true
+    if (hasElapsedMetadata) return false
+    if (prevTimeMillis <= 0L || timeMillis <= 0L) return false
+    return isRecordingGap(timeMillis - prevTimeMillis, stepMeters())
+}
 
 /**
  * Monotonic time step (ms) between two consecutive recorded points: the persisted elapsed-realtime
@@ -384,7 +415,10 @@ fun splitRouteSegments(route: List<GeoPoint>): List<List<GeoPoint>> {
     for (i in 1 until route.size) {
         val prev = route[i - 1]
         val point = route[i]
-        if (isSegmentBoundary(prev.timeMillis, point.timeMillis, point.segmentStart, point.elapsedMillis != null)) {
+        val boundary = isSegmentBoundary(
+            prev.timeMillis, point.timeMillis, point.segmentStart, point.elapsedMillis != null,
+        ) { haversineMeters(prev.lat, prev.lon, point.lat, point.lon) }
+        if (boundary) {
             segments += mutableListOf(point)
         } else {
             segments.last() += point
@@ -513,8 +547,12 @@ fun elevationGainBySegment(
     }
     for (i in points.indices) {
         val p = points[i]
-        if (i > 0 && isSegmentBoundary(points[i - 1].time, p.time, p.segmentStart, p.elapsedMillis != null)) {
-            flush()
+        if (i > 0) {
+            val prev = points[i - 1]
+            val boundary = isSegmentBoundary(
+                prev.time, p.time, p.segmentStart, p.elapsedMillis != null,
+            ) { haversineMeters(prev.lat, prev.lon, p.lat, p.lon) }
+            if (boundary) flush()
         }
         val a = p.altitudeMeters
         segment += if (a != null && descent) -a else a

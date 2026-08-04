@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import xx.biketracker.haversineMeters
 import xx.biketracker.isSegmentBoundary
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -65,7 +66,9 @@ fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
     var open = false
     for (i in points.indices) {
         val p = points[i]
-        val startSeg = i == 0 || isSegmentBoundary(points[i - 1].time, p.time, p.segmentStart, p.elapsedMillis != null)
+        val startSeg = i == 0 || isSegmentBoundary(
+            points[i - 1].time, p.time, p.segmentStart, p.elapsedMillis != null,
+        ) { haversineMeters(points[i - 1].lat, points[i - 1].lon, p.lat, p.lon) }
         if (startSeg) {
             if (open) sb.append("    </trkseg>\n")
             sb.append("    <trkseg>\n")

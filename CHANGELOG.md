@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Fixes arriving tens of seconds apart no longer count as a break in the recording: a ride under a jammed signal now keeps its distance, its time and its drawn track instead of coming out empty, while a genuine outage past two minutes still adds nothing.
 - A stored ride and an imported GPX track now end in a red dot marking the finish, shown at the same zooms as the start chevron; a live ride still ends at the puck.
 - Zoomed out far enough that the track carries no direction chevrons, a single white chevron on a black disc now sits at its start, pointing the way the ride set off.
 - A ride recovered after the app was killed mid-ride is now held to the same 200 m minimum as the auto-save.

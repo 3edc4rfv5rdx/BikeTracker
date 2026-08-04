@@ -76,13 +76,17 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
         if (i > 0) {
             val prev = points[i - 1]
             val step = monotonicStepMillis(prev.elapsedMillis, p.elapsedMillis, prev.time, p.time)
-            if (isSegmentBoundary(prev.time, p.time, p.segmentStart, p.elapsedMillis != null)) {
+            val stepMeters = haversineMeters(prev.lat, prev.lon, p.lat, p.lon)
+            val boundary = isSegmentBoundary(
+                prev.time, p.time, p.segmentStart, p.elapsedMillis != null,
+            ) { stepMeters }
+            if (boundary) {
                 // A pause/outage gap is added to neither the run nor any bucket; only recorded
                 // low-speed motion counts as a stop. The profile breaks here too.
                 closeRun()
                 pendingProfileBreak = true
             } else {
-                distance += haversineMeters(prev.lat, prev.lon, p.lat, p.lon)
+                distance += stepMeters
                 if (p.speedMps < AUTO_PAUSE_SPEED_MPS) {
                     runMillis += step // slow enough to be stopping; the run decides if it's a real stop
                 } else {

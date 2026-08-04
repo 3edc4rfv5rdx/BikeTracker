@@ -86,13 +86,14 @@ class GpxBuildTest {
 
     @Test
     fun legacyWallGapStartsANewSegment() {
-        // No elapsed metadata, so a > 10 s wall gap is a boundary via the legacy heuristic.
+        // No elapsed metadata, so a silence past the outage window is a boundary via the legacy
+        // heuristic and an importing app must not draw a line across it.
         val gpx = buildGpx(
             trip(),
             listOf(
                 tp(time = 1_000, elapsedMillis = null),
                 tp(time = 2_000, elapsedMillis = null),
-                tp(time = 30_000, elapsedMillis = null),
+                tp(time = 300_000, elapsedMillis = null),
             ),
         )
         assertEquals(2, gpx.count("<trkseg>"))

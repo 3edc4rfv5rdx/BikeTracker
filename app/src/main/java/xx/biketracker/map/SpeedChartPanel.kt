@@ -129,10 +129,15 @@ internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
     // Recording-segment id per point: a pause/outage boundary starts a new one, so cumulative
     // distance/time and the smoothing window never cross it.
     val segId = IntArray(route.size)
+    // Step distances, reused below for the cumulative distance axis.
+    val stepMeters = DoubleArray(route.size)
     for (i in 1 until route.size) {
+        val prev = route[i - 1]
+        val point = route[i]
+        stepMeters[i] = haversineMeters(prev.lat, prev.lon, point.lat, point.lon)
         val boundary = isSegmentBoundary(
-            route[i - 1].timeMillis, route[i].timeMillis, route[i].segmentStart, route[i].elapsedMillis != null,
-        )
+            prev.timeMillis, point.timeMillis, point.segmentStart, point.elapsedMillis != null,
+        ) { stepMeters[i] }
         segId[i] = segId[i - 1] + if (boundary) 1 else 0
     }
     // First and last index of each segment, so the smoothing window can clamp to the segment.
@@ -151,7 +156,7 @@ internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
         val step = if (i == 0) 0L else elapsedStepMillis(route[i - 1], route[i])
         elapsed += step // includes pauses, so the axis spans the whole ride; always monotonic
         if (i > 0 && !boundary) {
-            distance += haversineMeters(route[i - 1].lat, route[i - 1].lon, route[i].lat, route[i].lon)
+            distance += stepMeters[i]
             movingMillis += step // a boundary's pause step is excluded, so this stays moving time
         }
         // Average only within the current segment: a stopped fix before a pause must not drag
