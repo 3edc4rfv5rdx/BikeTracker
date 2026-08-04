@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A long ride no longer costs more battery the longer it gets: the Map tab re-derives only what each new fix added instead of the whole track and chart, and the chart builds nothing at all while it is pulled down.
 - A ride that fails to open no longer leaves the tracker running invisibly behind it, and pressing anything but Stop while a ride opens from standby now returns to standby instead of shutting the tracker down.
 - Start now says why it refused instead of doing nothing at all: a backup or restore in progress, or missing location permission, each get their own message, and a second refused tap is reported like the first.
 - A ride's maximum speed is now the fastest it actually got somewhere over three seconds, so a single stray fix can no longer credit a bicycle with 90 km/h; it is read off the track alone, so a receiver reporting no speed at all still yields one, and it reads a little below an instantaneous peak.

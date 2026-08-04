@@ -43,6 +43,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -68,8 +70,6 @@ import xx.biketracker.GeoPoint
 import xx.biketracker.R
 import xx.biketracker.haversineMeters
 import xx.biketracker.routeStartHeading
-import xx.biketracker.smoothRoute
-import xx.biketracker.splitRouteSegments
 import xx.biketracker.ui.AccentOrange
 import xx.biketracker.ui.ScrubBlue
 
@@ -353,19 +353,22 @@ fun RouteMap(
     // change (another ride selected) re-arms the one-time centering, and a viewport size
     // change (speed-chart panel toggled, rotation) re-fits the track to the new visible area.
     var centeredSize by remember(recenterKey) { mutableStateOf<IntSize?>(null) }
+    // The drawn shape of the track, carried between fixes so a growing ride only costs what it
+    // grew by; dropped when another track is shown. The lock keeps two updates apart: this effect
+    // restarts on every fix, and the run it replaces may still be inside its geometry work, which
+    // has no suspension point to cancel at.
+    val geometry = remember(recenterKey) { SmoothedTrack() }
+    val geometryLock = remember(recenterKey) { Mutex() }
     LaunchedEffect(route, styleEpoch, mapSize) {
         val style = mapInstance?.style ?: return@LaunchedEffect
-        // Smoothing re-runs over the whole track on every fix; off the main thread so a
-        // multi-hour ride (thousands of points) can't jank the map. Pause/outage gaps split
-        // the track into segments, each smoothed and drawn on its own — no line is synthesized
-        // across a stretch the tracker never recorded. Single-point segments cannot form a
-        // line and are skipped; the live one is still visible as the puck.
+        // Off the main thread so a multi-hour ride (thousands of points) can't jank the map.
+        // Pause/outage gaps split the track into segments, each smoothed and drawn on its own —
+        // no line is synthesized across a stretch the tracker never recorded. Single-point
+        // segments cannot form a line and are skipped; the live one is still visible as the puck.
         val (line, startHeading) = withContext(Dispatchers.Default) {
-            val multiLine = MultiLineString.fromLngLats(
-                splitRouteSegments(route)
-                    .map { segment -> smoothRoute(segment).map { Point.fromLngLat(it.lon, it.lat) } }
-                    .filter { it.size >= 2 }
-            )
+            val multiLine = geometryLock.withLock {
+                MultiLineString.fromLngLats(geometry.update(route).filter { it.size >= 2 })
+            }
             multiLine to routeStartHeading(route)
         }
         style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(line)

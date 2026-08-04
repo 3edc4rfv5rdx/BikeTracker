@@ -142,6 +142,10 @@ const val ROUTE_SIMPLIFY_TOLERANCE_M = 2.0
 /** How far from its first point a track must get before that stretch is read as the direction the
  *  ride set off in; see [routeStartHeading]. */
 const val ROUTE_START_SPAN_M = 20.0
+/** Points per chunk of an [AppendOnlyList], and the most any one append can cost to snapshot. */
+const val APPEND_CHUNK_SIZE = 256
+/** Points per Douglas-Peucker chunk of a drawn track; see [xx.biketracker.map.SmoothedTrack]. */
+const val ROUTE_SIMPLIFY_CHUNK = 384
 /** Meters per degree of latitude — good enough for the local planar math below. */
 private const val METERS_PER_DEGREE = 111_320.0
 
@@ -227,6 +231,70 @@ data class GeoPoint(
     val segmentStart: Boolean = false,
     val elapsedMillis: Long? = null,
 )
+
+/**
+ * A list that only ever grows and can hand out an immutable snapshot without copying what came
+ * before it. Items are held in chunks of [chunkSize]: a snapshot shares every filled chunk with
+ * the snapshots taken before it and copies only the chunk still filling up, so handing the current
+ * track to the UI on every fix costs a chunk rather than the whole ride.
+ *
+ * Snapshots are unaffected by later appends — the open chunk is replaced, never written into — so
+ * one may be read on another thread while this list goes on growing.
+ */
+class AppendOnlyList<T>(private val chunkSize: Int = APPEND_CHUNK_SIZE) {
+    private val filled = mutableListOf<List<T>>()
+    private var open = ArrayList<T>(chunkSize)
+
+    val size: Int get() = filled.size * chunkSize + open.size
+
+    fun add(item: T) {
+        open.add(item)
+        if (open.size == chunkSize) {
+            filled += open
+            open = ArrayList(chunkSize)
+        }
+    }
+
+    fun clear() {
+        filled.clear()
+        open = ArrayList(chunkSize)
+    }
+
+    fun snapshot(): List<T> = ChunkedList(filled.toList(), open.toList(), chunkSize)
+}
+
+/** The immutable face of an [AppendOnlyList]: every chunk but the last holds exactly [chunkSize]
+ *  items, which is what makes indexing a division. */
+private class ChunkedList<T>(
+    private val filled: List<List<T>>,
+    private val open: List<T>,
+    private val chunkSize: Int,
+) : AbstractList<T>(), RandomAccess {
+    override val size: Int = filled.size * chunkSize + open.size
+
+    override fun get(index: Int): T {
+        if (index < 0 || index >= size) throw IndexOutOfBoundsException("$index not in 0..<$size")
+        val chunk = index / chunkSize
+        return if (chunk < filled.size) filled[chunk][index % chunkSize] else open[index - filled.size * chunkSize]
+    }
+}
+
+/** [first] followed by [second], reading through to both instead of copying either. Neither may
+ *  be modified afterwards — as with [AppendOnlyList.snapshot], the result is only immutable
+ *  because what it reads from is. */
+fun <T> concat(first: List<T>, second: List<T>): List<T> = ConcatList(first, second)
+
+private class ConcatList<T>(
+    private val first: List<T>,
+    private val second: List<T>,
+) : AbstractList<T>(), RandomAccess {
+    override val size: Int = first.size + second.size
+
+    override fun get(index: Int): T {
+        if (index < 0 || index >= size) throw IndexOutOfBoundsException("$index not in 0..<$size")
+        return if (index < first.size) first[index] else second[index - first.size]
+    }
+}
 
 fun mpsToKmh(mps: Double): Double = mps * MPS_TO_KMH
 
@@ -421,20 +489,25 @@ fun monotonicStepMillis(
     return delta.coerceAtLeast(0L)
 }
 
+/** [isSegmentBoundary] between two consecutive recorded positions. */
+fun isSegmentBoundary(prev: GeoPoint, point: GeoPoint): Boolean = isSegmentBoundary(
+    prev.timeMillis, point.timeMillis, point.segmentStart, point.elapsedMillis != null,
+) { haversineMeters(prev.lat, prev.lon, point.lat, point.lon) }
+
 /**
  * Split a route into the segments that were actually recorded: drawing across a boundary
  * (see [isSegmentBoundary]) would show travel the tracker never saw.
+ *
+ * This and [smoothRoute] define what a drawn track is. The map derives the same thing a fix at a
+ * time (`SmoothedTrack`), since re-deriving a whole ride twice a second is what a live ride cannot
+ * afford; these stay the plain statement of the rule, and what that faster path is tested against.
  */
 fun splitRouteSegments(route: List<GeoPoint>): List<List<GeoPoint>> {
     if (route.isEmpty()) return emptyList()
     val segments = mutableListOf(mutableListOf(route.first()))
     for (i in 1 until route.size) {
-        val prev = route[i - 1]
         val point = route[i]
-        val boundary = isSegmentBoundary(
-            prev.timeMillis, point.timeMillis, point.segmentStart, point.elapsedMillis != null,
-        ) { haversineMeters(prev.lat, prev.lon, point.lat, point.lon) }
-        if (boundary) {
+        if (isSegmentBoundary(route[i - 1], point)) {
             segments += mutableListOf(point)
         } else {
             segments.last() += point
@@ -446,7 +519,8 @@ fun splitRouteSegments(route: List<GeoPoint>): List<List<GeoPoint>> {
 /**
  * Display-only track smoothing: a centered moving average irons out per-fix GPS scatter,
  * then Douglas-Peucker drops the points that no longer add geometry. Stored points are
- * untouched, so this also benefits every previously recorded ride.
+ * untouched, so this also benefits every previously recorded ride. See [splitRouteSegments] for
+ * how the map applies both.
  */
 fun smoothRoute(route: List<GeoPoint>): List<GeoPoint> {
     if (route.size < 3) return route
@@ -455,25 +529,32 @@ fun smoothRoute(route: List<GeoPoint>): List<GeoPoint> {
 
 /** Centered moving average; the very first and last points are kept raw, so the track stays
  *  anchored to the true start/finish and the live puck sits on the drawn line's end. */
-private fun movingAverage(points: List<GeoPoint>, window: Int): List<GeoPoint> {
+private fun movingAverage(points: List<GeoPoint>, window: Int): List<GeoPoint> =
+    List(points.size) { smoothedPointAt(points, it, window) }
+
+/**
+ * One point of [movingAverage], so a track that is still growing can smooth the fixes it has just
+ * gained without re-averaging the ones it already smoothed. The value at [i] is settled once
+ * `i + window / 2` points follow it: only then is the window no longer clipped by the track's end,
+ * and only then has [i] stopped being the last point that is kept raw.
+ */
+internal fun smoothedPointAt(points: List<GeoPoint>, i: Int, window: Int): GeoPoint {
+    if (i == 0 || i == points.lastIndex) return points[i]
     val half = window / 2
-    return List(points.size) { i ->
-        if (i == 0 || i == points.lastIndex) return@List points[i]
-        val from = max(0, i - half)
-        val to = min(points.lastIndex, i + half)
-        var lat = 0.0
-        var lon = 0.0
-        for (j in from..to) {
-            lat += points[j].lat
-            lon += points[j].lon
-        }
-        val n = to - from + 1
-        GeoPoint(lat / n, lon / n)
+    val from = max(0, i - half)
+    val to = min(points.lastIndex, i + half)
+    var lat = 0.0
+    var lon = 0.0
+    for (j in from..to) {
+        lat += points[j].lat
+        lon += points[j].lon
     }
+    val n = to - from + 1
+    return GeoPoint(lat / n, lon / n)
 }
 
 /** Douglas-Peucker on a local planar projection (meters), iterative to spare the stack. */
-private fun simplifyRoute(points: List<GeoPoint>, toleranceM: Double): List<GeoPoint> {
+internal fun simplifyRoute(points: List<GeoPoint>, toleranceM: Double): List<GeoPoint> {
     if (points.size < 3) return points
     val cosLat = cos(Math.toRadians(points.first().lat))
     val xs = DoubleArray(points.size) { points[it].lon * cosLat * METERS_PER_DEGREE }

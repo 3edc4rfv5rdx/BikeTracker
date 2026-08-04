@@ -8,6 +8,9 @@ import xx.biketracker.GeoPoint
 
 class SpeedSamplesTest {
 
+    /** Every sample of a finished track, in one pass. */
+    private fun samplesOf(route: List<GeoPoint>) = SpeedSampleTrack().update(route)
+
     /** Points on one parallel, evenly spaced in longitude, so every step covers the same meters. */
     private fun point(
         index: Int,
@@ -19,14 +22,14 @@ class SpeedSamplesTest {
 
     @Test
     fun fewerThanTwoPointsYieldNoSamples() {
-        assertEquals(0, buildSpeedSamples(emptyList()).size)
-        assertEquals(0, buildSpeedSamples(listOf(point(0, 1_000L))).size)
+        assertEquals(0, samplesOf(emptyList()).size)
+        assertEquals(0, samplesOf(listOf(point(0, 1_000L))).size)
     }
 
     @Test
     fun oneSamplePerRoutePoint() {
         val route = (0..9).map { point(it, it * GPS_INTERVAL_MS) }
-        assertEquals(route.size, buildSpeedSamples(route).size)
+        assertEquals(route.size, samplesOf(route).size)
     }
 
     @Test
@@ -37,7 +40,7 @@ class SpeedSamplesTest {
             point(2, 300_000L), // long pause before this fix: a recording gap
             point(3, 300_000L + GPS_INTERVAL_MS),
         )
-        val samples = buildSpeedSamples(route)
+        val samples = samplesOf(route)
         val step = samples[1].distanceMeters
         assertTrue(step > 0)
         assertEquals(samples[1].distanceMeters, samples[2].distanceMeters, 1e-9)
@@ -53,7 +56,7 @@ class SpeedSamplesTest {
         // A jammed receiver delivers fixes 30 s apart. The chart must plot the ride they describe,
         // not a row of boundaries with a zero-width domain.
         val route = (0..4).map { point(it, it * 30_000L) }
-        val samples = buildSpeedSamples(route)
+        val samples = samplesOf(route)
         assertTrue(samples.none { it.segmentStart })
         assertTrue(samples.last().distanceMeters > 0.0)
         assertEquals(4 * 30_000L, samples.last().movingTimeMillis)
@@ -68,13 +71,13 @@ class SpeedSamplesTest {
             point(1, 2_000L, speedMps = 10f),
             point(2, 3_000L, speedMps = 20f),
         )
-        buildSpeedSamples(route).forEach { assertEquals(10f, it.speedMps, 1e-6f) }
+        samplesOf(route).forEach { assertEquals(10f, it.speedMps, 1e-6f) }
     }
 
     @Test
     fun untimedPointsNeverGap() {
         val route = (0..3).map { point(it, timeMillis = 0L) }
-        val samples = buildSpeedSamples(route)
+        val samples = samplesOf(route)
         assertTrue(samples.last().distanceMeters > samples[1].distanceMeters)
     }
 
@@ -90,7 +93,7 @@ class SpeedSamplesTest {
 
     @Test
     fun smoothingNeverCrossesASegmentBoundary() {
-        val samples = buildSpeedSamples(stoppedThenFastRide())
+        val samples = samplesOf(stoppedThenFastRide())
         // The window stays inside each segment, so the stopped tail and the fast head keep their
         // own averages instead of bleeding across the pause.
         assertEquals(0f, samples[4].speedMps, 1e-6f)
@@ -99,7 +102,7 @@ class SpeedSamplesTest {
 
     @Test
     fun flaggedBoundaryBreaksDistanceEvenUnderTheGapThreshold() {
-        val samples = buildSpeedSamples(stoppedThenFastRide())
+        val samples = samplesOf(stoppedThenFastRide())
         assertTrue(samples[5].segmentStart)
         // The 2 s gap is under the stale threshold, yet the boundary adds neither distance nor time.
         assertEquals(samples[4].distanceMeters, samples[5].distanceMeters, 1e-9)
@@ -115,7 +118,7 @@ class SpeedSamplesTest {
             point(2, 41_000L, elapsedMillis = 2_000L),
             point(3, 42_000L, elapsedMillis = 3_000L),
         )
-        val samples = buildSpeedSamples(route)
+        val samples = samplesOf(route)
         for (i in 1 until samples.size) {
             assertTrue(samples[i].elapsedMillis >= samples[i - 1].elapsedMillis)
         }
@@ -129,7 +132,7 @@ class SpeedSamplesTest {
             point(1, 3_600_000L, elapsedMillis = 1_000L), // +1 h clock jump, no real pause
             point(2, 3_601_000L, elapsedMillis = 2_000L),
         )
-        val samples = buildSpeedSamples(route)
+        val samples = samplesOf(route)
         // Moving time follows the monotonic elapsed clock, not the inflated epoch delta.
         assertEquals(2_000L, samples.last().movingTimeMillis)
         // And the jump is not misread as a segment boundary.
@@ -140,7 +143,7 @@ class SpeedSamplesTest {
     fun oldRideWithoutElapsedClampsBackwardEpochJump() {
         // No elapsed metadata: the axis is rebuilt from epoch deltas, clamped so it never reverses.
         val route = listOf(point(0, 100_000L), point(1, 40_000L), point(2, 41_000L))
-        val samples = buildSpeedSamples(route)
+        val samples = samplesOf(route)
         for (i in 1 until samples.size) {
             assertTrue(samples[i].elapsedMillis >= samples[i - 1].elapsedMillis)
         }
@@ -155,8 +158,74 @@ class SpeedSamplesTest {
             point(5, resumeAt, speedMps = 10f, segmentStart = true),
             point(6, resumeAt + GPS_INTERVAL_MS, speedMps = 10f),
         )
-        val samples = buildSpeedSamples(first + second)
+        val samples = samplesOf(first + second)
         assertEquals(10f, samples[5].speedMps, 1e-6f)
         assertEquals(10f, samples[6].speedMps, 1e-6f)
+    }
+
+    // --- Fed a fix at a time (SpeedSampleTrack) ---
+
+    private fun assertSameSamples(expected: List<SpeedSample>, actual: List<SpeedSample>) {
+        assertEquals(expected.size, actual.size)
+        expected.forEachIndexed { i, want ->
+            val got = actual[i]
+            assertEquals("distance at $i", want.distanceMeters, got.distanceMeters, 0.0)
+            assertEquals("time at $i", want.timeMillis, got.timeMillis)
+            assertEquals("elapsed at $i", want.elapsedMillis, got.elapsedMillis)
+            assertEquals("moving time at $i", want.movingTimeMillis, got.movingTimeMillis)
+            assertEquals("speed at $i", want.speedMps, got.speedMps, 0f)
+            assertEquals("boundary at $i", want.segmentStart, got.segmentStart)
+        }
+    }
+
+    private fun grownFixByFix(route: List<GeoPoint>): List<SpeedSample> {
+        val track = SpeedSampleTrack()
+        var samples = emptyList<SpeedSample>()
+        for (n in 1..route.size) samples = track.update(route.subList(0, n))
+        return samples
+    }
+
+    @Test
+    fun aRideFedFixByFixGivesTheSameSamplesAsOneBuild() {
+        // Long enough to cross several chunks of the settled store.
+        val route = (0..600).map { point(it, 1_000L + it * GPS_INTERVAL_MS, speedMps = 3f + it % 11) }
+
+        assertSameSamples(samplesOf(route), grownFixByFix(route))
+    }
+
+    @Test
+    fun aPauseFedFixByFixGivesTheSameSamplesAsOneBuild() {
+        // The boundary lands inside the smoothing window as the ride grows past it, which is
+        // exactly where a settled sample would be wrong to settle early.
+        val route = stoppedThenFastRide()
+
+        assertSameSamples(samplesOf(route), grownFixByFix(route))
+    }
+
+    @Test
+    fun anOutageFedFixByFixGivesTheSameSamplesAsOneBuild() {
+        val route = (0..20).map { point(it, 1_000L + it * GPS_INTERVAL_MS) } +
+            (21..40).map { point(it, 1_000L + 3_600_000L + it * GPS_INTERVAL_MS) }
+
+        assertSameSamples(samplesOf(route), grownFixByFix(route))
+    }
+
+    @Test
+    fun anotherRideStartsTheSamplesOver() {
+        val track = SpeedSampleTrack()
+        track.update((0..30).map { point(it, 1_000L + it * GPS_INTERVAL_MS) })
+        // Longer than the ride it replaces, so the cache has to notice by the points themselves.
+        val other = (0..40).map { point(it, 9_000_000L + it * GPS_INTERVAL_MS, speedMps = 9f) }
+
+        assertSameSamples(samplesOf(other), track.update(other))
+    }
+
+    @Test
+    fun tooShortToPlotStaysEmptyAndRecovers() {
+        val track = SpeedSampleTrack()
+        val route = (0..5).map { point(it, 1_000L + it * GPS_INTERVAL_MS) }
+
+        assertEquals(0, track.update(route.take(1)).size)
+        assertSameSamples(samplesOf(route), track.update(route))
     }
 }

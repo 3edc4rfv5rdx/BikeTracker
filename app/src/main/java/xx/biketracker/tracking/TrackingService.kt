@@ -37,6 +37,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import xx.biketracker.ACCURACY_LIMIT_M
+import xx.biketracker.AppendOnlyList
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
 import xx.biketracker.AUTO_SAVE_GPS_WAIT_MS
 import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
@@ -372,7 +373,8 @@ class TrackingService : Service() {
     private var lastTrustedFix: ValidatedLocationFix? = null
     private var lastTrustedFixElapsedRealtime = 0L
     private val points = mutableListOf<TrackPoint>()
-    private val route = mutableListOf<GeoPoint>()
+    // Chunked, so publishing the track to the map on every fix costs a chunk and not the ride.
+    private val route = AppendOnlyList<GeoPoint>()
 
     private val kalman = GpsKalmanFilter()
     private val speedWindow = SpeedWindow()
@@ -848,11 +850,13 @@ class TrackingService : Service() {
         points += point
         // The segment flag lets the map and chart split at pause/outage boundaries; the elapsed
         // time drives the chart's monotonic time axis; the speed feeds the live speed chart.
-        route += smoothed.copy(
-            timeMillis = fix.wallTimeMillis,
-            speedMps = fix.speedMps?.toFloat() ?: 0f,
-            segmentStart = segmentStart,
-            elapsedMillis = elapsedSinceStart,
+        route.add(
+            smoothed.copy(
+                timeMillis = fix.wallTimeMillis,
+                speedMps = fix.speedMps?.toFloat() ?: 0f,
+                segmentStart = segmentStart,
+                elapsedMillis = elapsedSinceStart,
+            )
         )
         lastPoint = point
         lastPointElapsedRealtimeNanos = nowElapsedNanos
@@ -1245,7 +1249,7 @@ class TrackingService : Service() {
                 updatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
                 lastTrustedFixElapsedRealtime = lastTrustedFixElapsedRealtime,
                 persistenceFailed = persistenceFailed,
-                route = route.toList(),
+                route = route.snapshot(),
             )
         )
     }

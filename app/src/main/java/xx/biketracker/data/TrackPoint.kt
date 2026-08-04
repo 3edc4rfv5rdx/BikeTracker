@@ -35,6 +35,6 @@ data class TrackPoint(
     val segmentStart: Boolean = false,
     // Monotonic elapsed-realtime millis since ride start — the wall-clock-safe basis for the
     // speed chart's time axis (added in schema v7). NULL on rides recorded before it existed;
-    // those fall back to the epoch time. See buildSpeedSamples.
+    // those fall back to the epoch time. See monotonicStepMillis.
     val elapsedMillis: Long? = null,
 )

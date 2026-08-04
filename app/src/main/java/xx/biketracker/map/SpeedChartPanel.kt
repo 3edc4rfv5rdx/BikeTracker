@@ -64,10 +64,14 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import xx.biketracker.AppendOnlyList
 import xx.biketracker.GeoPoint
 import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.R
+import xx.biketracker.concat
 import xx.biketracker.distanceTickStepMeters
 import xx.biketracker.timeTickStepMillis
 import xx.biketracker.formatClock
@@ -123,58 +127,99 @@ internal class SpeedSample(
 private fun elapsedStepMillis(prev: GeoPoint, curr: GeoPoint): Long =
     monotonicStepMillis(prev.elapsedMillis, curr.elapsedMillis, prev.timeMillis, curr.timeMillis)
 
-internal fun buildSpeedSamples(route: List<GeoPoint>): List<SpeedSample> {
-    if (route.size < 2) return emptyList()
+/** Whether the recording broke between [i] - 1 and [i]; see [isSegmentBoundary]. */
+private fun boundaryAt(route: List<GeoPoint>, i: Int): Boolean =
+    i > 0 && isSegmentBoundary(route[i - 1], route[i])
+
+/** Running totals of a walk through a route, carried from one sample to the next. */
+private data class SampleWalk(
+    var distanceMeters: Double = 0.0,
+    var elapsedMillis: Long = 0L,
+    var movingTimeMillis: Long = 0L,
+    /** First index of the recording segment the walk is inside; the smoothing window stops there. */
+    var segmentFirst: Int = 0,
+)
+
+/** The sample for point [i], advancing [walk] over the step that leads to it. */
+private fun sampleAt(route: List<GeoPoint>, i: Int, walk: SampleWalk): SpeedSample {
     val half = SPEED_SMOOTH_WINDOW / 2
-    // Recording-segment id per point: a pause/outage boundary starts a new one, so cumulative
-    // distance/time and the smoothing window never cross it.
-    val segId = IntArray(route.size)
-    // Step distances, reused below for the cumulative distance axis.
-    val stepMeters = DoubleArray(route.size)
-    for (i in 1 until route.size) {
+    val boundary = boundaryAt(route, i)
+    if (i == 0 || boundary) walk.segmentFirst = i
+    val step = if (i == 0) 0L else elapsedStepMillis(route[i - 1], route[i])
+    walk.elapsedMillis += step // includes pauses, so the axis spans the whole ride; always monotonic
+    if (i > 0 && !boundary) {
         val prev = route[i - 1]
-        val point = route[i]
-        stepMeters[i] = haversineMeters(prev.lat, prev.lon, point.lat, point.lon)
-        val boundary = isSegmentBoundary(
-            prev.timeMillis, point.timeMillis, point.segmentStart, point.elapsedMillis != null,
-        ) { stepMeters[i] }
-        segId[i] = segId[i - 1] + if (boundary) 1 else 0
+        walk.distanceMeters += haversineMeters(prev.lat, prev.lon, route[i].lat, route[i].lon)
+        walk.movingTimeMillis += step // a boundary's pause step is excluded: this stays moving time
     }
-    // First and last index of each segment, so the smoothing window can clamp to the segment.
-    val segFirst = IntArray(segId.last() + 1)
-    val segLast = IntArray(segId.last() + 1)
-    for (i in route.indices) {
-        if (i == 0 || segId[i] != segId[i - 1]) segFirst[segId[i]] = i
-        segLast[segId[i]] = i
-    }
-    val samples = ArrayList<SpeedSample>(route.size)
-    var distance = 0.0
-    var movingMillis = 0L
-    var elapsed = 0L
-    for (i in route.indices) {
-        val boundary = i > 0 && segId[i] != segId[i - 1]
-        val step = if (i == 0) 0L else elapsedStepMillis(route[i - 1], route[i])
-        elapsed += step // includes pauses, so the axis spans the whole ride; always monotonic
-        if (i > 0 && !boundary) {
-            distance += stepMeters[i]
-            movingMillis += step // a boundary's pause step is excluded, so this stays moving time
+    // Average only within the current segment: a stopped fix before a pause must not drag the
+    // speeds after it, and vice versa.
+    val from = max(walk.segmentFirst, i - half)
+    var to = min(route.lastIndex, i + half)
+    for (j in i + 1..to) {
+        if (boundaryAt(route, j)) {
+            to = j - 1
+            break
         }
-        // Average only within the current segment: a stopped fix before a pause must not drag
-        // the speeds after it, and vice versa.
-        val from = max(segFirst[segId[i]], i - half)
-        val to = min(segLast[segId[i]], i + half)
-        var sum = 0f
-        for (j in from..to) sum += route[j].speedMps
-        samples += SpeedSample(
-            distanceMeters = distance,
-            timeMillis = route[i].timeMillis,
-            elapsedMillis = elapsed,
-            movingTimeMillis = movingMillis,
-            speedMps = sum / (to - from + 1),
-            segmentStart = boundary,
-        )
     }
-    return samples
+    var sum = 0f
+    for (j in from..to) sum += route[j].speedMps
+    return SpeedSample(
+        distanceMeters = walk.distanceMeters,
+        timeMillis = route[i].timeMillis,
+        elapsedMillis = walk.elapsedMillis,
+        movingTimeMillis = walk.movingTimeMillis,
+        speedMps = sum / (to - from + 1),
+        segmentStart = boundary,
+    )
+}
+
+/**
+ * The chart's samples for a track that is still growing, kept between fixes.
+ *
+ * Rebuilding every sample on every fix costs a sample object per recorded point, twice a second,
+ * for as long as the ride lasts — pure battery on the screen a rider watches while cycling. A
+ * ride only ever grows at its end, and a sample is settled as soon as [SPEED_SMOOTH_WINDOW] / 2
+ * points follow it: from then on neither its smoothed speed nor its totals can change. Only those
+ * last few are re-derived, off the same [sampleAt] that built them in the first place: updating
+ * fix by fix gives exactly what one update with the finished ride gives.
+ *
+ * Not thread-safe: it is a cache, and callers must not run two updates at once.
+ */
+internal class SpeedSampleTrack {
+    private var settled = AppendOnlyList<SpeedSample>()
+    private var walk = SampleWalk()
+
+    /** Points already settled, and the last of them — a route that does not continue where the
+     *  previous one ended is a different track and starts the cache over. */
+    private var consumed = 0
+    private var lastConsumed: GeoPoint? = null
+
+    fun update(route: List<GeoPoint>): List<SpeedSample> {
+        if (route.size < 2) {
+            reset()
+            return emptyList()
+        }
+        if (route.size < consumed || (consumed > 0 && route.getOrNull(consumed - 1) != lastConsumed)) {
+            reset()
+        }
+        while (consumed < route.size - SPEED_SMOOTH_WINDOW / 2) {
+            settled.add(sampleAt(route, consumed, walk))
+            consumed++
+        }
+        lastConsumed = route.getOrNull(consumed - 1)
+        // The unsettled end, from a copy of the totals so the walk stays where the settled part left it.
+        val tailWalk = walk.copy()
+        val tail = (consumed until route.size).map { sampleAt(route, it, tailWalk) }
+        return concat(settled.snapshot(), tail)
+    }
+
+    private fun reset() {
+        settled = AppendOnlyList()
+        walk = SampleWalk()
+        consumed = 0
+        lastConsumed = null
+    }
 }
 
 /**
@@ -193,20 +238,28 @@ fun SpeedChartPanel(
     scrubIndex: Int?,
     onScrub: (Int) -> Unit,
 ) {
-    // Cumulative distances and smoothing recompute over the whole track on every live fix;
-    // off the main thread so a multi-hour ride can't jank the UI (same as the map smoothing).
-    var samples by remember { mutableStateOf<List<SpeedSample>>(emptyList()) }
-    LaunchedEffect(route) {
-        samples = withContext(Dispatchers.Default) { buildSpeedSamples(route) }
+    // The track's identity (its first fix time): everything derived from it is dropped when
+    // another ride is shown, so nothing of one ride is ever carried into another.
+    val trackKey = route.firstOrNull()?.timeMillis
+
+    // Off the main thread so a multi-hour ride can't jank the UI (same as the map smoothing), and
+    // only while the chart is on screen — a pulled-down panel has nothing to plot. The samples are
+    // carried between fixes, so a live ride costs what it grew by; the lock keeps two updates
+    // apart, since this effect restarts on every fix and the run it replaces may still be inside
+    // work that has no suspension point to cancel at.
+    val samplesTrack = remember(trackKey) { SpeedSampleTrack() }
+    val samplesLock = remember(trackKey) { Mutex() }
+    var samples by remember(trackKey) { mutableStateOf<List<SpeedSample>>(emptyList()) }
+    LaunchedEffect(route, expanded) {
+        if (!expanded) return@LaunchedEffect
+        samples = samplesLock.withLock { withContext(Dispatchers.Default) { samplesTrack.update(route) } }
     }
 
     var axisDistance by rememberSaveable { mutableStateOf(true) }
     var menuOpen by remember { mutableStateOf(false) }
 
-    // Pinch-zoom window over the X domain, as fractions of the whole ride. Keyed to the
-    // track's identity (its first fix time), so another ride never inherits a stale zoom;
-    // held here, not in the chart, so collapsing the panel keeps it.
-    val trackKey = route.firstOrNull()?.timeMillis
+    // Pinch-zoom window over the X domain, as fractions of the whole ride. Keyed to the track, so
+    // another ride never inherits a stale zoom; held here, not in the chart, so collapsing keeps it.
     var viewStart by remember(trackKey) { mutableFloatStateOf(0f) }
     var viewWidth by remember(trackKey) { mutableFloatStateOf(1f) }
     fun applyZoom(factor: Float) {
