@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import xx.biketracker.map.MapSelection
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
@@ -160,6 +161,10 @@ suspend fun restoreDatabase(context: Context, source: Uri): Unit = withContext(D
             // Once the live database is closed, cancellation must not strand a truncated/missing file.
             withContext(NonCancellable) {
                 commitStagedDatabase(context, staged)
+                // These are other rides now. A ride picked out of the old database is either gone
+                // or, worse and without a word, a different ride that inherited its id — so the
+                // selection goes here, before the recreated UI reads it.
+                MapSelection.clearStoredSelection()
             }
         } finally {
             staged.delete()

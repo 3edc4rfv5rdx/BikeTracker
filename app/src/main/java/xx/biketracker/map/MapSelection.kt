@@ -54,9 +54,19 @@ object MapSelection {
     }
 
     fun clear() {
+        clearStoredSelection()
+        _imported.value = null
+    }
+
+    /**
+     * Forget the selected ride, leaving an imported track alone. Called when a restore replaces the
+     * whole database: every id then belongs to a different set of rides, so the selection either
+     * names a ride that is gone or — worse, and silently — a different ride that inherited its id.
+     * An imported GPX track is not a row in any database and outlives the swap unharmed.
+     */
+    fun clearStoredSelection() {
         _selectedTripId.value = null
         picked = null
-        _imported.value = null
     }
 
     /** Drop the selection if it points at the given trip — called when a ride is deleted. */
