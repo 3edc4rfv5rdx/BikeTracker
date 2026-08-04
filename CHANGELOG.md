@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Documented the ride column that has never been read (`Trip.avgGpsSpeedMps`) as dead schema in SPEC.md, with why removing it is not worth the migration.
 - A ride shown on the Map tab, or open in the extended statistics, now follows the ride itself: renaming it shows through at once, and deleting it closes the view instead of leaving a ride on screen that no longer exists.
 - Recording no longer claims a save failed when two of its periodic saves land out of order; they are now handed over one at a time, and an overtaken one is recognised as already stored.
 - Smoothing a track for display now keeps each point's time, speed and segment flag instead of resetting them, so nothing read off a smoothed track can quietly come out wrong.
