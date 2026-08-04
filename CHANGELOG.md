@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A GPX holding several tracks is now named after the file rather than after its first track; all of its tracks are shown, still separated where the file separates them.
 - The "track cut short" message now declines the point count properly in every language.
 - The lint script now prints its findings when lint reports an error, instead of aborting before the report — the one run where the report matters most.
 - The History tab's Today, Collapse-all and Records buttons no longer do nothing when tapped just as the ride list changes underneath them.

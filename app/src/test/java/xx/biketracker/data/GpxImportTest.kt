@@ -202,6 +202,43 @@ class GpxImportTest {
         assertEquals("Old export", parsed.name)
     }
 
+    // --- Several tracks in one file ---
+
+    private fun twoTracks(fileName: String?) = gpx(
+        (fileName?.let { metadata(it) } ?: "") +
+            """<trk><name>Day one</name><trkseg>
+                 <trkpt lat="50.0000000" lon="30.0000000"/>
+                 <trkpt lat="50.0010000" lon="30.0000000"/>
+               </trkseg></trk>
+               <trk><name>Day two</name><trkseg>
+                 <trkpt lat="51.0000000" lon="31.0000000"/>
+                 <trkpt lat="51.0010000" lon="31.0000000"/>
+               </trkseg></trk>"""
+    )
+
+    @Test
+    fun everyTrackInAFileIsShown() {
+        // A viewer that showed one third of what was picked would be the stranger answer. The
+        // <trkseg> divisions keep the days apart, so no line is drawn from one to the next.
+        val parsed = parse(twoTracks(fileName = "tour.gpx"))!!
+
+        assertEquals(4, parsed.route.size)
+        assertEquals(listOf(true, false, true, false), parsed.route.map { it.segmentStart })
+        assertEquals(2, splitRouteSegments(parsed.route).size)
+    }
+
+    @Test
+    fun severalTracksAreNamedAfterTheFile() {
+        // "Day one" names a third of what is on screen; the file names all of it.
+        assertEquals("tour.gpx", parse(twoTracks(fileName = "tour.gpx"))!!.name)
+    }
+
+    @Test
+    fun severalTracksWithNoFileNameAreLeftUnnamed() {
+        // The map then calls it an imported track, which is at least true.
+        assertNull(parse(twoTracks(fileName = null))!!.name)
+    }
+
     @Test
     fun malformedXmlReturnsNull() {
         assertNull(parse("<gpx><trk><trkseg>"))

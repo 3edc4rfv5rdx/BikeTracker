@@ -79,6 +79,13 @@ private fun documentSize(resolver: ContentResolver, uri: Uri): Long? = try {
  * namespace that merely shares a local name — an extension's own `<name>`, say — is not mistaken
  * for one of GPX's own. A file that declares no namespace at all is read as GPX too, since that is
  * what many exporters write.
+ *
+ * A file holding several `<trk>`s — three days of touring in one export — is shown as all of them,
+ * one after another: this is a viewer, and hiding two thirds of what was picked would be the
+ * stranger answer. Their `<trkseg>` divisions keep them apart, so no line is drawn between the end
+ * of one day and the start of the next. Only the naming changes: one track is named by its own
+ * `<name>`, while several fall back to the file's name, since day one's name is not the name of
+ * what is on screen.
  */
 fun parseGpx(input: InputStream, maxPoints: Int = MAX_IMPORTED_POINTS): ParsedGpx? {
     val handler = GpxHandler(maxPoints)
@@ -168,7 +175,9 @@ private class GpxHandler(private val maxPoints: Int) : DefaultHandler() {
         when (open.size) {
             1 -> isGpx = name == "gpx"
             2 -> if (isGpx) when (name) {
-                "trk" -> { tracks++; inTrack = true }
+                // Past the first track its name no longer describes what is drawn: the file's
+                // own name does, so drop what the first one gave.
+                "trk" -> { if (++tracks > 1) trackName = null; inTrack = true }
                 "metadata" -> inMetadata = true
                 "name" -> capture = Capture.ROOT_NAME // GPX 1.0 puts the file's name here
             }
