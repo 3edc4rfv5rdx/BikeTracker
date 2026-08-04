@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- A stored ride and an imported GPX track now end in a red dot marking the finish, shown at the same zooms as the start chevron; a live ride still ends at the puck.
+- Zoomed out far enough that the track carries no direction chevrons, a single white chevron on a black disc now sits at its start, pointing the way the ride set off.
 - A ride recovered after the app was killed mid-ride is now held to the same 200 m minimum as the auto-save.
 - A ride auto-saved after a long pause is now only kept if it covered at least 200 m, so the few dozen metres a jammed receiver wanders while the bike stands still no longer land in the history as rides of their own.
 - Standby now waits for a second fix to confirm you have left the spot before it opens a new ride, so a single spoofed jump can no longer split a ride in two.

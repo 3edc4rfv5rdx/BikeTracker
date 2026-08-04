@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="18dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- The start chevron: the same chevron as ic_map_direction, in white on a solid black disc.
+         It stands alone on a track zoomed out to a squiggle, and the disc is what makes it findable
+         there — over the orange and green track colors alike. -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M12,1 a11,11 0 1,0 0,22 a11,11 0 1,0 0,-22 z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M9.5,7 L14.5,12 L9.5,17" />
+</vector>

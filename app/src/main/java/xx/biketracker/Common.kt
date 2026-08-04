@@ -115,6 +115,9 @@ const val DRAFT_FLUSH_EVERY_POINTS = 20
 const val ROUTE_SMOOTH_WINDOW = 5
 /** Douglas-Peucker tolerance (meters): detail below this is GPS noise, not geometry. */
 const val ROUTE_SIMPLIFY_TOLERANCE_M = 2.0
+/** How far from its first point a track must get before that stretch is read as the direction the
+ *  ride set off in; see [routeStartHeading]. */
+const val ROUTE_START_SPAN_M = 20.0
 /** Meters per degree of latitude — good enough for the local planar math below. */
 private const val METERS_PER_DEGREE = 111_320.0
 
@@ -214,6 +217,29 @@ fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Dou
         cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
         sin(dLon / 2) * sin(dLon / 2)
     return earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a))
+}
+
+/** Compass bearing from one coordinate to another, in degrees clockwise from north. */
+fun bearingDegrees(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val lat1Rad = Math.toRadians(lat1)
+    val lat2Rad = Math.toRadians(lat2)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val y = sin(dLon) * cos(lat2Rad)
+    val x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(dLon)
+    return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
+}
+
+/**
+ * The direction a ride set off in: the bearing from its first point to the first point at least
+ * [ROUTE_START_SPAN_M] away, so the jitter of a bike still standing at the start doesn't decide
+ * it. Null when the track never gets that far from where it began — there is no direction to show.
+ */
+fun routeStartHeading(route: List<GeoPoint>): Double? {
+    val start = route.firstOrNull() ?: return null
+    val away = route.firstOrNull {
+        haversineMeters(start.lat, start.lon, it.lat, it.lon) >= ROUTE_START_SPAN_M
+    } ?: return null
+    return bearingDegrees(start.lat, start.lon, away.lat, away.lon)
 }
 
 /** Average speed in m/s, derived from distance and moving time (0 if no time elapsed). */

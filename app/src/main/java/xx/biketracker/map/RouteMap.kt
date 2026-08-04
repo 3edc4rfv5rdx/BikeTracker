@@ -67,6 +67,7 @@ import org.maplibre.geojson.Point
 import xx.biketracker.GeoPoint
 import xx.biketracker.R
 import xx.biketracker.haversineMeters
+import xx.biketracker.routeStartHeading
 import xx.biketracker.smoothRoute
 import xx.biketracker.splitRouteSegments
 import xx.biketracker.ui.AccentOrange
@@ -91,6 +92,22 @@ private const val DIRECTION_IMAGE_ID = "ride-route-chevron"
 private const val DIRECTION_SPACING = 56f
 // Zoomed further out the track is a squiggle the arrows would only clutter.
 private const val DIRECTION_MIN_ZOOM = 13f
+// Below that zoom the whole track can be shorter than one chevron spacing, leaving it with no
+// direction at all: a single chevron then sits at the start, pointing the way the ride set off.
+// Its maxZoom is the chevrons' minZoom, so exactly one of the two layers is ever drawn.
+private const val START_SOURCE_ID = "ride-route-start"
+private const val START_LAYER_ID = "ride-route-start-direction"
+private const val START_IMAGE_ID = "ride-route-chevron-start"
+// The chevron image points right, so a compass bearing turns into its rotation less a quarter turn.
+private const val START_ROTATE_KEY = "rotate"
+private const val START_ICON_EAST_OFFSET = 90.0
+
+// End of the track, marked only where the ride is over: a stored ride or an imported GPX. A live
+// ride ends at the puck, which says the same thing and says it is still moving. Zoomed in past
+// DIRECTION_MIN_ZOOM the chevrons take over from both end markers at once.
+private const val FINISH_SOURCE_ID = "ride-route-finish"
+private const val FINISH_LAYER_ID = "ride-route-finish-dot"
+private const val FINISH_IMAGE_ID = "ride-route-finish-disc"
 
 // Live-position puck: an arrow at the current fix, rotated to the heading of travel.
 private const val PUCK_SOURCE_ID = "ride-puck"
@@ -244,6 +261,34 @@ fun RouteMap(
                     PropertyFactory.iconIgnorePlacement(true),
                 ).apply { minZoom = DIRECTION_MIN_ZOOM }
             )
+            // The one chevron that stands in for them all once the track is too small to carry any:
+            // discked, since it has to be found on a track shrunk to a squiggle.
+            styleBitmap(context, R.drawable.ic_map_direction_start)?.let {
+                style.addImage(START_IMAGE_ID, it)
+            }
+            style.addSource(GeoJsonSource(START_SOURCE_ID))
+            style.addLayer(
+                SymbolLayer(START_LAYER_ID, START_SOURCE_ID).withProperties(
+                    PropertyFactory.iconImage(START_IMAGE_ID),
+                    PropertyFactory.iconRotate(Expression.get(START_ROTATE_KEY)),
+                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                ).apply { maxZoom = DIRECTION_MIN_ZOOM }
+            )
+            // Where a finished track ends. Shares the start chevron's zoom range, so the two ends
+            // of a ride are marked, and stop being marked, together.
+            styleBitmap(context, R.drawable.ic_map_finish)?.let {
+                style.addImage(FINISH_IMAGE_ID, it)
+            }
+            style.addSource(GeoJsonSource(FINISH_SOURCE_ID))
+            style.addLayer(
+                SymbolLayer(FINISH_LAYER_ID, FINISH_SOURCE_ID).withProperties(
+                    PropertyFactory.iconImage(FINISH_IMAGE_ID),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                ).apply { maxZoom = DIRECTION_MIN_ZOOM }
+            )
             // Scrub marker above the track but under the puck.
             style.addSource(GeoJsonSource(MARKER_SOURCE_ID))
             style.addLayer(
@@ -315,17 +360,43 @@ fun RouteMap(
         // the track into segments, each smoothed and drawn on its own — no line is synthesized
         // across a stretch the tracker never recorded. Single-point segments cannot form a
         // line and are skipped; the live one is still visible as the puck.
-        val line = withContext(Dispatchers.Default) {
-            MultiLineString.fromLngLats(
+        val (line, startHeading) = withContext(Dispatchers.Default) {
+            val multiLine = MultiLineString.fromLngLats(
                 splitRouteSegments(route)
                     .map { segment -> smoothRoute(segment).map { Point.fromLngLat(it.lon, it.lat) } }
                     .filter { it.size >= 2 }
             )
+            multiLine to routeStartHeading(route)
         }
         style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(line)
+        // The start chevron: placed on the first point, turned the way the ride set off.
+        val startSource = style.getSourceAs<GeoJsonSource>(START_SOURCE_ID)
+        if (startHeading == null) {
+            startSource?.setGeoJson(FeatureCollection.fromFeatures(listOf<Feature>()))
+        } else {
+            val start = route.first()
+            startSource?.setGeoJson(
+                Feature.fromGeometry(Point.fromLngLat(start.lon, start.lat)).apply {
+                    addNumberProperty(START_ROTATE_KEY, startHeading - START_ICON_EAST_OFFSET)
+                }
+            )
+        }
         if (route.isNotEmpty() && mapSize.height > 0 && centeredSize != mapSize) {
             centeredSize = mapSize
             centerOnRoute()
+        }
+    }
+
+    // The finish dot, on the last point of a track nothing is being added to any more. A live ride
+    // has a puck at that end instead, so the two never both mark the same spot.
+    LaunchedEffect(route, position, styleEpoch) {
+        val style = mapInstance?.style ?: return@LaunchedEffect
+        val source = style.getSourceAs<GeoJsonSource>(FINISH_SOURCE_ID) ?: return@LaunchedEffect
+        val finish = route.lastOrNull().takeIf { position == null }
+        if (finish == null) {
+            source.setGeoJson(FeatureCollection.fromFeatures(listOf<Feature>()))
+        } else {
+            source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(finish.lon, finish.lat)))
         }
     }
 
