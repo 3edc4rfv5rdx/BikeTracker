@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- An exported GPX now stays readable whatever a ride's name and note contain: characters XML forbids are dropped instead of written into the file, and a point with impossible coordinates is left out rather than exported as `NaN`.
+
 - The start-direction arrow on the map now reads the direction from the first recorded segment only: a ride paused right after it began no longer points its arrow across the jump to wherever riding resumed.
 
 - The lint script now pauses at the end instead of reporting a missing `delay` command.

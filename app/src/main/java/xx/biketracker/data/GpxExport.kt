@@ -51,10 +51,14 @@ private fun gpxPointTimeMillis(trip: Trip, point: TrackPoint): Long? {
  * Build the GPX document for [trip] from its [points]. Coordinates use 7 decimals (~1 cm),
  * altitude one. A recording gap (pause or GPS outage) starts a new `<trkseg>`, so an importing
  * app never draws a straight line across a stop. Point times are monotonic; see [gpxPointTimeMillis].
+ *
+ * A point that is nowhere is left out entirely rather than exported as `NaN`: the file has to stay
+ * readable by every consumer, this app's own importer included, whatever a restored database holds.
  */
 fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
+    val usable = points.filter { it.lat in -90.0..90.0 && it.lon in -180.0..180.0 }
     val iso = isoUtc()
-    val sb = StringBuilder(64 + points.size * 80)
+    val sb = StringBuilder(64 + usable.size * 80)
     sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
     sb.append("<gpx version=\"1.1\" creator=\"BikeTracker\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n")
     sb.append("  <metadata><time>").append(iso.format(Date(trip.startTime))).append("</time></metadata>\n")
@@ -64,18 +68,19 @@ fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
     }
 
     var open = false
-    for (i in points.indices) {
-        val p = points[i]
+    for (i in usable.indices) {
+        val p = usable[i]
         val startSeg = i == 0 || isSegmentBoundary(
-            points[i - 1].time, p.time, p.segmentStart, p.elapsedMillis != null,
-        ) { haversineMeters(points[i - 1].lat, points[i - 1].lon, p.lat, p.lon) }
+            usable[i - 1].time, p.time, p.segmentStart, p.elapsedMillis != null,
+        ) { haversineMeters(usable[i - 1].lat, usable[i - 1].lon, p.lat, p.lon) }
         if (startSeg) {
             if (open) sb.append("    </trkseg>\n")
             sb.append("    <trkseg>\n")
             open = true
         }
         sb.append("      <trkpt lat=\"").append(coord(p.lat)).append("\" lon=\"").append(coord(p.lon)).append("\">")
-        p.altitudeMeters?.let { sb.append("<ele>").append(oneDecimal(it)).append("</ele>") }
+        p.altitudeMeters?.takeIf { it.isFinite() }
+            ?.let { sb.append("<ele>").append(oneDecimal(it)).append("</ele>") }
         gpxPointTimeMillis(trip, p)?.let { sb.append("<time>").append(iso.format(Date(it))).append("</time>") }
         sb.append("</trkpt>\n")
     }
@@ -87,8 +92,38 @@ fun buildGpx(trip: Trip, points: List<TrackPoint>): String {
 private fun coord(value: Double) = String.format(Locale.US, "%.7f", value)
 private fun oneDecimal(value: Double) = String.format(Locale.US, "%.1f", value)
 
-private fun gpxEscape(text: String): String =
-    text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+/**
+ * A ride's own words made legal in an XML 1.0 document: markup characters escaped, and every code
+ * point the standard forbids dropped. A name or note is whatever was pasted into the edit dialog,
+ * and a control character or a lone half of a surrogate pair in it would leave the exported file
+ * not well-formed — unreadable by any consumer, this app's own importer included. Tabs and line
+ * breaks are legal and kept; a character outside the basic plane is kept whole.
+ */
+private fun gpxEscape(text: String): String {
+    val sb = StringBuilder(text.length)
+    var i = 0
+    while (i < text.length) {
+        val ch = text[i]
+        when {
+            ch == '&' -> sb.append("&amp;")
+            ch == '<' -> sb.append("&lt;")
+            ch == '>' -> sb.append("&gt;")
+            ch == '\t' || ch == '\n' || ch == '\r' -> sb.append(ch)
+            ch.isHighSurrogate() -> {
+                val low = text.getOrNull(i + 1)
+                if (low != null && low.isLowSurrogate()) {
+                    sb.append(ch).append(low)
+                    i++
+                }
+            }
+            ch.isLowSurrogate() -> Unit // a trailing half with nothing in front of it
+            ch < ' ' || ch == '\uFFFE' || ch == '\uFFFF' -> Unit // C0 controls and non-characters
+            else -> sb.append(ch)
+        }
+        i++
+    }
+    return sb.toString()
+}
 
 /**
  * Write [trip]'s GPX into the shared `GPX-export` folder and return the content [Uri] of the file,

@@ -27,10 +27,12 @@ class GpxBuildTest {
         altitude: Double? = null,
         segmentStart: Boolean = false,
         elapsedMillis: Long? = null,
+        lat: Double = 50.1234567,
+        lon: Double = 30.7654321,
     ) = TrackPoint(
         tripId = 1,
-        lat = 50.1234567,
-        lon = 30.7654321,
+        lat = lat,
+        lon = lon,
         time = time,
         speedMps = 5f,
         altitudeMeters = altitude,
@@ -58,6 +60,51 @@ class GpxBuildTest {
         assertTrue(gpx.contains("<name>A &amp; B &lt;x&gt;</name>"))
         assertTrue(gpx.contains("<desc>q &gt; \"y\" &amp; z</desc>"))
         assertFalse(gpx.contains("<x>")) // the raw angle brackets must not survive
+    }
+
+    /** Whatever the ride is called, the document must survive its own importer. */
+    private fun roundTripName(title: String): String? =
+        parseGpx(buildGpx(trip(title = title), listOf(tp(elapsedMillis = 0))).byteInputStream())?.name
+
+    @Test
+    fun controlCharactersAreDroppedButTabsAndBreaksAreKept() {
+        // A NUL or a vertical tab is illegal in XML 1.0 — there is no way to write one at all.
+        assertEquals("Ride two", roundTripName("Ride\u0000 \u000Btwo"))
+        assertEquals("Ride\ttwo\nthree", roundTripName("Ride\ttwo\nthree"))
+    }
+
+    @Test
+    fun aLoneSurrogateIsDroppedAndARealEmojiSurvives() {
+        assertEquals("ride", roundTripName("ri\uD83Dde")) // a high half with no low half after it
+        assertEquals("ride", roundTripName("ride\uDE00")) // a low half with nothing in front of it
+        assertEquals("ride \uD83D\uDE00", roundTripName("ride \uD83D\uDE00"))
+    }
+
+    @Test
+    fun aPointThatIsNowhereIsLeftOutOfTheDocument() {
+        val gpx = buildGpx(
+            trip(),
+            listOf(
+                tp(elapsedMillis = 0),
+                tp(elapsedMillis = 1_000, lat = Double.NaN),
+                tp(elapsedMillis = 2_000, lon = Double.POSITIVE_INFINITY),
+                tp(elapsedMillis = 3_000, lat = 91.0),
+                tp(elapsedMillis = 4_000),
+            ),
+        )
+
+        assertEquals(2, gpx.count("<trkpt"))
+        assertFalse(gpx.contains("NaN"))
+        assertFalse(gpx.contains("Infinity"))
+        assertEquals(2, parseGpx(gpx.byteInputStream())?.route?.size)
+    }
+
+    @Test
+    fun aNonFiniteAltitudeIsOmittedRatherThanWritten() {
+        val gpx = buildGpx(trip(), listOf(tp(altitude = Double.NaN), tp(altitude = 120.0)))
+
+        assertEquals(1, gpx.count("<ele>"))
+        assertTrue(gpx.contains("<ele>120.0</ele>"))
     }
 
     @Test
