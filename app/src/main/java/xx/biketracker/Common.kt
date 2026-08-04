@@ -40,6 +40,19 @@ const val GPS_MIN_INTERVAL_MS = 1000L
 const val STANDBY_TIMEOUT_MS = 30L * 60L * 1000L
 /** Movement must hold above the resume threshold this long to auto-start a ride from standby. */
 const val STANDBY_RESUME_HOLD_MS = 3_000L
+/**
+ * Having left the standby anchor must hold this long — across fixes, not on the strength of one —
+ * before it auto-starts a ride. A single fix far from the anchor is what a spoofed jump looks
+ * like, and wherever the signal is jammed those arrive on a bike that never moved.
+ */
+const val STANDBY_DEPARTURE_HOLD_MS = 3_000L
+/**
+ * A ride the tracker closes on its own (the long-pause auto-save) is only stored once it has
+ * covered this far. A jammed receiver wanders tens of metres while the bike stands still, and
+ * every such stretch would otherwise be saved as a ride of its own; a ride the rider stops by
+ * hand is stored whatever its length.
+ */
+const val MIN_AUTO_SAVED_DISTANCE_M = 200.0
 /** Reduced GPS cadence while in standby — lighter on the battery, still catches movement quickly. */
 const val STANDBY_GPS_INTERVAL_MS = 4_000L
 const val STANDBY_GPS_MIN_INTERVAL_MS = 2_000L
@@ -274,6 +287,22 @@ fun timeTickStepMillis(spanMillis: Double, maxTicks: Int): Double {
         ?: niceTickStep(spanMin / ticks / 60.0) * 60.0
     return stepMin * 60_000.0
 }
+
+/**
+ * Whether a recorded ride is worth storing. Any ride needs a track to draw and some ground to
+ * show for itself. One nobody asked to close — the long-pause auto-save, or the recovery pass
+ * finalizing a draft left behind by a dead process, [automatic] — must also have covered
+ * [MIN_AUTO_SAVED_DISTANCE_M]: the alternative is a history littered with the few-dozen-metre
+ * stretches a jammed receiver records for a bike standing still. The rider's own Stop is never
+ * second-guessed, however short the ride.
+ */
+fun isRideWorthSaving(
+    pointCount: Int,
+    distanceMeters: Double,
+    automatic: Boolean,
+): Boolean = pointCount >= 2 &&
+    distanceMeters > 0.0 &&
+    (!automatic || distanceMeters >= MIN_AUTO_SAVED_DISTANCE_M)
 
 /**
  * A wall-time gap above [GPS_STALE_MS] between two consecutive fixes is a recording

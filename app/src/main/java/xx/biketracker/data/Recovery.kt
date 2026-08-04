@@ -3,6 +3,7 @@ package xx.biketracker.data
 import android.content.Context
 import kotlinx.coroutines.Job
 import xx.biketracker.elevationGainBySegment
+import xx.biketracker.isRideWorthSaving
 import xx.biketracker.tracking.TrackingState
 import xx.biketracker.tracking.TrackingStatus
 
@@ -16,8 +17,9 @@ var recoveryJob: Job? = null
 /**
  * Finalize trips left unfinished by a process death mid-ride. The service flushes points and
  * running aggregates into a draft row as it records, so everything up to the last flush is
- * recoverable: drafts with real data are marked finished (with the point reductions computed as
- * at a normal save), empty ones are deleted. Trips started at or after [startedBefore] are
+ * recoverable: drafts worth keeping are marked finished (with the point reductions computed as
+ * at a normal save), the rest deleted. Nobody asked for this save, so it holds to the same
+ * minimum ride as the auto-save (see [isRideWorthSaving]). Trips started at or after [startedBefore] are
  * skipped — they belong to a ride that may have just begun, not to a dead process.
  */
 suspend fun finalizeAbandonedTrips(context: Context, startedBefore: Long) {
@@ -28,7 +30,7 @@ suspend fun finalizeAbandonedTrips(context: Context, startedBefore: Long) {
         for (trip in dao.getUnfinishedTrips()) {
             if (trip.startTime >= startedBefore) continue
             val points = dao.getPoints(trip.id)
-            if (points.size >= 2 && trip.distanceMeters > 0) {
+            if (isRideWorthSaving(points.size, trip.distanceMeters, automatic = true)) {
                 val altitudes = points.map { it.altitudeMeters }
                 dao.updateTrip(
                     trip.copy(

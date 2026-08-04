@@ -3,6 +3,11 @@
 Newest entries on top.
 
 ## Unreleased
+
+- A ride recovered after the app was killed mid-ride is now held to the same 200 m minimum as the auto-save.
+- A ride auto-saved after a long pause is now only kept if it covered at least 200 m, so the few dozen metres a jammed receiver wanders while the bike stands still no longer land in the history as rides of their own.
+- Standby now waits for a second fix to confirm you have left the spot before it opens a new ride, so a single spoofed jump can no longer split a ride in two.
+
 ## v0.5.20260803+156
 
 - The unit-test runner now waits three seconds before exiting.

@@ -48,7 +48,9 @@ import xx.biketracker.GeoPoint
 import xx.biketracker.LEFT_ANCHOR_DISTANCE_M
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.MPS_TO_KMH
+import xx.biketracker.isRideWorthSaving
 import xx.biketracker.SPEED_CORROBORATION_FRACTION
+import xx.biketracker.STANDBY_DEPARTURE_HOLD_MS
 import xx.biketracker.STANDBY_GPS_INTERVAL_MS
 import xx.biketracker.STANDBY_GPS_MIN_INTERVAL_MS
 import xx.biketracker.STANDBY_RESUME_HOLD_MS
@@ -260,9 +262,11 @@ class TrackingService : Service() {
     // resumes the ride even when the reported speeds say otherwise; see [hasLeftAnchor].
     private var standstillAnchor: ValidatedLocationFix? = null
     private var autoSaveJob: Job? = null
-    // Standby (post-auto-save) bookkeeping: when the rider started moving again, and the
-    // watchdog that shuts the service down after a long, motionless standby.
+    // Standby (post-auto-save) bookkeeping: when the rider started moving again, since when the
+    // fixes have been placing them away from the anchor, and the watchdog that shuts the service
+    // down after a long, motionless standby.
     private var movingSince = 0L
+    private var departedSince = 0L
     private var standbyJob: Job? = null
 
     private var currentSpeedMps = 0.0
@@ -431,6 +435,7 @@ class TrackingService : Service() {
         pausedAutomatically = false
         clearLowSpeedStreak()
         movingSince = 0L
+        departedSince = 0L
         standstillAnchor = null
         draftPersistence = null
         draftStartJob = null
@@ -587,16 +592,17 @@ class TrackingService : Service() {
             }
             FixValidation.Rejected -> return
         }
-        // Both hold timers below (auto-pause, standby auto-start) measure an unbroken stretch of
-        // observed speed. Across a gap in the fix stream the tracker saw nothing of what the rider
-        // did — jamming and blocked signal look exactly like a standstill — and the first fix back
-        // routinely reports a speed of 0. Without this reset that one fix would satisfy a hold
-        // measured from before the outage and pause a moving bike.
+        // Every hold timer below (auto-pause, standby auto-start, standby departure) measures an
+        // unbroken stretch of observations. Across a gap in the fix stream the tracker saw nothing
+        // of what the rider did — jamming and blocked signal look exactly like a standstill — and
+        // the first fix back routinely reports a speed of 0. Without this reset that one fix would
+        // satisfy a hold measured from before the outage and pause a moving bike.
         if (previous == null ||
             fix.elapsedRealtimeNanos - previous.elapsedRealtimeNanos > GPS_STALE_MS * 1_000_000L
         ) {
             clearLowSpeedStreak()
             movingSince = 0L
+            departedSince = 0L
         }
         lastTrustedFix = fix
         lastTrustedFixElapsedRealtime = fix.elapsedRealtimeNanos / 1_000_000L
@@ -765,15 +771,21 @@ class TrackingService : Service() {
     // Standby: after the long-pause auto-save the ride is already stored, so movement here opens
     // a brand-new ride rather than resuming the finished one.
     private fun maybeStandbyStart(fix: ValidatedLocationFix) {
-        // Having left the spot needs no hold time: the distance is already proof of a trip under
-        // way, and it is the only proof a jammed receiver leaves.
+        val now = fix.elapsedRealtimeNanos / 1_000_000L
+        // Distance from the spot is the only proof of a trip a jammed receiver leaves, but a single
+        // fix away from it proves nothing — that is exactly what a spoofed jump looks like, and it
+        // would open a ride the rider never started. The departure has to hold across fixes.
         if (hasLeftAnchor(standstillAnchor, fix)) {
-            startRideFromStandby(automatic = true)
-            return
+            if (departedSince == 0L) departedSince = now
+            if (now - departedSince >= STANDBY_DEPARTURE_HOLD_MS) {
+                startRideFromStandby(automatic = true)
+                return
+            }
+        } else {
+            departedSince = 0L
         }
         val speed = fix.speedMps ?: return
         val startMps = resumeSpeedMps(AppSettings.autoPauseSpeedKmh.value)
-        val now = fix.elapsedRealtimeNanos / 1_000_000L
         if (speed >= startMps) {
             if (movingSince == 0L) movingSince = now
             else if (now - movingSince >= STANDBY_RESUME_HOLD_MS) startRideFromStandby(automatic = true)
@@ -939,17 +951,20 @@ class TrackingService : Service() {
             addAll(flushJobs)
         }
         val finalCheckpoint = checkpoint(finished = true)
+        // Decided here, on the main thread, from the reason this stop was ordered: a Stop arriving
+        // later can downgrade the standby that follows, but not the ride's own claim to be stored.
+        val worthSaving = save && isRideWorthSaving(
+            pointCount = finalCheckpoint.points.size,
+            distanceMeters = finalCheckpoint.trip.distanceMeters,
+            automatic = thenStandby,
+        )
         scope.launch {
             withContext(NonCancellable) {
                 pendingJobs.joinAll()
-                val result = if (
-                    !save ||
-                    finalCheckpoint.points.size < 2 ||
-                    finalCheckpoint.trip.distanceMeters <= 0
-                ) {
-                    persistence.discard()
-                } else {
+                val result = if (worthSaving) {
                     persistence.persist(finalCheckpoint)
+                } else {
+                    persistence.discard()
                 }
                 withContext(Dispatchers.Main) {
                     when {

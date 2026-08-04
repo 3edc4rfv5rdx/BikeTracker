@@ -1,3 +1,3 @@
-base_version=0.5
-build=156
-version=0.5.20260803
+base_version=0.6
+build=163
+version=0.6.20260804
