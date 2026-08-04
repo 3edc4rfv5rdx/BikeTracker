@@ -50,6 +50,7 @@ import xx.biketracker.LEFT_ANCHOR_DISTANCE_M
 import xx.biketracker.MAX_PLAUSIBLE_SPEED_MPS
 import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.isRideWorthSaving
+import xx.biketracker.RECORDING_OUTAGE_MS
 import xx.biketracker.SPEED_CORROBORATION_FRACTION
 import xx.biketracker.STANDBY_DEPARTURE_HOLD_MS
 import xx.biketracker.STANDBY_GPS_INTERVAL_MS
@@ -112,6 +113,58 @@ internal fun corroboratedSpeedMps(reportedMps: Double?, stepMeters: Double, dtMi
     val stepSpeed = stepMeters / (dtMillis / 1000.0)
     val corroborated = reportedMps?.takeIf { stepSpeed >= it * SPEED_CORROBORATION_FRACTION }
     return max(stepSpeed, corroborated ?: 0.0)
+}
+
+/**
+ * Whether the stretch between two consecutive fixes broke the run of observations a hold timer
+ * measures — everything recorded before it then describes a stretch the tracker did not see.
+ *
+ * [windowMs] is what counts as a break for the hold in question, and the two holds want very
+ * different answers. Auto-pause is the strict case: the first fix back after any silence routinely
+ * reports a speed of 0, so a low-speed hold measured from before the silence would pause a moving
+ * bike, and anything past [GPS_STALE_MS] must drop the streak. The standby holds are the opposite
+ * case — they have to remain *reachable*. Where the signal is jammed, fixes tens of seconds apart
+ * are the cadence rather than an interruption, so only a silence no sampling interval accounts for
+ * ([RECORDING_OUTAGE_MS]) discards what came before it.
+ */
+internal fun brokeObservationRun(
+    previous: ValidatedLocationFix?,
+    fix: ValidatedLocationFix,
+    windowMs: Long,
+): Boolean =
+    previous == null || fix.elapsedRealtimeNanos - previous.elapsedRealtimeNanos > windowMs * 1_000_000L
+
+/**
+ * A condition that must hold across fixes rather than on the strength of one, for the length of
+ * [holdMillis]. The streak is judged from the second qualifying observation on: the fix that opens
+ * it only records when it began, so a lone fix can never satisfy the hold however long it has been
+ * since the last one. That is what keeps a single spoofed jump — the everyday shape of a jammed
+ * signal — from opening a ride the rider never started.
+ *
+ * Time is measured in the caller's monotonic clock; a hold is fed only observations from one
+ * unbroken run (see [brokeObservationRun]) and [reset] when that run breaks.
+ */
+internal class ObservationHold(private val holdMillis: Long) {
+    // Null rather than a zero sentinel: the caller's clock is free to pass 0 as a real instant.
+    private var since: Long? = null
+
+    fun reset() {
+        since = null
+    }
+
+    /** Feed one observation; true once the condition has held long enough across at least two. */
+    fun observe(nowMillis: Long, qualifies: Boolean): Boolean {
+        if (!qualifies) {
+            since = null
+            return false
+        }
+        val start = since
+        if (start == null) {
+            since = nowMillis
+            return false
+        }
+        return nowMillis - start >= holdMillis
+    }
 }
 
 internal data class LocationFixCandidate(
@@ -263,11 +316,11 @@ class TrackingService : Service() {
     // resumes the ride even when the reported speeds say otherwise; see [hasLeftAnchor].
     private var standstillAnchor: ValidatedLocationFix? = null
     private var autoSaveJob: Job? = null
-    // Standby (post-auto-save) bookkeeping: when the rider started moving again, since when the
-    // fixes have been placing them away from the anchor, and the watchdog that shuts the service
-    // down after a long, motionless standby.
-    private var movingSince = 0L
-    private var departedSince = 0L
+    // Standby (post-auto-save) bookkeeping: the two holds that decide the rider has set off again —
+    // by speed, and by having left the anchor — and the watchdog that shuts the service down after
+    // a long, motionless standby.
+    private val movementHold = ObservationHold(STANDBY_RESUME_HOLD_MS)
+    private val departureHold = ObservationHold(STANDBY_DEPARTURE_HOLD_MS)
     private var standbyJob: Job? = null
 
     private var currentSpeedMps = 0.0
@@ -435,8 +488,8 @@ class TrackingService : Service() {
         bearingDegrees = null
         pausedAutomatically = false
         clearLowSpeedStreak()
-        movingSince = 0L
-        departedSince = 0L
+        movementHold.reset()
+        departureHold.reset()
         standstillAnchor = null
         draftPersistence = null
         draftStartJob = null
@@ -593,17 +646,13 @@ class TrackingService : Service() {
             }
             FixValidation.Rejected -> return
         }
-        // Every hold timer below (auto-pause, standby auto-start, standby departure) measures an
-        // unbroken stretch of observations. Across a gap in the fix stream the tracker saw nothing
-        // of what the rider did — jamming and blocked signal look exactly like a standstill — and
-        // the first fix back routinely reports a speed of 0. Without this reset that one fix would
-        // satisfy a hold measured from before the outage and pause a moving bike.
-        if (previous == null ||
-            fix.elapsedRealtimeNanos - previous.elapsedRealtimeNanos > GPS_STALE_MS * 1_000_000L
-        ) {
-            clearLowSpeedStreak()
-            movingSince = 0L
-            departedSince = 0L
+        // Every hold below measures an unbroken run of observations, but each wants its own idea of
+        // what breaks that run; see [brokeObservationRun]. Auto-pause errs towards forgetting, the
+        // standby holds towards staying reachable on a stream that is merely slow.
+        if (brokeObservationRun(previous, fix, GPS_STALE_MS)) clearLowSpeedStreak()
+        if (brokeObservationRun(previous, fix, RECORDING_OUTAGE_MS)) {
+            movementHold.reset()
+            departureHold.reset()
         }
         lastTrustedFix = fix
         lastTrustedFixElapsedRealtime = fix.elapsedRealtimeNanos / 1_000_000L
@@ -779,23 +828,14 @@ class TrackingService : Service() {
         // Distance from the spot is the only proof of a trip a jammed receiver leaves, but a single
         // fix away from it proves nothing — that is exactly what a spoofed jump looks like, and it
         // would open a ride the rider never started. The departure has to hold across fixes.
-        if (hasLeftAnchor(standstillAnchor, fix)) {
-            if (departedSince == 0L) departedSince = now
-            if (now - departedSince >= STANDBY_DEPARTURE_HOLD_MS) {
-                startRideFromStandby(automatic = true)
-                return
-            }
-        } else {
-            departedSince = 0L
+        if (departureHold.observe(now, hasLeftAnchor(standstillAnchor, fix))) {
+            startRideFromStandby(automatic = true)
+            return
         }
+        // A fix without a speed says nothing either way, so it neither feeds nor breaks this hold.
         val speed = fix.speedMps ?: return
         val startMps = resumeSpeedMps(AppSettings.autoPauseSpeedKmh.value)
-        if (speed >= startMps) {
-            if (movingSince == 0L) movingSince = now
-            else if (now - movingSince >= STANDBY_RESUME_HOLD_MS) startRideFromStandby(automatic = true)
-        } else {
-            movingSince = 0L
-        }
+        if (movementHold.observe(now, speed >= startMps)) startRideFromStandby(automatic = true)
     }
 
     /** Keep the service alive after the auto-save, listening at a lighter GPS cadence for the
