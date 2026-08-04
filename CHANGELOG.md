@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Start now says why it refused instead of doing nothing at all: a backup or restore in progress, or missing location permission, each get their own message, and a second refused tap is reported like the first.
 - A ride's maximum speed is now the fastest it actually got somewhere over three seconds, so a single stray fix can no longer credit a bicycle with 90 km/h; it is read off the track alone, so a receiver reporting no speed at all still yields one, and it reads a little below an instantaneous peak.
 - A ride's statistics no longer count a stretch as "stopped" just because the fixes reported no speed: a stretch whose positions kept covering ground is credited as riding, at the pace those positions imply, exactly as the tracker itself judges movement.
 - A paused ride waiting for the GPS to come back before it auto-saves now gives up after fifteen minutes and saves anyway, instead of holding the tracker open indefinitely on a phone left without a signal.

@@ -11,6 +11,24 @@ import kotlin.math.min
 
 enum class TrackingStatus { IDLE, RECORDING, PAUSED, STANDBY }
 
+/** Why a ride could not start, so the rider is told which of these it was rather than that it
+ *  simply didn't happen. */
+enum class StartupFailureReason {
+    /** A backup or a restore holds the database; a ride cannot open its draft alongside one. */
+    DATABASE_BUSY,
+    /** Location permission was gone by the time the service looked. */
+    NO_PERMISSION,
+    /** The draft could not be opened, or the provider refused the location request. */
+    FAILED,
+}
+
+/**
+ * A refused start, for the UI to report once. [attempt] counts refusals across the process: two
+ * taps refused for the same reason must be two distinct values, or the state flow would treat the
+ * second as no news and the rider would tap into silence.
+ */
+data class StartupFailure(val reason: StartupFailureReason, val attempt: Int)
+
 /**
  * Live view of the ride in progress, published by [TrackingService] and collected
  * by the UI. Distances and speeds are SI (meters, m/s); the UI converts for display.
@@ -30,7 +48,7 @@ data class TrackingSnapshot(
     val updatedAtElapsedRealtime: Long = 0L, // publication baseline for the live moving timer
     val lastTrustedFixElapsedRealtime: Long = 0L,
     val persistenceFailed: Boolean = false,
-    val startupFailed: Boolean = false,
+    val startupFailure: StartupFailure? = null,
     val route: List<GeoPoint> = emptyList(),
 )
 
@@ -77,8 +95,17 @@ object TrackingState {
     private val _snapshot = MutableStateFlow(TrackingSnapshot())
     val snapshot: StateFlow<TrackingSnapshot> = _snapshot.asStateFlow()
 
+    // Numbered here rather than in the service: a refused start stops the service, so the next
+    // refusal is counted by a fresh instance and would otherwise repeat the previous number.
+    private var startupFailures = 0
+
     internal fun publish(snapshot: TrackingSnapshot) {
         _snapshot.value = snapshot
+    }
+
+    /** Publish a start that was refused, clearing the rest of the snapshot: there is no ride. */
+    internal fun publishStartupFailure(reason: StartupFailureReason) {
+        _snapshot.value = TrackingSnapshot(startupFailure = StartupFailure(reason, ++startupFailures))
     }
 
     internal fun reset() {

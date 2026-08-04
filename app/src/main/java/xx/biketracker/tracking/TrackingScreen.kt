@@ -164,9 +164,21 @@ fun TrackingScreen() {
     LaunchedEffect(snapshot.persistenceFailed) {
         if (snapshot.persistenceFailed) snackbarHostState.showSnackbar(saveFailedMessage)
     }
-    val startupFailedMessage = stringResource(R.string.track_start_failed)
-    LaunchedEffect(snapshot.startupFailed) {
-        if (snapshot.startupFailed) snackbarHostState.showSnackbar(startupFailedMessage)
+    // A refused start says which refusal it was; the numbered failure makes a second refused tap
+    // a fresh value, so it is reported like the first rather than swallowed as unchanged state.
+    val startupFailure = snapshot.startupFailure
+    val startFailedMessage = stringResource(R.string.track_start_failed)
+    val databaseBusyMessage = stringResource(R.string.database_busy)
+    val permissionMessage = stringResource(R.string.perm_denied)
+    LaunchedEffect(startupFailure) {
+        val reason = startupFailure?.reason ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            when (reason) {
+                StartupFailureReason.DATABASE_BUSY -> databaseBusyMessage
+                StartupFailureReason.NO_PERMISSION -> permissionMessage
+                StartupFailureReason.FAILED -> startFailedMessage
+            }
+        )
     }
 
     // GPS trouble: fixes rejected by the accuracy filter, or none arriving at all.

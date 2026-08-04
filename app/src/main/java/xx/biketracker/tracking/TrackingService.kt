@@ -460,17 +460,22 @@ class TrackingService : Service() {
     private fun startTracking(startId: Int) {
         if (status != TrackingStatus.IDLE || startupPending) return
         AppSettings.load(this) // pick up the latest auto-pause settings, even in a fresh process
+        // Each of these refusals used to end in a bare stopSelf(): the button simply did nothing,
+        // with no snackbar, no notification and no state change to explain it.
         if (DatabaseRestoreCoordinator.state.value == RestoreOperationState.Running) {
+            TrackingState.publishStartupFailure(StartupFailureReason.DATABASE_BUSY)
             stopSelf()
             return
         }
         if (!DatabaseMaintenance.reserveRide()) {
+            TrackingState.publishStartupFailure(StartupFailureReason.DATABASE_BUSY)
             stopSelf()
             return
         }
         ownsRideReservation = true
         if (!hasLocationPermission()) {
             releaseRideReservation()
+            TrackingState.publishStartupFailure(StartupFailureReason.NO_PERMISSION)
             stopSelf()
             return
         }
@@ -625,7 +630,7 @@ class TrackingService : Service() {
             withContext(NonCancellable) {
                 persistence?.discard()
                 withContext(Dispatchers.Main) {
-                    TrackingState.publish(TrackingSnapshot(startupFailed = true))
+                    TrackingState.publishStartupFailure(StartupFailureReason.FAILED)
                     status = TrackingStatus.IDLE
                     releaseRideReservation()
                     if (foregroundStarted) {
