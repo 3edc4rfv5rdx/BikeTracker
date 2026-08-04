@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- The lint script now prints its findings when lint reports an error, instead of aborting before the report — the one run where the report matters most.
 - The History tab's Today, Collapse-all and Records buttons no longer do nothing when tapped just as the ride list changes underneath them.
 - Documented the ride column that has never been read (`Trip.avgGpsSpeedMps`) as dead schema in SPEC.md, with why removing it is not worth the migration.
 - A ride shown on the Map tab, or open in the extended statistics, now follows the ride itself: renaming it shows through at once, and deleting it closes the view instead of leaving a ride on screen that no longer exists.
