@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The start-direction arrow on the map now reads the direction from the first recorded segment only: a ride paused right after it began no longer points its arrow across the jump to wherever riding resumed.
+
 - The lint script now pauses at the end instead of reporting a missing `delay` command.
 
 - The debug and release build scripts now run from their own directory, so launching them from anywhere no longer misses the wrapper and starts a fresh build number.

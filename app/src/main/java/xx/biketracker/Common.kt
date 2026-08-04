@@ -333,13 +333,21 @@ fun bearingDegrees(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Doub
  * The direction a ride set off in: the bearing from its first point to the first point at least
  * [ROUTE_START_SPAN_M] away, so the jitter of a bike still standing at the start doesn't decide
  * it. Null when the track never gets that far from where it began — there is no direction to show.
+ *
+ * The search stops at the first recording boundary ([isSegmentBoundary]). Past it the track jumps
+ * to wherever riding resumed, and a bearing measured across that jump would point along a stretch
+ * nobody rode — so a first segment too short to establish a direction simply has none.
  */
 fun routeStartHeading(route: List<GeoPoint>): Double? {
     val start = route.firstOrNull() ?: return null
-    val away = route.firstOrNull {
-        haversineMeters(start.lat, start.lon, it.lat, it.lon) >= ROUTE_START_SPAN_M
-    } ?: return null
-    return bearingDegrees(start.lat, start.lon, away.lat, away.lon)
+    for (index in 1..route.lastIndex) {
+        val point = route[index]
+        if (isSegmentBoundary(route[index - 1], point)) return null
+        if (haversineMeters(start.lat, start.lon, point.lat, point.lon) >= ROUTE_START_SPAN_M) {
+            return bearingDegrees(start.lat, start.lon, point.lat, point.lon)
+        }
+    }
+    return null
 }
 
 /** Average speed in m/s, derived from distance and moving time (0 if no time elapsed). */
