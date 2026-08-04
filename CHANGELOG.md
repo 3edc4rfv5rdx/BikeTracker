@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- An imported GPX is now labelled with the track's own name, falling back to the file's; the name of whoever exported the file can no longer end up on it.
+- An imported GPX is now segmented only where the file itself says the recording stopped, so a track logged once every few minutes is drawn as the one ride it is instead of vanishing; a step nobody could have ridden still breaks the line, and no longer sets the speed chart's whole scale.
 - Standby now recognises that you have set off again even where the signal is poor enough that fixes arrive tens of seconds apart; it could previously never confirm it, and shut down after half an hour instead of recording the ride.
 - Fixes arriving tens of seconds apart no longer count as a break in the recording: a ride under a jammed signal now keeps its distance, its time and its drawn track instead of coming out empty, while a genuine outage past two minutes still adds nothing.
 - A stored ride and an imported GPX track now end in a red dot marking the finish, shown at the same zooms as the start chevron; a live ride still ends at the puck.

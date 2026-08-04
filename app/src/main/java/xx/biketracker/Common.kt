@@ -364,12 +364,15 @@ fun isRecordingGap(dtMillis: Long, stepMeters: Double): Boolean {
 
 /**
  * The boundary between two consecutive recorded fixes. A recording segment ends and a new one
- * begins at the first fix after a manual/auto pause or a GPS outage. New rides carry that boundary
- * explicitly ([segmentStart]) and are the authority — the wall time is ignored entirely, so a
- * forward clock change can't be misread as a pause. Old rides (recorded before the flag, with no
- * elapsed metadata) have only their epoch times to go on and fall back to [isRecordingGap]; points
- * without a timestamp (0, old data recorded before times reached the route) can't be measured
- * against each other at all and never split.
+ * begins at the first fix after a manual/auto pause or a GPS outage.
+ *
+ * [hasElapsedMetadata] says whether the track knows its own boundaries. New rides do, and so does
+ * an imported GPX (its `<trkseg>` divisions, resolved by [xx.biketracker.data.parseGpx]): their
+ * [segmentStart] flags are then the whole answer and the wall time is ignored entirely, so neither
+ * a forward clock change nor a sampling cadence unlike this app's can be misread as a pause. Old
+ * rides, recorded before the flag existed, have only their epoch times to go on and fall back to
+ * [isRecordingGap]; points without a timestamp (0, old data recorded before times reached the
+ * route) can't be measured against each other at all and never split.
  *
  * [stepMeters] is evaluated only on that legacy path, so callers may compute the distance lazily.
  */
