@@ -206,6 +206,34 @@ internal class ObservationHold(private val holdMillis: Long) {
 internal fun autoSaveMayClose(hasFreshFix: Boolean, waitedMillis: Long, limitMillis: Long): Boolean =
     hasFreshFix || waitedMillis >= limitMillis
 
+/** What a command delivered while a ride is still opening does to the service. */
+internal enum class PendingStartupOutcome {
+    /** Nothing but the startup is holding the service up: tear it down. */
+    ABORT,
+    /** The rider ended a standby session while it was opening a ride: drop both. */
+    FINISH,
+    /** The startup came from a live standby session that outlives it: go back to standby. */
+    BACK_TO_STANDBY,
+    /** Not about the startup at all; let the command be handled normally. */
+    HANDLE,
+}
+
+/**
+ * Route a command that arrives while a startup is still pending. A cold startup is the only reason
+ * that service instance exists, so anything but START ends it. A startup opened from standby is
+ * different: the service is already running, already in the foreground and already holding the ride
+ * reservation, so only the rider ending the session may take it down — everything else falls back
+ * to the standby it came from.
+ */
+internal fun pendingStartupOutcome(action: String?, fromStandby: Boolean): PendingStartupOutcome =
+    when {
+        action == TrackingService.ACTION_START -> PendingStartupOutcome.HANDLE
+        !fromStandby -> PendingStartupOutcome.ABORT
+        action == TrackingService.ACTION_STOP || action == TrackingService.ACTION_DISCARD ->
+            PendingStartupOutcome.FINISH
+        else -> PendingStartupOutcome.BACK_TO_STANDBY
+    }
+
 internal data class LocationFixCandidate(
     val lat: Double,
     val lon: Double,
@@ -430,13 +458,23 @@ class TrackingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // A command other than START can reach a freshly created instance (e.g. the user taps
-        // Resume just as the auto-save finished the previous service). Such an instance must
-        // stop immediately: it was started via startForegroundService, and neither calling
-        // startForeground nor stopSelf would crash with a foreground-timeout exception.
-        if (startupPending && intent?.action != ACTION_START) {
-            failStartup()
-            return START_NOT_STICKY
+        // Every delivery, not only a START: a startup is torn down with stopSelfResult, which stops
+        // the service only for the id of the most recent delivery. Recording the id here is what
+        // keeps an aborted startup from leaving a stopped-but-alive service behind.
+        activeStartId = startId
+        if (startupPending) {
+            val handled = when (pendingStartupOutcome(intent?.action, startupFromStandby)) {
+                // A command other than START can reach a freshly created instance (e.g. the user
+                // taps Resume just as the auto-save finished the previous service). Such an
+                // instance must stop immediately: it was started via startForegroundService, and
+                // neither calling startForeground nor stopSelf would crash with a
+                // foreground-timeout exception.
+                PendingStartupOutcome.ABORT -> { failStartup(); true }
+                PendingStartupOutcome.FINISH -> { cancelPendingStartup(); finishService(); true }
+                PendingStartupOutcome.BACK_TO_STANDBY -> { failStandbyStartup(); true }
+                PendingStartupOutcome.HANDLE -> false
+            }
+            if (handled) return START_NOT_STICKY
         }
         if (status == TrackingStatus.IDLE && intent?.action != ACTION_START) {
             stopSelf()
@@ -447,7 +485,7 @@ class TrackingService : Service() {
             // end standby (there is nothing to save or throw away).
             ACTION_START ->
                 if (status == TrackingStatus.STANDBY) startRideFromStandby(automatic = false)
-                else startTracking(startId)
+                else startTracking()
             ACTION_PAUSE -> pauseTracking(automatic = false)
             ACTION_RESUME -> resumeTracking()
             ACTION_STOP -> if (status == TrackingStatus.STANDBY) finishService() else stopAndSave()
@@ -457,7 +495,7 @@ class TrackingService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startTracking(startId: Int) {
+    private fun startTracking() {
         if (status != TrackingStatus.IDLE || startupPending) return
         AppSettings.load(this) // pick up the latest auto-pause settings, even in a fresh process
         // Each of these refusals used to end in a bare stopSelf(): the button simply did nothing,
@@ -480,12 +518,15 @@ class TrackingService : Service() {
             return
         }
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
-        activeStartId = startId
         startupFromStandby = false
         startupGeneration++
         startupPending = true
         registrationReady = false
         draftReady = false
+        // In the rare case this instance is reused after a stop, allow the new ride to save. It
+        // runs before the foreground notification so that it also drops the previous ride's draft
+        // handle: a startup failing below erases "its" draft, and that must never be a stored ride.
+        resetRideState()
         TrackingState.publish(TrackingSnapshot())
         try {
             startForegroundNotification()
@@ -495,8 +536,6 @@ class TrackingService : Service() {
             return
         }
 
-        // In the rare case this instance is reused after a stop, allow the new ride to save.
-        resetRideState()
         createDraft()
         requestUpdates(
             priority = Priority.PRIORITY_HIGH_ACCURACY,
@@ -620,28 +659,53 @@ class TrackingService : Service() {
         updateNotification()
     }
 
+    /** Abandon a cold startup: stop listening, erase the draft it opened, tell the rider and stop
+     *  the service. */
     private fun failStartup() {
         if (!startupPending) return
-        startupPending = false
         stopping.set(true)
         if (::fusedClient.isInitialized) fusedClient.removeLocationUpdates(locationCallback)
+        cancelPendingStartup(then = ::endFailedStartup)
+    }
+
+    /** The visible half of a failed startup: nothing is recording, the reservation the draft held
+     *  is free again, and the service stops for the latest command it was given. */
+    private fun endFailedStartup() {
+        TrackingState.publishStartupFailure(StartupFailureReason.FAILED)
+        status = TrackingStatus.IDLE
+        releaseRideReservation()
+        if (foregroundStarted) {
+            foregroundStarted = false
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        }
+        stopSelfResult(activeStartId)
+    }
+
+    /**
+     * Drop a pending startup without deciding what comes after it: the draft it opened is erased
+     * and its late GPS and draft acks are invalidated, leaving the caller free to choose between
+     * standby and shutdown. [then] runs on the main thread once the draft is gone — at once when
+     * there was none, which is what lets a startup that failed inside [startForegroundNotification]
+     * stop the service within the foreground-start timeout rather than after a database write that
+     * a backup or restore may be holding up. It is skipped if a newer startup has taken the service
+     * over by then, whose state is not this one's to tear down.
+     *
+     * The erase itself outlives this call; should the service die first, the empty draft left
+     * behind is exactly what the launch-time recovery pass exists to clear.
+     */
+    private fun cancelPendingStartup(then: () -> Unit = {}) {
+        startupPending = false
+        val generation = ++startupGeneration
         val persistence = draftPersistence
+        draftPersistence = null
+        if (persistence == null) {
+            then()
+            return
+        }
         scope.launch {
             withContext(NonCancellable) {
-                persistence?.discard()
-                withContext(Dispatchers.Main) {
-                    TrackingState.publishStartupFailure(StartupFailureReason.FAILED)
-                    status = TrackingStatus.IDLE
-                    releaseRideReservation()
-                    if (foregroundStarted) {
-                        foregroundStarted = false
-                        ServiceCompat.stopForeground(
-                            this@TrackingService,
-                            ServiceCompat.STOP_FOREGROUND_REMOVE,
-                        )
-                    }
-                    stopSelfResult(activeStartId)
-                }
+                persistence.discard()
+                withContext(Dispatchers.Main) { if (generation == startupGeneration) then() }
             }
         }
     }
@@ -657,10 +721,7 @@ class TrackingService : Service() {
      *  advertising a Recording state that has no fix stream. */
     private fun failStandbyStartup() {
         if (!startupPending) return
-        startupPending = false
-        startupGeneration++ // invalidate this attempt's late callbacks
-        val persistence = draftPersistence
-        scope.launch { withContext(NonCancellable) { persistence?.discard() } }
+        cancelPendingStartup()
         enterStandby() // resets ride state and re-arms the lighter standby GPS request
     }
 
