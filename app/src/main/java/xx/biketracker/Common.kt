@@ -529,6 +529,16 @@ fun splitRouteSegments(route: List<GeoPoint>): List<List<GeoPoint>> {
  * then Douglas-Peucker drops the points that no longer add geometry. Stored points are
  * untouched, so this also benefits every previously recorded ride. See [splitRouteSegments] for
  * how the map applies both.
+ *
+ * Apply it to one recording segment at a time — [splitRouteSegments] first, as the map does. The
+ * window is not segment-aware, so smoothing a whole route would average positions from either side
+ * of a pause together, and simplification is free to drop the very point a boundary is flagged on.
+ * That is a rule about *where* the result is meaningful, not a promise the code can check: a
+ * boundary is not always a flag (old rides are judged on their timestamps), and a display helper is
+ * no place to start refusing rides.
+ *
+ * What each surviving point says about itself — its time, its speed, its segment flag, its elapsed
+ * offset — is carried through unchanged; only the position is averaged.
  */
 fun smoothRoute(route: List<GeoPoint>): List<GeoPoint> {
     if (route.size < 3) return route
@@ -558,7 +568,10 @@ internal fun smoothedPointAt(points: List<GeoPoint>, i: Int, window: Int): GeoPo
         lon += points[j].lon
     }
     val n = to - from + 1
-    return GeoPoint(lat / n, lon / n)
+    // The position is averaged, the point is not: it keeps its own time, speed, segment flag and
+    // elapsed offset. Rebuilding it from coordinates alone would hand back a route on which every
+    // reader that asks a point when it happened is silently wrong.
+    return points[i].copy(lat = lat / n, lon = lon / n)
 }
 
 /** Douglas-Peucker on a local planar projection (meters), iterative to spare the stack. */
