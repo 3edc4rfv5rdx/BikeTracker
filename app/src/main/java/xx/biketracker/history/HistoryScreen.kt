@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -189,10 +190,14 @@ fun HistoryScreen(onShowRideOnMap: (Trip) -> Unit, onShowRideStats: (Trip) -> Un
     }
 
     // The Today / Collapse-all top-bar buttons live in the activity; taps arrive as commands.
-    LaunchedEffect(years) {
+    // One collector for the screen's whole life: the commands carry no replay and are dropped
+    // outright when nobody is listening, so a collector keyed on the tree would swallow every tap
+    // that landed while it was being restarted — and the tree changes on every ride recorded.
+    val currentYears by rememberUpdatedState(years)
+    LaunchedEffect(Unit) {
         HistoryCommands.commands.collect { command ->
             when (command) {
-                HistoryCommands.Command.OPEN_TODAY -> todayNodeKeys(years)?.let {
+                HistoryCommands.Command.OPEN_TODAY -> todayNodeKeys(currentYears)?.let {
                     expanded.clear()
                     expanded.addAll(it)
                 }
