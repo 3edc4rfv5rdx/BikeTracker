@@ -20,6 +20,11 @@ const val DEFAULT_AUTO_SAVE_MIN = 10
 /** Auto-resume speed is derived, not stored: this much above the pause threshold (hysteresis). */
 const val AUTO_RESUME_MARGIN_KMH = 1
 
+internal fun clampRiderWeightKg(value: Int): Int = value.coerceIn(0, 300)
+internal fun clampAutoPauseSpeedKmh(value: Int): Int = value.coerceIn(1, 20)
+internal fun clampAutoPauseHoldSec(value: Int): Int = value.coerceIn(1, 120)
+internal fun clampAutoSaveMin(value: Int): Int = value.coerceIn(0, 120)
+
 /** Resume/standby-start threshold in m/s, derived from the pause threshold plus the hysteresis margin. */
 fun resumeSpeedMps(pauseSpeedKmh: Int): Double = (pauseSpeedKmh + AUTO_RESUME_MARGIN_KMH) / MPS_TO_KMH
 
@@ -73,11 +78,27 @@ object AppSettings {
         val prefs = prefs(context)
         _themeMode.value = prefs.getString(KEY_THEME, null)
             ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM
-        _riderWeightKg.value = prefs.getInt(KEY_WEIGHT, DEFAULT_WEIGHT_KG)
+        val rawWeight = prefs.getInt(KEY_WEIGHT, DEFAULT_WEIGHT_KG)
+        val rawPauseSpeed = prefs.getInt(KEY_AUTOPAUSE_SPEED_KMH, DEFAULT_AUTO_PAUSE_SPEED_KMH)
+        val rawPauseHold = prefs.getInt(KEY_AUTOPAUSE_HOLD_SEC, DEFAULT_AUTO_PAUSE_HOLD_SEC)
+        val rawAutoSave = prefs.getInt(KEY_AUTOSAVE_MIN, DEFAULT_AUTO_SAVE_MIN)
+        _riderWeightKg.value = clampRiderWeightKg(rawWeight)
         _autoPauseEnabled.value = prefs.getBoolean(KEY_AUTOPAUSE_ENABLED, true)
-        _autoPauseSpeedKmh.value = prefs.getInt(KEY_AUTOPAUSE_SPEED_KMH, DEFAULT_AUTO_PAUSE_SPEED_KMH)
-        _autoPauseHoldSec.value = prefs.getInt(KEY_AUTOPAUSE_HOLD_SEC, DEFAULT_AUTO_PAUSE_HOLD_SEC)
-        _autoSaveMin.value = prefs.getInt(KEY_AUTOSAVE_MIN, DEFAULT_AUTO_SAVE_MIN)
+        _autoPauseSpeedKmh.value = clampAutoPauseSpeedKmh(rawPauseSpeed)
+        _autoPauseHoldSec.value = clampAutoPauseHoldSec(rawPauseHold)
+        _autoSaveMin.value = clampAutoSaveMin(rawAutoSave)
+        if (rawWeight != _riderWeightKg.value ||
+            rawPauseSpeed != _autoPauseSpeedKmh.value ||
+            rawPauseHold != _autoPauseHoldSec.value ||
+            rawAutoSave != _autoSaveMin.value
+        ) {
+            prefs.edit {
+                putInt(KEY_WEIGHT, _riderWeightKg.value)
+                putInt(KEY_AUTOPAUSE_SPEED_KMH, _autoPauseSpeedKmh.value)
+                putInt(KEY_AUTOPAUSE_HOLD_SEC, _autoPauseHoldSec.value)
+                putInt(KEY_AUTOSAVE_MIN, _autoSaveMin.value)
+            }
+        }
     }
 
     fun setThemeMode(context: Context, mode: ThemeMode) {
@@ -86,7 +107,7 @@ object AppSettings {
     }
 
     fun setRiderWeightKg(context: Context, kg: Int) {
-        val clamped = kg.coerceIn(0, 300)
+        val clamped = clampRiderWeightKg(kg)
         _riderWeightKg.value = clamped
         prefs(context).edit { putInt(KEY_WEIGHT, clamped) }
     }
@@ -97,20 +118,20 @@ object AppSettings {
     }
 
     fun setAutoPauseSpeedKmh(context: Context, kmh: Int) {
-        val clamped = kmh.coerceIn(1, 20)
+        val clamped = clampAutoPauseSpeedKmh(kmh)
         _autoPauseSpeedKmh.value = clamped
         prefs(context).edit { putInt(KEY_AUTOPAUSE_SPEED_KMH, clamped) }
     }
 
     fun setAutoPauseHoldSec(context: Context, seconds: Int) {
-        val clamped = seconds.coerceIn(1, 120)
+        val clamped = clampAutoPauseHoldSec(seconds)
         _autoPauseHoldSec.value = clamped
         prefs(context).edit { putInt(KEY_AUTOPAUSE_HOLD_SEC, clamped) }
     }
 
     /** [minutes] of 0 turns auto-save off: a pause then lasts until the rider ends the ride. */
     fun setAutoSaveMin(context: Context, minutes: Int) {
-        val clamped = minutes.coerceIn(0, 120)
+        val clamped = clampAutoSaveMin(minutes)
         _autoSaveMin.value = clamped
         prefs(context).edit { putInt(KEY_AUTOSAVE_MIN, clamped) }
     }

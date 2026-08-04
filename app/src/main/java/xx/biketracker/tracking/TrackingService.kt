@@ -32,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.NonCancellable
@@ -206,6 +207,64 @@ internal class ObservationHold(private val holdMillis: Long) {
  */
 internal fun autoSaveMayClose(hasFreshFix: Boolean, waitedMillis: Long, limitMillis: Long): Boolean =
     hasFreshFix || waitedMillis >= limitMillis
+
+/** What an elapsed-realtime deadline needs its caller to do at [nowMillis]. */
+internal sealed interface DeadlineDecision {
+    data object Disabled : DeadlineDecision
+    data class Wait(val millis: Long) : DeadlineDecision
+    data object Expired : DeadlineDecision
+}
+
+/** Multiply a user-controlled duration without ever wrapping into a negative delay. */
+internal fun saturatingDuration(value: Long, unitMillis: Long): Long = when {
+    value <= 0L || unitMillis <= 0L -> 0L
+    value > Long.MAX_VALUE / unitMillis -> Long.MAX_VALUE
+    else -> value * unitMillis
+}
+
+private fun elapsedSince(startMillis: Long, nowMillis: Long): Long =
+    if (nowMillis >= startMillis) nowMillis - startMillis else 0L
+
+/** Decide the live auto-save deadline from the original pause instant. */
+internal fun autoSaveDeadlineDecision(
+    pauseStartedMillis: Long,
+    nowMillis: Long,
+    autoSaveMinutes: Long,
+    hasFreshFix: Boolean,
+    gpsWaitMillis: Long,
+): DeadlineDecision {
+    if (autoSaveMinutes <= 0L) return DeadlineDecision.Disabled
+    val timeoutMillis = saturatingDuration(autoSaveMinutes, 60_000L)
+    val elapsed = elapsedSince(pauseStartedMillis, nowMillis)
+    if (elapsed < timeoutMillis) return DeadlineDecision.Wait(timeoutMillis - elapsed)
+    val waitedForGps = elapsed - timeoutMillis
+    return if (autoSaveMayClose(hasFreshFix, waitedForGps, gpsWaitMillis)) {
+        DeadlineDecision.Expired
+    } else {
+        DeadlineDecision.Wait(gpsWaitMillis - waitedForGps)
+    }
+}
+
+/** Decide a fixed timeout from its elapsed-realtime start, including time spent asleep. */
+internal fun elapsedDeadlineDecision(
+    startedMillis: Long,
+    nowMillis: Long,
+    timeoutMillis: Long,
+): DeadlineDecision {
+    val boundedTimeout = timeoutMillis.coerceAtLeast(0L)
+    val elapsed = elapsedSince(startedMillis, nowMillis)
+    return if (elapsed >= boundedTimeout) DeadlineDecision.Expired
+    else DeadlineDecision.Wait(boundedTimeout - elapsed)
+}
+
+/** Reject a timer result made stale by resume, stop, or a later pause. */
+internal fun autoSaveDeadlineIsCurrent(
+    expectedPauseStartedMillis: Long,
+    activePauseStartedMillis: Long?,
+    isPaused: Boolean,
+    isStopping: Boolean,
+): Boolean =
+    isPaused && !isStopping && activePauseStartedMillis == expectedPauseStartedMillis
 
 /** What a command delivered while a ride is still opening does to the service. */
 internal enum class PendingStartupOutcome {
@@ -386,12 +445,14 @@ class TrackingService : Service() {
     // resumes the ride even when the reported speeds say otherwise; see [hasLeftAnchor].
     private var standstillAnchor: ValidatedLocationFix? = null
     private var autoSaveJob: Job? = null
+    private var pauseStartedElapsedRealtime: Long? = null
     // Standby (post-auto-save) bookkeeping: the two holds that decide the rider has set off again —
     // by speed, and by having left the anchor — and the watchdog that shuts the service down after
     // a long, motionless standby.
     private val movementHold = ObservationHold(STANDBY_RESUME_HOLD_MS)
     private val departureHold = ObservationHold(STANDBY_DEPARTURE_HOLD_MS)
     private var standbyJob: Job? = null
+    private var standbyStartedElapsedRealtime: Long? = null
 
     private var currentSpeedMps = 0.0
     private var altitudeMeters: Double? = null
@@ -581,6 +642,8 @@ class TrackingService : Service() {
         movementHold.reset()
         departureHold.reset()
         standstillAnchor = null
+        pauseStartedElapsedRealtime = null
+        standbyStartedElapsedRealtime = null
         draftPersistence = null
         draftStartJob = null
         startTime = System.currentTimeMillis()
@@ -769,6 +832,13 @@ class TrackingService : Service() {
         lastTrustedFix = fix
         lastTrustedFixElapsedRealtime = fix.elapsedRealtimeNanos / 1_000_000L
 
+        // Coroutine/Handler delays need not advance in deep sleep. A fix is a wakeup opportunity
+        // to enforce the elapsed-realtime standby deadline before it can open another ride.
+        if (status == TrackingStatus.STANDBY && standbyHasExpired()) {
+            finishService()
+            return
+        }
+
         fix.speedMps?.let { currentSpeedMps = it }
         fix.altitudeMeters?.let { altitudeMeters = it }
         gpsAccuracyMeters = fix.accuracyMeters
@@ -784,6 +854,10 @@ class TrackingService : Service() {
             TrackingStatus.STANDBY -> maybeStandbyStart(fix)
             TrackingStatus.IDLE -> return
         }
+        // Re-evaluate elapsed deadlines after the fix has had its chance to resume/start. For a
+        // paused ride, a fresh stationary fix can settle the bounded GPS confirmation immediately.
+        if (status == TrackingStatus.PAUSED) rearmAutoSave()
+        if (status == TrackingStatus.STANDBY) rearmStandbyTimeout()
         publish()
     }
 
@@ -912,6 +986,7 @@ class TrackingService : Service() {
         pausedAutomatically = automatic
         lowSpeedSince = 0L
         standstillAnchor = lastTrustedFix
+        pauseStartedElapsedRealtime = SystemClock.elapsedRealtime()
         // Break the segment so the paused gap adds neither distance nor time, and mark the next
         // recorded fix as a new segment's start.
         lastPoint = null
@@ -963,6 +1038,7 @@ class TrackingService : Service() {
         resetRideState()
         standstillAnchor = anchor
         status = TrackingStatus.STANDBY
+        standbyStartedElapsedRealtime = SystemClock.elapsedRealtime()
         scheduleStandbyTimeout()
         updateNotification()
         publish()
@@ -1016,12 +1092,33 @@ class TrackingService : Service() {
 
     private fun scheduleStandbyTimeout() {
         cancelStandbyTimeout()
-        standbyJob = scope.launch {
-            delay(STANDBY_TIMEOUT_MS)
-            withContext(Dispatchers.Main) {
-                if (status == TrackingStatus.STANDBY) finishService()
+        val started = standbyStartedElapsedRealtime ?: return
+        standbyJob = scope.launch(Dispatchers.Main) {
+            while (status == TrackingStatus.STANDBY) {
+                when (val decision = elapsedDeadlineDecision(
+                    startedMillis = started,
+                    nowMillis = SystemClock.elapsedRealtime(),
+                    timeoutMillis = STANDBY_TIMEOUT_MS,
+                )) {
+                    DeadlineDecision.Disabled -> return@launch
+                    DeadlineDecision.Expired -> {
+                        finishService()
+                        return@launch
+                    }
+                    is DeadlineDecision.Wait -> delay(decision.millis)
+                }
             }
         }
+    }
+
+    private fun rearmStandbyTimeout() {
+        if (status == TrackingStatus.STANDBY) scheduleStandbyTimeout()
+    }
+
+    private fun standbyHasExpired(): Boolean {
+        val started = standbyStartedElapsedRealtime ?: return false
+        return elapsedDeadlineDecision(started, SystemClock.elapsedRealtime(), STANDBY_TIMEOUT_MS) ==
+            DeadlineDecision.Expired
     }
 
     private fun cancelStandbyTimeout() {
@@ -1047,37 +1144,46 @@ class TrackingService : Service() {
     }
 
     private fun scheduleAutoSave() {
-        cancelAutoSave()
-        // Auto-save turned off: the pause lasts as long as the rider wants it to.
-        if (AppSettings.autoSaveMin.value <= 0) return
+        // Re-arming after a fix replaces only the waiter; the pause instant must remain stable.
+        autoSaveJob?.cancel()
+        autoSaveJob = null
+        val pauseStarted = pauseStartedElapsedRealtime ?: return
         // Runs on the main thread so this can't race with a resume or recordLocation mutating
         // status/points; a resume's cancelAutoSave() aborts it at either suspension point.
         autoSaveJob = scope.launch(Dispatchers.Main) {
-            delay(AppSettings.autoSaveMin.value * 60_000L)
-            // Turning auto-save off mid-pause must call this one off too.
-            if (AppSettings.autoSaveMin.value <= 0) return@launch
-            // Closing the ride is only defensible when the tracker can see that the rider really
-            // is standing still. A pause that started with the signal jammed proves nothing, so
-            // wait for the fixes to come back and let one of them decide: movement auto-resumes
-            // and cancels this job, a genuine standstill falls through to the save below. The wait
-            // is bounded — on a phone left without a signal nothing ever settles it.
-            val waitStart = SystemClock.elapsedRealtime()
-            while (status == TrackingStatus.PAUSED &&
-                AppSettings.autoSaveMin.value > 0 &&
-                !autoSaveMayClose(
-                    hasFreshFix = hasFreshFix(),
-                    waitedMillis = SystemClock.elapsedRealtime() - waitStart,
-                    limitMillis = AUTO_SAVE_GPS_WAIT_MS,
-                )
-            ) {
-                delay(AUTO_SAVE_GPS_RECHECK_MS)
-            }
-            // Turning auto-save off during the wait calls the save off with it, exactly as it does
-            // during the period before it.
-            if (status == TrackingStatus.PAUSED && AppSettings.autoSaveMin.value > 0) {
-                saveAndEnterStandby()
+            AppSettings.autoSaveMin.collectLatest { minutes ->
+                while (status == TrackingStatus.PAUSED) {
+                    when (val decision = autoSaveDeadlineDecision(
+                        pauseStartedMillis = pauseStarted,
+                        nowMillis = SystemClock.elapsedRealtime(),
+                        autoSaveMinutes = minutes.toLong(),
+                        hasFreshFix = hasFreshFix(),
+                        gpsWaitMillis = AUTO_SAVE_GPS_WAIT_MS,
+                    )) {
+                        // Keep collecting: changing 0 to a positive value during this pause arms a
+                        // deadline based on the time that has already elapsed.
+                        DeadlineDecision.Disabled -> return@collectLatest
+                        DeadlineDecision.Expired -> {
+                            if (autoSaveDeadlineIsCurrent(
+                                expectedPauseStartedMillis = pauseStarted,
+                                activePauseStartedMillis = pauseStartedElapsedRealtime,
+                                isPaused = status == TrackingStatus.PAUSED,
+                                isStopping = stopping.get(),
+                            )) {
+                                saveAndEnterStandby()
+                            }
+                            return@collectLatest
+                        }
+                        is DeadlineDecision.Wait ->
+                            delay(decision.millis.coerceAtMost(AUTO_SAVE_GPS_RECHECK_MS))
+                    }
+                }
             }
         }
+    }
+
+    private fun rearmAutoSave() {
+        if (status == TrackingStatus.PAUSED) scheduleAutoSave()
     }
 
     /** Whether a fix was accepted recently enough to still describe where the rider is. */
@@ -1088,6 +1194,7 @@ class TrackingService : Service() {
     private fun cancelAutoSave() {
         autoSaveJob?.cancel()
         autoSaveJob = null
+        pauseStartedElapsedRealtime = null
     }
 
     /** Schedule a full checkpoint; the writer reconciles it with durable rows on retry. Each
