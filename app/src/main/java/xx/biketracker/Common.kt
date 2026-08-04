@@ -96,6 +96,8 @@ const val MAX_SPEED_WINDOW_MS = 3_000L
 const val AUTO_PAUSE_SPEED_MPS = 2.0 / MPS_TO_KMH
 /** A stopped stretch must last at least this long to count. */
 const val AUTO_PAUSE_DEBOUNCE_MS = 10_000L
+/** Auto-resume movement must span several fixes; one noisy speed/position step is not movement. */
+const val AUTO_RESUME_HOLD_MS = 3_000L
 /**
  * Distance from the spot where the rider was last seen standing that means they have left,
  * whatever speed the fixes claim. A jammed or obstructed receiver reports a speed of 0 — or no
@@ -225,8 +227,8 @@ const val PREFS_NAME = "biketracker_prefs"
 
 /** A latitude/longitude pair; the live route and stored track are ordered lists of these.
  *  [timeMillis] is the recording wall time (epoch), 0 when unknown — kept for clock labels only.
- *  [speedMps] is the GPS speed of the fix (0 when the fix had none), carried so the speed chart
- *  can plot live and stored tracks alike. [segmentStart] is true on the first fix after a
+ *  [speedMps] is the best available speed observation (receiver or coordinate-derived), carried
+ *  so the speed chart can plot live and stored tracks alike. [segmentStart] is true on the first fix after a
  *  manual/auto pause or a GPS outage — the explicit recording-segment boundary
  *  ([isSegmentBoundary]); it is persisted, so short pauses split correctly regardless of the
  *  wall-clock gap. [elapsedMillis] is monotonic time since ride start (from elapsed-realtime),
@@ -239,6 +241,15 @@ data class GeoPoint(
     val segmentStart: Boolean = false,
     val elapsedMillis: Long? = null,
 )
+
+/** Stored point speed, deriving it from this connected step when the fix had no observation. */
+fun observedOrDerivedSpeedMps(point: TrackPoint, stepMillis: Long, stepMeters: Double): Double? {
+    point.speedMps?.let { return it.toDouble() }
+    if (stepMillis <= 0L || !stepMeters.isFinite()) return null
+    return (stepMeters / (stepMillis / 1000.0)).takeIf {
+        it.isFinite() && it <= MAX_PLAUSIBLE_SPEED_MPS
+    }
+}
 
 /**
  * A list that only ever grows and can hand out an immutable snapshot without copying what came

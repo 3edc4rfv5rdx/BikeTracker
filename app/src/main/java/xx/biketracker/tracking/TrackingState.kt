@@ -38,7 +38,8 @@ data class TrackingSnapshot(
     val pausedAutomatically: Boolean = false, // meaningful only while status == PAUSED
     val distanceMeters: Double = 0.0,
     val movingTimeMillis: Long = 0L,
-    val currentSpeedMps: Double = 0.0,
+    // Null only while recording when the latest accepted fix supplied no trustworthy speed.
+    val currentSpeedMps: Double? = 0.0,
     val maxSpeedMps: Double = 0.0,
     val altitudeMeters: Double? = null,
     val gpsAccuracyMeters: Float? = null, // horizontal accuracy of the last fix; null before one

@@ -35,7 +35,7 @@ suspend fun finalizeAbandonedTrips(context: Context, startedBefore: Long) {
                 dao.updateTrip(
                     trip.copy(
                         endTime = points.last().time,
-                        avgGpsSpeedMps = points.map { it.speedMps.toDouble() }.average(),
+                        avgGpsSpeedMps = averageObservedSpeed(points),
                         elevationGainMeters = if (altitudes.any { it != null }) elevationGainBySegment(points) else null,
                         finished = true,
                     )

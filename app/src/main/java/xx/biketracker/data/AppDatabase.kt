@@ -10,7 +10,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-internal const val CURRENT_SCHEMA_VERSION = 7
+internal const val CURRENT_SCHEMA_VERSION = 8
 
 @Database(
     entities = [Trip::class, TrackPoint::class],
@@ -79,9 +79,40 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v7 -> v8: speed becomes nullable so a point with no trustworthy observation is not
+         *  persisted as a false zero. SQLite cannot relax NOT NULL in place, so rebuild the table. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE track_points_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        tripId INTEGER NOT NULL,
+                        lat REAL NOT NULL,
+                        lon REAL NOT NULL,
+                        time INTEGER NOT NULL,
+                        speedMps REAL,
+                        altitudeMeters REAL,
+                        segmentStart INTEGER NOT NULL,
+                        elapsedMillis INTEGER,
+                        FOREIGN KEY(tripId) REFERENCES trips(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""".trimIndent()
+                )
+                db.execSQL(
+                    """INSERT INTO track_points_new
+                        (id, tripId, lat, lon, time, speedMps, altitudeMeters, segmentStart, elapsedMillis)
+                        SELECT id, tripId, lat, lon, time, speedMps, altitudeMeters, segmentStart, elapsedMillis
+                        FROM track_points""".trimIndent()
+                )
+                db.execSQL("DROP TABLE track_points")
+                db.execSQL("ALTER TABLE track_points_new RENAME TO track_points")
+                db.execSQL("CREATE INDEX index_track_points_tripId ON track_points(tripId)")
+            }
+        }
+
         /** Full migration path; internal so the instrumentation tests validate the same objects. */
         internal val MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+            MIGRATION_7_8,
         )
 
         @Volatile

@@ -108,6 +108,21 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate7To8_existingPointSpeedIsPreservedAndNullable() {
+        seedV1()
+        helper.runMigrationsAndValidate(TEST_DB, 7, true, *AppDatabase.MIGRATIONS).close()
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, *AppDatabase.MIGRATIONS)
+        db.query("SELECT speedMps FROM track_points").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(5.0, cursor.getDouble(0), 0.0)
+        }
+        db.execSQL(
+            "INSERT INTO track_points (tripId, lat, lon, time, speedMps, altitudeMeters, " +
+                "segmentStart, elapsedMillis) VALUES (1, 50.0, 30.0, 2000, NULL, NULL, 0, 1000)"
+        )
+    }
+
+    @Test
     fun migrateAll_fromV1ToCurrentKeepsRows() {
         seedV1()
         val db = helper.runMigrationsAndValidate(

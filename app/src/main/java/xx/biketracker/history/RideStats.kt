@@ -9,6 +9,7 @@ import xx.biketracker.elevationGainBySegment
 import xx.biketracker.haversineMeters
 import xx.biketracker.isSegmentBoundary
 import xx.biketracker.monotonicStepMillis
+import xx.biketracker.observedOrDerivedSpeedMps
 import kotlin.math.max
 
 /** Upper bounds (km/h) of the speed-histogram buckets; the last bucket is open-ended, so these
@@ -113,7 +114,8 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
                 pendingProfileBreak = true
             } else {
                 distance += stepMeters
-                if (p.speedMps < AUTO_PAUSE_SPEED_MPS) {
+                val speedMps = observedOrDerivedSpeedMps(p, step, stepMeters) ?: 0.0
+                if (speedMps < AUTO_PAUSE_SPEED_MPS) {
                     // Slow enough to be stopping; the run decides whether it really was. It is
                     // anchored to the spot the bike was last seen moving from.
                     if (runMillis == 0L) runAnchor = prev
@@ -125,7 +127,7 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
                     }
                 } else {
                     closeRun()
-                    zones[zoneIndexFor(p.speedMps.toDouble())] += step
+                    zones[zoneIndexFor(speedMps)] += step
                 }
             }
         }

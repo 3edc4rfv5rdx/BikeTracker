@@ -420,7 +420,8 @@ private fun MapLiveStats(snapshot: TrackingSnapshot) {
         }
     }
     Text(
-        text = "${formatSpeedKmh(snapshot.currentSpeedMps)} ${stringResource(id = R.string.unit_kmh)} · " +
+        text = "${snapshot.currentSpeedMps?.let(::formatSpeedKmh) ?: "—"} " +
+            "${stringResource(id = R.string.unit_kmh)} · " +
             formatDuration(snapshot.liveMovingTimeMillis(nowElapsedRealtime)),
         fontSize = 26.sp,
         fontWeight = FontWeight.Bold,

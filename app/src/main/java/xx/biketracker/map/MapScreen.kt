@@ -25,6 +25,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import xx.biketracker.GeoPoint
+import xx.biketracker.haversineMeters
+import xx.biketracker.isSegmentBoundary
+import xx.biketracker.monotonicStepMillis
+import xx.biketracker.observedOrDerivedSpeedMps
 import xx.biketracker.R
 import xx.biketracker.data.AppDatabase
 import xx.biketracker.tracking.TrackingState
@@ -64,8 +68,26 @@ fun MapScreen() {
     var selectedRoute by remember { mutableStateOf<List<GeoPoint>>(emptyList()) }
     LaunchedEffect(selected?.id) {
         selectedRoute = selected?.let { trip ->
-            AppDatabase.get(context).tripDao().getPoints(trip.id)
-                .map { GeoPoint(it.lat, it.lon, it.time, it.speedMps, it.segmentStart, it.elapsedMillis) }
+            AppDatabase.get(context).tripDao().getPoints(trip.id).let { points ->
+                points.mapIndexed { index, point ->
+                    val previous = points.getOrNull(index - 1)
+                    val stepMillis = previous?.let {
+                        monotonicStepMillis(it.elapsedMillis, point.elapsedMillis, it.time, point.time)
+                    } ?: 0L
+                    val stepMeters = previous?.let {
+                        haversineMeters(it.lat, it.lon, point.lat, point.lon)
+                    } ?: 0.0
+                    val boundary = previous != null && isSegmentBoundary(
+                        previous.time, point.time, point.segmentStart, point.elapsedMillis != null,
+                    ) { stepMeters }
+                    val speed = if (boundary) point.speedMps?.toDouble()
+                    else observedOrDerivedSpeedMps(point, stepMillis, stepMeters)
+                    GeoPoint(
+                        point.lat, point.lon, point.time, speed?.toFloat() ?: 0f,
+                        point.segmentStart, point.elapsedMillis,
+                    )
+                }
+            }
         } ?: emptyList()
     }
 

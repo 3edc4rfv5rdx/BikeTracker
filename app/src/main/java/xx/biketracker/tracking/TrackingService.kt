@@ -40,6 +40,7 @@ import kotlinx.coroutines.withContext
 import xx.biketracker.ACCURACY_LIMIT_M
 import xx.biketracker.AppendOnlyList
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
+import xx.biketracker.AUTO_RESUME_HOLD_MS
 import xx.biketracker.AUTO_SAVE_GPS_WAIT_MS
 import xx.biketracker.DRAFT_FLUSH_EVERY_POINTS
 import xx.biketracker.FIX_REANCHOR_MS
@@ -64,6 +65,7 @@ import xx.biketracker.haversineMeters
 import xx.biketracker.MainActivity
 import xx.biketracker.R
 import xx.biketracker.data.AppDatabase
+import xx.biketracker.data.averageObservedSpeed
 import xx.biketracker.data.DatabaseMaintenance
 import xx.biketracker.data.DatabaseRestoreCoordinator
 import xx.biketracker.data.RestoreOperationState
@@ -316,6 +318,33 @@ internal data class ValidatedLocationFix(
     val bearingDegrees: Float?,
 )
 
+internal enum class SpeedObservationSource { RECEIVER, COORDINATES }
+
+/** A speed that is safe to display and feed into state transitions. */
+internal data class SpeedObservation(val metersPerSecond: Double, val source: SpeedObservationSource)
+
+/**
+ * Prefer receiver speed. When it is absent, derive a conservative speed only between consecutive
+ * accepted fixes in one fresh observation run. Removing both fixes' uncertainty radii prevents
+ * ordinary stationary jitter from masquerading as movement; the anchor/hold rules independently
+ * guard against mistaking an uncertain zero for proof of a stop.
+ */
+internal fun speedObservation(
+    previous: ValidatedLocationFix?,
+    fix: ValidatedLocationFix,
+    sameObservationRun: Boolean,
+): SpeedObservation? {
+    fix.speedMps?.let { return SpeedObservation(it, SpeedObservationSource.RECEIVER) }
+    if (previous == null || !sameObservationRun) return null
+    val dtMillis = elapsedMillisBetween(previous.elapsedRealtimeNanos, fix.elapsedRealtimeNanos)
+        ?: return null
+    val distance = haversineMeters(previous.lat, previous.lon, fix.lat, fix.lon)
+    val uncertainty = previous.accuracyMeters.toDouble() + fix.accuracyMeters
+    val speed = (distance - uncertainty).coerceAtLeast(0.0) / (dtMillis / 1000.0)
+    return speed.takeIf { it.isFinite() && it <= MAX_PLAUSIBLE_SPEED_MPS }
+        ?.let { SpeedObservation(it, SpeedObservationSource.COORDINATES) }
+}
+
 /** The verdict on a fix: sound and consistent, unusable, or sound but implausibly far from the
  *  reference it was checked against (see [shouldReanchor]). */
 internal sealed interface FixValidation {
@@ -444,6 +473,8 @@ class TrackingService : Service() {
     // Where the rider was last seen standing (the pause / standby position). Movement away from it
     // resumes the ride even when the reported speeds say otherwise; see [hasLeftAnchor].
     private var standstillAnchor: ValidatedLocationFix? = null
+    private val resumeMovementHold = ObservationHold(AUTO_RESUME_HOLD_MS)
+    private val resumeDepartureHold = ObservationHold(AUTO_RESUME_HOLD_MS)
     private var autoSaveJob: Job? = null
     private var pauseStartedElapsedRealtime: Long? = null
     // Standby (post-auto-save) bookkeeping: the two holds that decide the rider has set off again —
@@ -454,7 +485,7 @@ class TrackingService : Service() {
     private var standbyJob: Job? = null
     private var standbyStartedElapsedRealtime: Long? = null
 
-    private var currentSpeedMps = 0.0
+    private var currentSpeedMps: Double? = null
     private var altitudeMeters: Double? = null
     private var gpsAccuracyMeters: Float? = null
     private var bearingDegrees: Float? = null
@@ -633,7 +664,7 @@ class TrackingService : Service() {
         distanceMeters = 0.0
         movingTimeMillis = 0L
         maxSpeedMps = 0.0
-        currentSpeedMps = 0.0
+        currentSpeedMps = null
         altitudeMeters = null
         gpsAccuracyMeters = null
         bearingDegrees = null
@@ -641,6 +672,8 @@ class TrackingService : Service() {
         clearLowSpeedStreak()
         movementHold.reset()
         departureHold.reset()
+        resumeMovementHold.reset()
+        resumeDepartureHold.reset()
         standstillAnchor = null
         pauseStartedElapsedRealtime = null
         standbyStartedElapsedRealtime = null
@@ -810,6 +843,7 @@ class TrackingService : Service() {
         )
         // Rejected fixes do not refresh GPS freshness or overwrite the last trusted telemetry.
         val previous = lastTrustedFix
+        var reanchored = false
         val fix = when (val validation = validateLocationFix(candidate, previous)) {
             is FixValidation.Accepted -> validation.fix
             // A fix that contradicts a reference which has itself gone silent for too long wins:
@@ -817,6 +851,7 @@ class TrackingService : Service() {
             is FixValidation.Jumped -> {
                 if (previous == null || !shouldReanchor(previous, validation.fix)) return
                 reanchor()
+                reanchored = true
                 validation.fix
             }
             FixValidation.Rejected -> return
@@ -824,11 +859,17 @@ class TrackingService : Service() {
         // Every hold below measures an unbroken run of observations, but each wants its own idea of
         // what breaks that run; see [brokeObservationRun]. Auto-pause errs towards forgetting, the
         // standby holds towards staying reachable on a stream that is merely slow.
-        if (brokeObservationRun(previous, fix, GPS_STALE_MS)) clearLowSpeedStreak()
+        val speedRunBroke = reanchored || brokeObservationRun(previous, fix, GPS_STALE_MS)
+        if (speedRunBroke) {
+            clearLowSpeedStreak()
+            resumeMovementHold.reset()
+            resumeDepartureHold.reset()
+        }
         if (brokeObservationRun(previous, fix, RECORDING_OUTAGE_MS)) {
             movementHold.reset()
             departureHold.reset()
         }
+        val observedSpeed = speedObservation(previous, fix, sameObservationRun = !speedRunBroke)
         lastTrustedFix = fix
         lastTrustedFixElapsedRealtime = fix.elapsedRealtimeNanos / 1_000_000L
 
@@ -839,19 +880,24 @@ class TrackingService : Service() {
             return
         }
 
-        fix.speedMps?.let { currentSpeedMps = it }
+        // Missing receiver speed is either replaced by a trustworthy coordinate observation or
+        // shown as unknown; it never inherits the preceding fix's value.
+        currentSpeedMps = observedSpeed?.metersPerSecond
         fix.altitudeMeters?.let { altitudeMeters = it }
         gpsAccuracyMeters = fix.accuracyMeters
         // Bearing is only trustworthy while moving; keep the last heading when the fix omits it,
         // so the puck doesn't spin to north at a standstill.
-        if (fix.bearingDegrees != null && fix.speedMps != null && fix.speedMps >= AUTO_PAUSE_SPEED_MPS) {
+        if (fix.bearingDegrees != null &&
+            observedSpeed != null &&
+            observedSpeed.metersPerSecond >= AUTO_PAUSE_SPEED_MPS
+        ) {
             bearingDegrees = fix.bearingDegrees
         }
 
         when (status) {
-            TrackingStatus.RECORDING -> recordLocation(fix)
-            TrackingStatus.PAUSED -> maybeAutoResume(fix)
-            TrackingStatus.STANDBY -> maybeStandbyStart(fix)
+            TrackingStatus.RECORDING -> recordLocation(fix, observedSpeed)
+            TrackingStatus.PAUSED -> maybeAutoResume(fix, observedSpeed)
+            TrackingStatus.STANDBY -> maybeStandbyStart(fix, observedSpeed)
             TrackingStatus.IDLE -> return
         }
         // Re-evaluate elapsed deadlines after the fix has had its chance to resume/start. For a
@@ -871,7 +917,7 @@ class TrackingService : Service() {
         pendingSegmentStart = true
     }
 
-    private fun recordLocation(fix: ValidatedLocationFix) {
+    private fun recordLocation(fix: ValidatedLocationFix, observedSpeed: SpeedObservation?) {
         val prev = lastPoint
         val nowElapsedNanos = fix.elapsedRealtimeNanos
         val nowElapsedMillis = nowElapsedNanos / 1_000_000L
@@ -890,7 +936,7 @@ class TrackingService : Service() {
             rawLon = fix.lon,
             accuracyM = fix.accuracyMeters,
             timeMs = nowElapsedMillis,
-            speedMps = fix.speedMps ?: 0.0,
+            speedMps = observedSpeed?.metersPerSecond ?: 0.0,
         )
         // Whether the recording carried on between the two fixes, judged on the step rather than
         // the interval alone: fixes tens of seconds apart are routine where the signal is jammed,
@@ -901,6 +947,11 @@ class TrackingService : Service() {
         // This fix opens a new recording segment if a pause broke the track or an outage gapped it.
         val segmentStart = pendingSegmentStart || gapped
         pendingSegmentStart = false
+        // A coordinate estimate may not cross the boundary that this point opens. Receiver speed
+        // belongs to the fix itself and remains valid on either side of a pause/outage.
+        val recordedSpeed = observedSpeed?.takeUnless {
+            it.source == SpeedObservationSource.COORDINATES && (prev == null || gapped)
+        }
 
         if (prev != null && !gapped) {
             distanceMeters += stepMeters
@@ -919,7 +970,7 @@ class TrackingService : Service() {
             lat = smoothed.lat,
             lon = smoothed.lon,
             time = fix.wallTimeMillis,
-            speedMps = fix.speedMps?.toFloat() ?: 0f,
+            speedMps = recordedSpeed?.metersPerSecond?.toFloat(),
             altitudeMeters = fix.altitudeMeters,
             segmentStart = segmentStart,
             elapsedMillis = elapsedSinceStart,
@@ -930,7 +981,7 @@ class TrackingService : Service() {
         route.add(
             smoothed.copy(
                 timeMillis = fix.wallTimeMillis,
-                speedMps = fix.speedMps?.toFloat() ?: 0f,
+                speedMps = recordedSpeed?.metersPerSecond?.toFloat() ?: 0f,
                 segmentStart = segmentStart,
                 elapsedMillis = elapsedSinceStart,
             )
@@ -940,7 +991,7 @@ class TrackingService : Service() {
         if (points.size - scheduledFlushCount >= DRAFT_FLUSH_EVERY_POINTS) flushDraft()
 
         updateNotification()
-        fix.speedMps?.let { evaluateAutoPause(fix, it, nowElapsedMillis) }
+        recordedSpeed?.let { evaluateAutoPause(fix, it.metersPerSecond, nowElapsedMillis) }
     }
 
     private fun evaluateAutoPause(fix: ValidatedLocationFix, speed: Double, now: Long) {
@@ -971,13 +1022,19 @@ class TrackingService : Service() {
     }
 
     // Only an automatic pause resumes by itself; a manual one waits for the button.
-    private fun maybeAutoResume(fix: ValidatedLocationFix) {
+    private fun maybeAutoResume(fix: ValidatedLocationFix, observedSpeed: SpeedObservation?) {
         if (!pausedAutomatically) return
+        val now = fix.elapsedRealtimeNanos / 1_000_000L
         val resumeMps = resumeSpeedMps(AppSettings.autoPauseSpeedKmh.value)
-        val movingBySpeed = fix.speedMps != null && fix.speedMps >= resumeMps
+        val movingBySpeed = resumeMovementHold.observe(
+            now,
+            observedSpeed?.metersPerSecond?.let { it >= resumeMps } == true,
+        )
         // Leaving the spot counts as movement even when the fix claims otherwise: that is what
-        // rescues a ride from a pause the jamming caused rather than the rider.
-        if (movingBySpeed || hasLeftAnchor(standstillAnchor, fix)) resumeTracking(automatic = true)
+        // rescues a ride from a pause the jamming caused rather than the rider. Both paths must
+        // hold across fixes; a lone noisy step cannot resume a ride.
+        val movingByDeparture = resumeDepartureHold.observe(now, hasLeftAnchor(standstillAnchor, fix))
+        if (movingBySpeed || movingByDeparture) resumeTracking(automatic = true)
     }
 
     private fun pauseTracking(automatic: Boolean) {
@@ -986,6 +1043,8 @@ class TrackingService : Service() {
         pausedAutomatically = automatic
         lowSpeedSince = 0L
         standstillAnchor = lastTrustedFix
+        resumeMovementHold.reset()
+        resumeDepartureHold.reset()
         pauseStartedElapsedRealtime = SystemClock.elapsedRealtime()
         // Break the segment so the paused gap adds neither distance nor time, and mark the next
         // recorded fix as a new segment's start.
@@ -1005,6 +1064,8 @@ class TrackingService : Service() {
         status = TrackingStatus.RECORDING
         pausedAutomatically = false
         standstillAnchor = null
+        resumeMovementHold.reset()
+        resumeDepartureHold.reset()
         cancelAutoSave()
         updateNotification()
         publish()
@@ -1014,7 +1075,7 @@ class TrackingService : Service() {
 
     // Standby: after the long-pause auto-save the ride is already stored, so movement here opens
     // a brand-new ride rather than resuming the finished one.
-    private fun maybeStandbyStart(fix: ValidatedLocationFix) {
+    private fun maybeStandbyStart(fix: ValidatedLocationFix, observedSpeed: SpeedObservation?) {
         val now = fix.elapsedRealtimeNanos / 1_000_000L
         // Distance from the spot is the only proof of a trip a jammed receiver leaves, but a single
         // fix away from it proves nothing — that is exactly what a spoofed jump looks like, and it
@@ -1023,10 +1084,14 @@ class TrackingService : Service() {
             startRideFromStandby(automatic = true)
             return
         }
-        // A fix without a speed says nothing either way, so it neither feeds nor breaks this hold.
-        val speed = fix.speedMps ?: return
         val startMps = resumeSpeedMps(AppSettings.autoPauseSpeedKmh.value)
-        if (movementHold.observe(now, speed >= startMps)) startRideFromStandby(automatic = true)
+        if (movementHold.observe(
+                now,
+                observedSpeed?.metersPerSecond?.let { it >= startMps } == true,
+            )
+        ) {
+            startRideFromStandby(automatic = true)
+        }
     }
 
     /** Keep the service alive after the auto-save, listening at a lighter GPS cadence for the
@@ -1270,11 +1335,7 @@ class TrackingService : Service() {
                 distanceMeters = distanceMeters,
                 movingTimeMillis = movingTimeMillis,
                 maxSpeedMps = maxSpeedMps,
-                avgGpsSpeedMps = if (finished && recorded.isNotEmpty()) {
-                    recorded.map { it.speedMps.toDouble() }.average()
-                } else {
-                    null
-                },
+                avgGpsSpeedMps = if (finished) averageObservedSpeed(recorded) else null,
                 elevationGainMeters = if (finished && altitudes.any { it != null }) {
                     elevationGainBySegment(recorded)
                 } else {

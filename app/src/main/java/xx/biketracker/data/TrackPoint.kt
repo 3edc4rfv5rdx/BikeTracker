@@ -27,7 +27,9 @@ data class TrackPoint(
     val lat: Double,
     val lon: Double,
     val time: Long,               // epoch millis
-    val speedMps: Float,          // instantaneous speed reported by the GPS fix
+    // Best trustworthy speed observation: receiver speed or a conservative coordinate-derived
+    // speed. Null means this point had neither; made nullable in schema v8.
+    val speedMps: Float?,
     val altitudeMeters: Double? = null, // GPS altitude if the fix had one, else null (added in schema v2)
     // True on the first fix after a pause or GPS outage — the recording-segment boundary, so a
     // short pause splits regardless of the wall-clock gap (added in schema v6). Old rows are 0
@@ -38,3 +40,9 @@ data class TrackPoint(
     // those fall back to the epoch time. See monotonicStepMillis.
     val elapsedMillis: Long? = null,
 )
+
+/** Average of the speed observations a saved track actually has; null when it has none. */
+internal fun averageObservedSpeed(points: List<TrackPoint>): Double? =
+    points.mapNotNull { it.speedMps?.toDouble() }
+        .takeIf { it.isNotEmpty() }
+        ?.average()

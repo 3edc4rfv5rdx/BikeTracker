@@ -220,7 +220,7 @@ fun TrackingScreen() {
         // Big current speed — pure number. The font's own leading above/below the digits is trimmed
         // so the visible glyphs sit tight against the fields, with just 2dp of slack.
         Text(
-            text = formatSpeedKmh(snapshot.currentSpeedMps),
+            text = snapshot.currentSpeedMps?.let(::formatSpeedKmh) ?: "—",
             fontSize = 120.sp,
             fontWeight = FontWeight.Bold,
             style = NO_FONT_PADDING,
