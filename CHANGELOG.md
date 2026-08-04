@@ -3,6 +3,7 @@
 Newest entries on top.
 
 ## Unreleased
+## v0.6.20260804+175
 
 - Dropped a null assertion the Map selection change made redundant, which the compiler warned about.
 - A GPX holding several tracks is now named after the file rather than after its first track; all of its tracks are shown, still separated where the file separates them.
