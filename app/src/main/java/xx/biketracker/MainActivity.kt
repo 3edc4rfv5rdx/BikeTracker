@@ -287,7 +287,7 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                         when {
                             selectedTrip != null -> {
                                 Text(
-                                    text = selectedTrip!!.displayName(),
+                                    text = selectedTrip.displayName(),
                                     style = MaterialTheme.typography.bodyLarge,
                                 )
                                 IconButton(onClick = { MapSelection.clear() }) {
