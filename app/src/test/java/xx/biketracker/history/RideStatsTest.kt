@@ -16,10 +16,12 @@ class RideStatsTest {
         elapsedMillis: Long? = time,
         segmentStart: Boolean = false,
         altitudeMeters: Double? = null,
+        lat: Double = 50.0,
+        lon: Double = 30.0,
     ) = TrackPoint(
         tripId = 1,
-        lat = 50.0,
-        lon = 30.0,
+        lat = lat,
+        lon = lon,
         time = time,
         speedMps = speedMps,
         altitudeMeters = altitudeMeters,
@@ -116,6 +118,50 @@ class RideStatsTest {
         val stats = computeRideStats(points)
         assertEquals(1, stats.stopCount)
         assertEquals(12_000L, stats.stoppedMillis)
+    }
+
+    @Test
+    fun aRunThatKeptCoveringGroundIsNotAStop() {
+        // Twelve seconds of fixes reporting a standstill while the positions advance 1e-4 of
+        // latitude a second — about 11 m/s, 40 km/h. This is what a jammed receiver does to a bike
+        // that is plainly still riding, and the ride must not be credited with a stop for it.
+        val points = ArrayList<TrackPoint>()
+        points += tp(time = 0, speedMps = 5f, elapsedMillis = 0)
+        for (t in 1..12) {
+            points += tp(time = t * 1_000L, speedMps = 0.2f, elapsedMillis = t * 1_000L, lat = 50.0 + t * 1e-4)
+        }
+        points += tp(time = 13_000, speedMps = 5f, elapsedMillis = 13_000, lat = 50.0 + 12 * 1e-4)
+        val stats = computeRideStats(points)
+
+        assertEquals(0, stats.stopCount)
+        assertEquals(0L, stats.stoppedMillis)
+        // Bucketed at the pace the positions imply, not dumped in the slowest bucket.
+        assertEquals(12_000L, stats.speedZoneMillis.last())
+        assertEquals(0L, stats.speedZoneMillis[0])
+        assertEquals(13_000L, stats.speedZoneMillis.sum() + stats.stoppedMillis)
+    }
+
+    @Test
+    fun aStandstillThatOnlyJittersIsStillAStop() {
+        // The same twelve seconds, but the positions only wobble ~2 m about one spot. The wobble
+        // adds up to a couple of dozen metres of path, and a rule counting path walked would call
+        // that motion; the spot it wobbles around never moves, which is what actually counts.
+        val points = ArrayList<TrackPoint>()
+        points += tp(time = 0, speedMps = 5f, elapsedMillis = 0)
+        for (t in 1..12) {
+            points += tp(
+                time = t * 1_000L,
+                speedMps = 0.2f,
+                elapsedMillis = t * 1_000L,
+                lat = 50.0 + if (t % 2 == 0) 2e-5 else 0.0,
+            )
+        }
+        points += tp(time = 13_000, speedMps = 5f, elapsedMillis = 13_000)
+        val stats = computeRideStats(points)
+
+        assertEquals(1, stats.stopCount)
+        assertEquals(12_000L, stats.stoppedMillis)
+        assertEquals(1_000L, stats.speedZoneMillis.sum()) // only the closing moving second
     }
 
     @Test

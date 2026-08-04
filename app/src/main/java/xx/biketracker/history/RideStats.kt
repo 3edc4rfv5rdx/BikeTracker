@@ -2,12 +2,14 @@ package xx.biketracker.history
 
 import xx.biketracker.AUTO_PAUSE_DEBOUNCE_MS
 import xx.biketracker.AUTO_PAUSE_SPEED_MPS
+import xx.biketracker.LEFT_ANCHOR_DISTANCE_M
 import xx.biketracker.MPS_TO_KMH
 import xx.biketracker.data.TrackPoint
 import xx.biketracker.elevationGainBySegment
 import xx.biketracker.haversineMeters
 import xx.biketracker.isSegmentBoundary
 import xx.biketracker.monotonicStepMillis
+import kotlin.math.max
 
 /** Upper bounds (km/h) of the speed-histogram buckets; the last bucket is open-ended, so these
  *  three bounds make four buckets: 0-10, 10-20, 20-30, 30+. */
@@ -41,14 +43,26 @@ class RideStats(
 }
 
 /**
- * A stop is a stretch of recorded motion below [AUTO_PAUSE_SPEED_MPS] lasting at least
- * [AUTO_PAUSE_DEBOUNCE_MS] — the same signal auto-pause reacts to, so a red-light crawl counts but
- * a brief coast does not. A recording boundary (pause or GPS outage) is conservatively never
- * counted as a stop: a boolean boundary can't tell a café pause from a tunnel, so its gap adds to
- * neither stopped time nor the buckets. Time comes from the monotonic
- * [xx.biketracker.data.TrackPoint.elapsedMillis] so a mid-ride clock change can't distort it.
- * Every non-boundary interval lands in a speed bucket, so the buckets sum to the ride's moving
- * time; distance and buckets ignore recording gaps like the trip totals.
+ * A stop is a stretch of recorded motion below [AUTO_PAUSE_SPEED_MPS] that stayed where it was for
+ * at least [AUTO_PAUSE_DEBOUNCE_MS] — the same signal auto-pause reacts to, so a red-light crawl
+ * counts but a brief coast does not.
+ *
+ * Slow fixes on their own do not make a stop. Where the signal is jammed the receiver reports 0 for
+ * a bike that is moving, and the positions are the one thing that still means something — the
+ * reasoning the tracker itself follows in [xx.biketracker.tracking.hasLeftAnchor]. A run that got
+ * further than [LEFT_ANCHOR_DISTANCE_M] from where it began was therefore motion the fixes failed
+ * to report; its time stays in the ride, bucketed at the pace its own positions imply. Distance
+ * from that spot, not the path walked: at a true standstill the jitter of a long stop adds up to a
+ * journey, while the spot it jitters around does not move. Per-point accuracy is not persisted, so
+ * the threshold cannot be widened by the fixes' own error circles the way the live tracker widens
+ * it — the plain distance has to carry it.
+ *
+ * A recording boundary (pause or GPS outage) is conservatively never counted as a stop: a boolean
+ * boundary can't tell a café pause from a tunnel, so its gap adds to neither stopped time nor the
+ * buckets. Time comes from the monotonic [xx.biketracker.data.TrackPoint.elapsedMillis] so a
+ * mid-ride clock change can't distort it. Every non-boundary interval lands either in a speed
+ * bucket or in stopped time, so the two together account for the ride's moving time; distance and
+ * buckets ignore recording gaps like the trip totals.
  */
 fun computeRideStats(points: List<TrackPoint>): RideStats {
     val profile = ArrayList<ElevationPoint>()
@@ -56,19 +70,31 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
     var distance = 0.0
     var stopCount = 0
     var stoppedMillis = 0L
-    var runMillis = 0L // length of the current below-threshold run, still to be judged a stop or not
     var pendingProfileBreak = false // a boundary was crossed; the next altitude opens a new segment
+    // The current below-threshold run, still to be judged a stop or motion the fixes missed: how
+    // long it has lasted, the spot it began at, the furthest it ever got from there, and the ground
+    // it covered getting about.
+    var runMillis = 0L
+    var runAnchor: TrackPoint? = null
+    var runAwayMeters = 0.0
+    var runPathMeters = 0.0
 
-    // Close the pending low-speed run: a real stop once it reaches the debounce, otherwise brief
-    // low-speed motion that still belongs to the ride's moving time, so it enters the slowest bucket.
+    // Close the pending run. One that stayed put long enough is a stop; one that got away from
+    // where it began was movement the fixes missed, and one too brief to judge is a coast — both of
+    // those keep their time in the ride, in the bucket their own positions earn.
     fun closeRun() {
-        if (runMillis >= AUTO_PAUSE_DEBOUNCE_MS) {
-            stopCount++
-            stoppedMillis += runMillis
-        } else {
-            zones[0] += runMillis
+        if (runMillis > 0L) {
+            if (runMillis >= AUTO_PAUSE_DEBOUNCE_MS && runAwayMeters <= LEFT_ANCHOR_DISTANCE_M) {
+                stopCount++
+                stoppedMillis += runMillis
+            } else {
+                zones[zoneIndexFor(runPathMeters / (runMillis / 1000.0))] += runMillis
+            }
         }
         runMillis = 0L
+        runAnchor = null
+        runAwayMeters = 0.0
+        runPathMeters = 0.0
     }
 
     for (i in points.indices) {
@@ -88,10 +114,18 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
             } else {
                 distance += stepMeters
                 if (p.speedMps < AUTO_PAUSE_SPEED_MPS) {
-                    runMillis += step // slow enough to be stopping; the run decides if it's a real stop
+                    // Slow enough to be stopping; the run decides whether it really was. It is
+                    // anchored to the spot the bike was last seen moving from.
+                    if (runMillis == 0L) runAnchor = prev
+                    runMillis += step
+                    runPathMeters += stepMeters
+                    runAnchor?.let {
+                        runAwayMeters =
+                            max(runAwayMeters, haversineMeters(it.lat, it.lon, p.lat, p.lon))
+                    }
                 } else {
                     closeRun()
-                    zones[zoneIndexFor(p.speedMps)] += step
+                    zones[zoneIndexFor(p.speedMps.toDouble())] += step
                 }
             }
         }
@@ -115,8 +149,9 @@ fun computeRideStats(points: List<TrackPoint>): RideStats {
     )
 }
 
-/** Index of the speed bucket a fix falls in; the open top bucket catches everything past the last bound. */
-private fun zoneIndexFor(speedMps: Float): Int {
+/** Index of the speed bucket a pace falls in; the open top bucket catches everything past the last
+ *  bound. Fed either a fix's reported speed or the pace a run's own positions imply. */
+private fun zoneIndexFor(speedMps: Double): Int {
     val kmh = speedMps * MPS_TO_KMH
     for (i in SPEED_ZONE_BOUNDS_KMH.indices) if (kmh < SPEED_ZONE_BOUNDS_KMH[i]) return i
     return SPEED_ZONE_BOUNDS_KMH.size

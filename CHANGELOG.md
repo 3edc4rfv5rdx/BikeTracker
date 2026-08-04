@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- A ride's statistics no longer count a stretch as "stopped" just because the fixes reported no speed: a stretch whose positions kept covering ground is credited as riding, at the pace those positions imply, exactly as the tracker itself judges movement.
 - A paused ride waiting for the GPS to come back before it auto-saves now gives up after fifteen minutes and saves anyway, instead of holding the tracker open indefinitely on a phone left without a signal.
 - Setting auto-save to 0 now also calls off a save that is already waiting for the signal, not only one still counting down.
 - An imported GPX is now labelled with the track's own name, falling back to the file's; the name of whoever exported the file can no longer end up on it.
