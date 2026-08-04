@@ -3,6 +3,9 @@
 Newest entries on top.
 
 ## Unreleased
+
+- Cancelling an offline map download now takes effect while the area is still being prepared, instead of leaving the dialog stuck at 0% and starting the download anyway; deleting all areas no longer leaves a freshly created one behind.
+
 ## v0.6.20260804+175
 
 - Dropped a null assertion the Map selection change made redundant, which the compiler warned about.
