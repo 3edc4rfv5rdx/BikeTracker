@@ -410,7 +410,10 @@ class TrackingService : Service() {
     // committed batches can therefore be retried without skipping or duplicating points.
     private var draftPersistence: DraftPersistence? = null
     private var draftStartJob: Job? = null
-    private val flushJobs = mutableListOf<Job>()
+    // One flush at a time, each waiting on the one before it: the writer reconciles a checkpoint
+    // against the durable row it finds, so two of them arriving out of order would have the older
+    // one report a save failure for a ride that is in fact fully stored.
+    private var flushJob: Job? = null
     private var scheduledFlushCount = 0
     private var persistenceFailed = false
     private var startupPending = false
@@ -556,7 +559,7 @@ class TrackingService : Service() {
         stopping.set(false)
         kalman.reset()
         speedWindow.reset()
-        flushJobs.clear()
+        flushJob = null
         scheduledFlushCount = 0
         persistenceFailed = false
         lastTrustedFix = null
@@ -1087,13 +1090,17 @@ class TrackingService : Service() {
         autoSaveJob = null
     }
 
-    /** Schedule a full checkpoint; the writer reconciles it with durable rows on retry. */
+    /** Schedule a full checkpoint; the writer reconciles it with durable rows on retry. Each
+     *  waits for the flush before it, so checkpoints reach the database in the order they were
+     *  taken however long a write is held up — and only one of them is ever outstanding. */
     private fun flushDraft() {
         val persistence = draftPersistence ?: return
         if (points.size == scheduledFlushCount) return
         val checkpoint = checkpoint(finished = false)
         scheduledFlushCount = checkpoint.points.size
-        flushJobs += scope.launch {
+        val previous = flushJob
+        flushJob = scope.launch {
+            previous?.join()
             reportPersistenceResult(persistence.persist(checkpoint))
         }
     }
@@ -1116,10 +1123,8 @@ class TrackingService : Service() {
             publish()
         }
         val persistence = draftPersistence ?: return handleSaveFailure()
-        val pendingJobs = buildList {
-            draftStartJob?.let(::add)
-            addAll(flushJobs)
-        }
+        // The last flush waits on every flush before it, so joining it joins them all.
+        val pendingJobs = listOfNotNull(draftStartJob, flushJob)
         val finalCheckpoint = checkpoint(finished = true)
         // Decided here, on the main thread, from the reason this stop was ordered: a Stop arriving
         // later can downgrade the standby that follows, but not the ride's own claim to be stored.

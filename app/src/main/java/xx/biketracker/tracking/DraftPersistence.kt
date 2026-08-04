@@ -36,8 +36,14 @@ internal class DraftPersistence(
     suspend fun persist(checkpoint: DraftCheckpoint): Result<Unit> = operation {
         val id = ensureDraftLocked()
         val storedCount = gateway.pointCount(id)
-        check(storedCount in 0..checkpoint.points.size) {
-            "Draft contains $storedCount points, checkpoint contains ${checkpoint.points.size}"
+        check(storedCount >= 0) { "Draft contains $storedCount points" }
+        // A checkpoint a newer one has already overtaken is not a failed save — everything it
+        // holds is durable — and reporting one as a failure would tell the rider their ride is
+        // not being recorded while it is being recorded twice over. Writing is what is skipped,
+        // not the success. Checkpoints are handed over in order, so this stays a safety net.
+        if (storedCount > checkpoint.points.size) {
+            durablePointCount = storedCount
+            return@operation
         }
         val missing = checkpoint.points
             .subList(storedCount, checkpoint.points.size)

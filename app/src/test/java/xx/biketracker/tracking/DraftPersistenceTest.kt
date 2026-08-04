@@ -1,6 +1,9 @@
 package xx.biketracker.tracking
 
 import java.io.IOException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -82,6 +85,47 @@ class DraftPersistenceTest {
     }
 
     @Test
+    fun aCheckpointOvertakenByANewerOneIsNotAFailedSave() = runBlocking {
+        // Two flushes in flight and the newer one commits first: the older then finds more points
+        // stored than it holds. Nothing is wrong — everything it carries is durable already — and
+        // calling that a failure puts "save failed" in front of a rider whose ride is fully stored.
+        val gateway = FakeGateway()
+        val persistence = DraftPersistence(initialTrip, gateway)
+        assertTrue(persistence.persist(checkpoint(4)).isSuccess)
+
+        assertTrue(persistence.persist(checkpoint(2)).isSuccess)
+        assertEquals(listOf(1L, 2L, 3L, 4L), gateway.points.map { it.time })
+        assertEquals(4, persistence.durablePointCount)
+        assertEquals(1, gateway.commitCalls) // the overtaken checkpoint wrote nothing
+    }
+
+    @Test
+    fun aDraftCountThatCannotBeExplainedAtAllStillFails() = runBlocking {
+        // Being tolerant of a newer checkpoint is not being tolerant of nonsense.
+        val gateway = FakeGateway().apply { pointCountOverride = -1 }
+        val persistence = DraftPersistence(initialTrip, gateway)
+
+        assertTrue(persistence.persist(checkpoint(3)).isFailure)
+        assertTrue(gateway.points.isEmpty())
+    }
+
+    @Test
+    fun aStormOfCheckpointsLeavesTheDraftWhole() = runBlocking {
+        // Every flush of a ride submitted at once, reaching the writer in whatever order. However
+        // they interleave, each writes only what is missing and none reports a failure.
+        val gateway = FakeGateway()
+        val persistence = DraftPersistence(initialTrip, gateway)
+
+        val results = listOf(6, 2, 8, 4)
+            .map { count -> async(Dispatchers.Default) { persistence.persist(checkpoint(count)) } }
+            .awaitAll()
+
+        assertTrue(results.all { it.isSuccess })
+        assertEquals((1L..8L).toList(), gateway.points.map { it.time })
+        assertEquals(8, persistence.durablePointCount)
+    }
+
+    @Test
     fun discardFailureCanBeRetriedWithoutCreatingAnotherDraft() = runBlocking {
         val gateway = FakeGateway()
         val persistence = DraftPersistence(initialTrip, gateway)
@@ -113,7 +157,9 @@ class DraftPersistenceTest {
         var failNextCommitAfterWrite = false
         var failNextDelete = false
         var commitFailure: Throwable? = null
+        var pointCountOverride: Int? = null
         var insertCalls = 0
+        var commitCalls = 0
         var trip: Trip? = null
         val points = mutableListOf<TrackPoint>()
 
@@ -127,9 +173,10 @@ class DraftPersistenceTest {
             return 1
         }
 
-        override suspend fun pointCount(tripId: Long): Int = points.size
+        override suspend fun pointCount(tripId: Long): Int = pointCountOverride ?: points.size
 
         override suspend fun commit(tripId: Long, newPoints: List<TrackPoint>, trip: Trip) {
+            commitCalls++
             commitFailure?.let { throw it }
             if (failNextCommitBeforeWrite) {
                 failNextCommitBeforeWrite = false

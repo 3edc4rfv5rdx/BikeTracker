@@ -4,6 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- Recording no longer claims a save failed when two of its periodic saves land out of order; they are now handed over one at a time, and an overtaken one is recognised as already stored.
 - Smoothing a track for display now keeps each point's time, speed and segment flag instead of resetting them, so nothing read off a smoothed track can quietly come out wrong.
 - Importing a GPX now offers GPX and XML files rather than everything on the device, turns down a file far too large to be a track, and reads it as a stream instead of holding the whole document twice over; a track past 100 000 points is shown cut short and says so.
 - A GPX whose elements carry a namespace prefix now imports like any other file; it was refused outright before.
