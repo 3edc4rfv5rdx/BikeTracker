@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The start and finish of a track on the map are now marked at every zoom, and a ride that never got far enough to have a start direction is marked with a plain disc instead of being left without a start marker at all.
+
 - An exported GPX now stays readable whatever a ride's name and note contain: characters XML forbids are dropped instead of written into the file, and a point with impossible coordinates is left out rather than exported as `NaN`.
 
 - The start-direction arrow on the map now reads the direction from the first recorded segment only: a ride paused right after it began no longer points its arrow across the jump to wherever riding resumed.

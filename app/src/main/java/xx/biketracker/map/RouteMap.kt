@@ -92,19 +92,19 @@ private const val DIRECTION_IMAGE_ID = "ride-route-chevron"
 private const val DIRECTION_SPACING = 56f
 // Zoomed further out the track is a squiggle the arrows would only clutter.
 private const val DIRECTION_MIN_ZOOM = 13f
-// Below that zoom the whole track can be shorter than one chevron spacing, leaving it with no
-// direction at all: a single chevron then sits at the start, pointing the way the ride set off.
-// Its maxZoom is the chevrons' minZoom, so exactly one of the two layers is ever drawn.
+// Start of the track, marked at every zoom: a disced chevron pointing the way the ride set off,
+// or a plain disc where that direction is unknown (a ride paused or ended within the first few
+// meters). Zoomed out below DIRECTION_MIN_ZOOM it is also the only direction the track carries.
 private const val START_SOURCE_ID = "ride-route-start"
 private const val START_LAYER_ID = "ride-route-start-direction"
 private const val START_IMAGE_ID = "ride-route-chevron-start"
+private const val START_PLAIN_IMAGE_ID = "ride-route-start-disc"
 // The chevron image points right, so a compass bearing turns into its rotation less a quarter turn.
 private const val START_ROTATE_KEY = "rotate"
 private const val START_ICON_EAST_OFFSET = 90.0
 
 // End of the track, marked only where the ride is over: a stored ride or an imported GPX. A live
-// ride ends at the puck, which says the same thing and says it is still moving. Zoomed in past
-// DIRECTION_MIN_ZOOM the chevrons take over from both end markers at once.
+// ride ends at the puck, which says the same thing and says it is still moving.
 private const val FINISH_SOURCE_ID = "ride-route-finish"
 private const val FINISH_LAYER_ID = "ride-route-finish-dot"
 private const val FINISH_IMAGE_ID = "ride-route-finish-disc"
@@ -261,10 +261,14 @@ fun RouteMap(
                     PropertyFactory.iconIgnorePlacement(true),
                 ).apply { minZoom = DIRECTION_MIN_ZOOM }
             )
-            // The one chevron that stands in for them all once the track is too small to carry any:
-            // discked, since it has to be found on a track shrunk to a squiggle.
+            // The start marker: discked, since it has to be found both among the chevrons and on a
+            // track shrunk to a squiggle. Which of the two images it wears is a plain layer
+            // property, set with the data below (same reason as the puck's tints).
             styleBitmap(context, R.drawable.ic_map_direction_start)?.let {
                 style.addImage(START_IMAGE_ID, it)
+            }
+            styleBitmap(context, R.drawable.ic_map_start)?.let {
+                style.addImage(START_PLAIN_IMAGE_ID, it)
             }
             style.addSource(GeoJsonSource(START_SOURCE_ID))
             style.addLayer(
@@ -274,10 +278,9 @@ fun RouteMap(
                     PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                     PropertyFactory.iconAllowOverlap(true),
                     PropertyFactory.iconIgnorePlacement(true),
-                ).apply { maxZoom = DIRECTION_MIN_ZOOM }
+                )
             )
-            // Where a finished track ends. Shares the start chevron's zoom range, so the two ends
-            // of a ride are marked, and stop being marked, together.
+            // Where a finished track ends.
             styleBitmap(context, R.drawable.ic_map_finish)?.let {
                 style.addImage(FINISH_IMAGE_ID, it)
             }
@@ -287,7 +290,7 @@ fun RouteMap(
                     PropertyFactory.iconImage(FINISH_IMAGE_ID),
                     PropertyFactory.iconAllowOverlap(true),
                     PropertyFactory.iconIgnorePlacement(true),
-                ).apply { maxZoom = DIRECTION_MIN_ZOOM }
+                )
             )
             // Scrub marker above the track but under the puck.
             style.addSource(GeoJsonSource(MARKER_SOURCE_ID))
@@ -372,16 +375,25 @@ fun RouteMap(
             multiLine to routeStartHeading(route)
         }
         style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)?.setGeoJson(line)
-        // The start chevron: placed on the first point, turned the way the ride set off.
+        // The start marker: placed on the first point, turned the way the ride set off. A track
+        // that never got far enough to have a direction still gets its start marked — with the
+        // plain disc, which points nowhere rather than somewhere made up.
         val startSource = style.getSourceAs<GeoJsonSource>(START_SOURCE_ID)
-        if (startHeading == null) {
+        val start = route.firstOrNull()
+        if (start == null) {
             startSource?.setGeoJson(FeatureCollection.fromFeatures(listOf<Feature>()))
         } else {
-            val start = route.first()
             startSource?.setGeoJson(
                 Feature.fromGeometry(Point.fromLngLat(start.lon, start.lat)).apply {
-                    addNumberProperty(START_ROTATE_KEY, startHeading - START_ICON_EAST_OFFSET)
+                    if (startHeading != null) {
+                        addNumberProperty(START_ROTATE_KEY, startHeading - START_ICON_EAST_OFFSET)
+                    }
                 }
+            )
+            (style.getLayer(START_LAYER_ID) as? SymbolLayer)?.setProperties(
+                PropertyFactory.iconImage(
+                    if (startHeading != null) START_IMAGE_ID else START_PLAIN_IMAGE_ID
+                )
             )
         }
         if (route.isNotEmpty() && mapSize.height > 0 && centeredSize != mapSize) {
