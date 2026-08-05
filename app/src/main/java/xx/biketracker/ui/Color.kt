@@ -15,6 +15,11 @@ val AccentOrange = Color(0xFFFF3D00)
 // yellower than AccentOrange so it never reads as the red GPS-trouble tint.
 val PausedOrange = Color(0xFFFF9800)
 
+// Calm grey for the primary button while recording: a ride under way needs no urging on, so
+// Pause sits back and leaves the loud colors to the red Stop beside it. Dark enough to read as a
+// button against the light window, light enough against the dark one.
+val RecordingGrey = Color(0xFF616161)
+
 // Light red for the Stop button while recording — kept lighter than the reddish accents so it
 // stays clearly distinct from the paused-state PausedOrange next to it.
 val StopRed = Color(0xFFFF5252)

@@ -37,6 +37,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import xx.biketracker.ui.KeepScreenOnWhile
 import xx.biketracker.ui.PausedOrange
+import xx.biketracker.ui.RecordingGrey
 import xx.biketracker.ui.ScrubBlue
 import xx.biketracker.ui.StopGrey
 import xx.biketracker.ui.StopRed
@@ -429,8 +430,14 @@ private fun Controls(
             text = primaryText,
             onClick = primaryAction,
             modifier = Modifier.weight(1f),
-            // Paused is easy to miss otherwise — flag it with the accent color.
-            containerColor = if (status == TrackingStatus.PAUSED) PausedOrange else null,
+            // Paused is easy to miss otherwise — flag it with the accent color. While recording
+            // the same button offers Pause, which is no call to action: grey keeps it readable
+            // without shouting over the red Stop next to it.
+            containerColor = when (status) {
+                TrackingStatus.PAUSED -> PausedOrange
+                TrackingStatus.RECORDING -> RecordingGrey
+                else -> null
+            },
         )
         // Tap saves; a long-press stops without saving. The transparent overlay carries both
         // gestures so the tonal button keeps its Material look and shaped ripple. The discard

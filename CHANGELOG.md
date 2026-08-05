@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The Pause button is grey while a ride is recording, instead of wearing the theme's default violet.
+
 - The start and finish of a track on the map are now marked at every zoom, and a ride that never got far enough to have a start direction is marked with a plain disc instead of being left without a start marker at all.
 
 - An exported GPX now stays readable whatever a ride's name and note contain: characters XML forbids are dropped instead of written into the file, and a point with impossible coordinates is left out rather than exported as `NaN`.
