@@ -37,7 +37,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import xx.biketracker.ui.KeepScreenOnWhile
 import xx.biketracker.ui.PausedOrange
-import xx.biketracker.ui.RecordingGrey
+import xx.biketracker.ui.SavingGrey
 import xx.biketracker.ui.ScrubBlue
 import xx.biketracker.ui.StopGrey
 import xx.biketracker.ui.StopRed
@@ -312,6 +312,7 @@ fun TrackingScreen() {
 
             Controls(
                 status = snapshot.status,
+                saving = snapshot.saving,
                 onStart = ::onStart,
                 onPause = { TrackingService.pause(context) },
                 onResume = { TrackingService.resume(context) },
@@ -403,6 +404,7 @@ private fun StatCell(stat: Stat, modifier: Modifier, valueSize: TextUnit = 42.sp
 @Composable
 private fun Controls(
     status: TrackingStatus,
+    saving: Boolean,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -430,14 +432,15 @@ private fun Controls(
             text = primaryText,
             onClick = primaryAction,
             modifier = Modifier.weight(1f),
-            // Paused is easy to miss otherwise — flag it with the accent color. While recording
-            // the same button offers Pause, which is no call to action: grey keeps it readable
-            // without shouting over the red Stop next to it.
-            containerColor = when (status) {
-                TrackingStatus.PAUSED -> PausedOrange
-                TrackingStatus.RECORDING -> RecordingGrey
+            // Paused is easy to miss otherwise — flag it with the accent color. While the ride is
+            // being written to the database the button commands nothing, so it goes grey and
+            // stops taking taps until that is over.
+            containerColor = when {
+                saving -> SavingGrey
+                status == TrackingStatus.PAUSED -> PausedOrange
                 else -> null
             },
+            enabled = !saving,
         )
         // Tap saves; a long-press stops without saving. The transparent overlay carries both
         // gestures so the tonal button keeps its Material look and shaped ripple. The discard
@@ -515,8 +518,15 @@ private fun BigButton(
             modifier = modifier.height(68.dp),
         ) { label() }
     } else {
+        // A given fill is the button's own statement and holds while it is disabled too — the
+        // stock disabled tint would drop it back to a colorless button and lose that.
         val colors = if (containerColor != null) {
-            ButtonDefaults.buttonColors(containerColor = containerColor, contentColor = Color.Black)
+            ButtonDefaults.buttonColors(
+                containerColor = containerColor,
+                contentColor = Color.Black,
+                disabledContainerColor = containerColor,
+                disabledContentColor = Color.Black,
+            )
         } else {
             ButtonDefaults.buttonColors()
         }

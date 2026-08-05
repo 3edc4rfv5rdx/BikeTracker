@@ -48,6 +48,9 @@ data class TrackingSnapshot(
     val startElapsedRealtime: Long = 0L,
     val updatedAtElapsedRealtime: Long = 0L, // publication baseline for the live moving timer
     val lastTrustedFixElapsedRealtime: Long = 0L,
+    // True from the moment a stop is ordered until the ride has been written to the database (or
+    // the write failed): the controls have nothing to command in that window.
+    val saving: Boolean = false,
     val persistenceFailed: Boolean = false,
     val startupFailure: StartupFailure? = null,
     val route: List<GeoPoint> = emptyList(),

@@ -4,7 +4,7 @@ Newest entries on top.
 
 ## Unreleased
 
-- The Pause button is grey while a ride is recording, instead of wearing the theme's default violet.
+- The Start/Pause button goes grey and stops taking taps from the moment a ride is stopped until it has been written to the database, and keeps its usual colors the rest of the time.
 
 - The start and finish of a track on the map are now marked at every zoom, and a ride that never got far enough to have a start direction is marked with a plain disc instead of being left without a start marker at all.
 

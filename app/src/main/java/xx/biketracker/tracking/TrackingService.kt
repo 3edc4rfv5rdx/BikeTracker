@@ -1290,10 +1290,10 @@ class TrackingService : Service() {
         }
         pendingStandby = thenStandby
         cancelAutoSave()
-        if (persistenceFailed) {
-            persistenceFailed = false
-            publish()
-        }
+        persistenceFailed = false
+        // Unconditional: the snapshot now also carries that the ride is being written, and the
+        // controls go quiet on it for as long as that takes.
+        publish()
         val persistence = draftPersistence ?: return handleSaveFailure()
         // The last flush waits on every flush before it, so joining it joins them all.
         val pendingJobs = listOfNotNull(draftStartJob, flushJob)
@@ -1421,6 +1421,7 @@ class TrackingService : Service() {
                 startElapsedRealtime = startElapsedRealtime,
                 updatedAtElapsedRealtime = SystemClock.elapsedRealtime(),
                 lastTrustedFixElapsedRealtime = lastTrustedFixElapsedRealtime,
+                saving = stopping.get(),
                 persistenceFailed = persistenceFailed,
                 route = route.snapshot(),
             )
