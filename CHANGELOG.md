@@ -4,6 +4,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- The speed chart's handle at the bottom of the map is now dragged up or down, the chart following the finger and settling to whichever end the drag was thrown at or left nearer; a tap on it still folds and unfolds the chart.
+
 - The Start/Pause button goes grey and stops taking taps from the moment a ride is stopped until it has been written to the database, and keeps its usual colors the rest of the time.
 
 - The start and finish of a track on the map are now marked at every zoom, and a ride that never got far enough to have a start direction is marked with a plain disc instead of being left without a start marker at all.

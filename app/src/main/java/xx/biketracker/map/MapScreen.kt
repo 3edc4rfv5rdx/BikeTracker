@@ -128,7 +128,7 @@ fun MapScreen() {
     // Scrub selection from the chart, as an index into the route (samples are one per point).
     // Keyed to the shown track's identity, so another ride never inherits a stale marker.
     var scrubIndex by remember(recenterKey) { mutableStateOf<Int?>(null) }
-    // Chart visibility survives tab switches; the panel's handle strip toggles it.
+    // Chart visibility survives tab switches; the panel's handle strip drags (or taps) it.
     var chartExpanded by rememberSaveable { mutableStateOf(true) }
 
     // The chart panel takes its slice from the map, never overlays it: a scrubbed marker (or

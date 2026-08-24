@@ -1,5 +1,6 @@
 package xx.biketracker.map
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +9,9 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,16 +35,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -51,6 +58,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
@@ -64,6 +72,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -88,12 +97,18 @@ import xx.biketracker.ui.rememberVibrator
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 // --- Chart tuning ---
 /** Centered moving-average window (points) over raw GPS speeds; per-fix speed is noisy. */
 private const val SPEED_SMOOTH_WINDOW = 7
 /** The expanded panel (handle included) is the screen height divided by this. */
 private const val PANEL_SCREEN_DIVISOR = 3
+/** The drag handle's strip; the panel never gets shorter than this. */
+private val HANDLE_HEIGHT = 22.dp
+/** A handle flick faster than this (dp per second) settles the panel the way it was thrown,
+ *  however far it was dragged. */
+private val FLING_VELOCITY = 300.dp
 /** Hard ceiling for zooming the X axis (pinch or buttons). */
 private const val CHART_MAX_ZOOM = 10f
 /** X-zoom factor of one +/- button tap, around the window center. */
@@ -223,8 +238,9 @@ internal class SpeedSampleTrack {
 }
 
 /**
- * Bottom panel of the Map tab: the ride's speed over distance or time. The handle strip
- * toggles the chart between hidden and a fixed third of the screen. One finger scrubs (the
+ * Bottom panel of the Map tab: the ride's speed over distance or time. The handle strip is
+ * dragged up or down to move the chart between hidden and a fixed third of the screen, and it
+ * follows the finger on the way; a tap on it jumps between the same two ends. One finger scrubs (the
  * picked point is reported as a route index so the map can mark it), a long-press hands the
  * finger over to panning the zoomed window, and two fingers pinch-zoom the X axis. The ⋮
  * button in the corner unfolds a strip with the axis pick and +/- zoom buttons. Works
@@ -242,6 +258,33 @@ fun SpeedChartPanel(
     // another ride is shown, so nothing of one ride is ever carried into another.
     val trackKey = route.firstOrNull()?.timeMillis
 
+    // Size the panel off the actual window height (multi-window-aware), not the whole display.
+    val density = LocalDensity.current
+    val panelHeight = with(density) {
+        LocalWindowInfo.current.containerSize.height.toDp() / PANEL_SCREEN_DIVISOR
+    }
+    // What the handle uncovers: the panel minus its own strip. Kept non-negative — the window
+    // size is still zero on the frame before the layout is measured.
+    val chartHeightPx = with(density) { (panelHeight - HANDLE_HEIGHT).coerceAtLeast(0.dp).toPx() }
+    val flingVelocity = with(density) { FLING_VELOCITY.toPx() }
+
+    // How much of the chart the handle has uncovered: 0 pulled down, 1 the full third of the
+    // screen. The finger drives it while dragging; on release it settles to one end and reports
+    // that end through [onToggle], so [expanded] stays the state that outlives this panel.
+    val reveal = remember { Animatable(if (expanded) 1f else 0f) }
+    LaunchedEffect(expanded) {
+        val target = if (expanded) 1f else 0f
+        if (reveal.value != target) reveal.animateTo(target)
+    }
+    // Flips only at the ends of a drag, so uncovering the chart does not recompose per frame.
+    val chartVisible by remember { derivedStateOf { reveal.value > 0f } }
+    val scope = rememberCoroutineScope()
+    val dragState = rememberDraggableState { delta ->
+        if (chartHeightPx > 0f) {
+            scope.launch { reveal.snapTo((reveal.value - delta / chartHeightPx).coerceIn(0f, 1f)) }
+        }
+    }
+
     // Off the main thread so a multi-hour ride can't jank the UI (same as the map smoothing), and
     // only while the chart is on screen — a pulled-down panel has nothing to plot. The samples are
     // carried between fixes, so a live ride costs what it grew by; the lock keeps two updates
@@ -250,8 +293,8 @@ fun SpeedChartPanel(
     val samplesTrack = remember(trackKey) { SpeedSampleTrack() }
     val samplesLock = remember(trackKey) { Mutex() }
     var samples by remember(trackKey) { mutableStateOf<List<SpeedSample>>(emptyList()) }
-    LaunchedEffect(route, expanded) {
-        if (!expanded) return@LaunchedEffect
+    LaunchedEffect(route, chartVisible) {
+        if (!chartVisible) return@LaunchedEffect
         samples = samplesLock.withLock { withContext(Dispatchers.Default) { samplesTrack.update(route) } }
     }
 
@@ -282,23 +325,34 @@ fun SpeedChartPanel(
         }
     }
 
-    // Size the panel off the actual window height (multi-window-aware), not the whole display.
-    val panelHeight = with(LocalDensity.current) {
-        LocalWindowInfo.current.containerSize.height.toDp() / PANEL_SCREEN_DIVISOR
-    }
     val chartLabel = stringResource(R.string.map_speed_chart)
 
     Surface {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (expanded) Modifier.height(panelHeight) else Modifier),
-        ) {
-            // Handle strip: the only control that stays when the chart is pulled down.
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Handle strip: the only control that stays when the chart is pulled down. Dragging
+            // it up or down moves the chart with the finger; a tap still toggles the two ends,
+            // which is also all a screen reader can do with it.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(22.dp)
+                    .height(HANDLE_HEIGHT)
+                    .draggable(
+                        state = dragState,
+                        orientation = Orientation.Vertical,
+                        onDragStopped = { velocity ->
+                            // A flick settles the way it was thrown, a slow drag to whichever
+                            // end it was left nearer. Landing on the other state animates there
+                            // through [expanded] changing, so only a drag that ends on the state
+                            // it started from is animated back here.
+                            val settleExpanded = when {
+                                velocity <= -flingVelocity -> true
+                                velocity >= flingVelocity -> false
+                                else -> reveal.value > 0.5f
+                            }
+                            if (settleExpanded != expanded) onToggle()
+                            else reveal.animateTo(if (settleExpanded) 1f else 0f)
+                        },
+                    )
                     .clickable(onClick = onToggle)
                     .semantics { contentDescription = chartLabel },
                 contentAlignment = Alignment.Center,
@@ -309,67 +363,85 @@ fun SpeedChartPanel(
                         .background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(2.dp)),
                 )
             }
-            if (expanded) {
-                // Readout line: figures, then the fold-out controls unfolding in-line to the
-                // left of the ⋮ trigger, so they share this row and never cover the plot.
-                Row(
+            if (chartVisible) {
+                // The uncovered slice of the chart: laid out at its full height however much
+                // the handle has uncovered, and clipped to what it has, so nothing inside
+                // reflows under the dragging finger.
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 12.dp, end = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(CONTROL_SPACING),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ScrubReadout(
-                        sample = scrubIndex?.let { samples.getOrNull(it) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (menuOpen) {
-                        ChartMenuButton(
-                            icon = Icons.Filled.Straighten,
-                            label = stringResource(R.string.stat_distance),
-                            active = axisDistance,
-                        ) { axisDistance = true }
-                        ChartMenuButton(
-                            icon = Icons.Filled.Schedule,
-                            label = stringResource(R.string.stat_time),
-                            active = !axisDistance,
-                        ) { axisDistance = false }
-                        ChartMenuButton(
-                            icon = Icons.Filled.Add,
-                            label = stringResource(R.string.map_zoom_in),
-                        ) { applyZoom(BUTTON_ZOOM_STEP) }
-                        ChartMenuButton(
-                            icon = Icons.Filled.Remove,
-                            label = stringResource(R.string.map_zoom_out),
-                        ) { applyZoom(1f / BUTTON_ZOOM_STEP) }
-                    }
-                    ChartMenuButton(
-                        icon = Icons.Filled.MoreVert,
-                        label = stringResource(R.string.chart_menu),
-                        active = menuOpen,
-                    ) { menuOpen = !menuOpen }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(top = 4.dp),
-                ) {
-                    SpeedChart(
-                        samples = samples,
-                        axisDistance = axisDistance,
-                        scrubIndex = scrubIndex,
-                        onScrub = onScrub,
-                        // Scrubbing collapses the strip, so the readout regains the full row.
-                        onInteract = { menuOpen = false },
-                        viewStart = viewStart,
-                        viewWidth = viewWidth,
-                        onViewChange = { start, width ->
-                            viewStart = start
-                            viewWidth = width
+                        .clipToBounds()
+                        .layout { measurable, constraints ->
+                            val full = chartHeightPx.roundToInt()
+                            val placeable = measurable.measure(
+                                constraints.copy(minHeight = full, maxHeight = full),
+                            )
+                            layout(placeable.width, (reveal.value * full).roundToInt()) {
+                                placeable.place(0, 0)
+                            }
                         },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                ) {
+                    // Readout line: figures, then the fold-out controls unfolding in-line to the
+                    // left of the ⋮ trigger, so they share this row and never cover the plot.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(CONTROL_SPACING),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ScrubReadout(
+                            sample = scrubIndex?.let { samples.getOrNull(it) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (menuOpen) {
+                            ChartMenuButton(
+                                icon = Icons.Filled.Straighten,
+                                label = stringResource(R.string.stat_distance),
+                                active = axisDistance,
+                            ) { axisDistance = true }
+                            ChartMenuButton(
+                                icon = Icons.Filled.Schedule,
+                                label = stringResource(R.string.stat_time),
+                                active = !axisDistance,
+                            ) { axisDistance = false }
+                            ChartMenuButton(
+                                icon = Icons.Filled.Add,
+                                label = stringResource(R.string.map_zoom_in),
+                            ) { applyZoom(BUTTON_ZOOM_STEP) }
+                            ChartMenuButton(
+                                icon = Icons.Filled.Remove,
+                                label = stringResource(R.string.map_zoom_out),
+                            ) { applyZoom(1f / BUTTON_ZOOM_STEP) }
+                        }
+                        ChartMenuButton(
+                            icon = Icons.Filled.MoreVert,
+                            label = stringResource(R.string.chart_menu),
+                            active = menuOpen,
+                        ) { menuOpen = !menuOpen }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(top = 4.dp),
+                    ) {
+                        SpeedChart(
+                            samples = samples,
+                            axisDistance = axisDistance,
+                            scrubIndex = scrubIndex,
+                            onScrub = onScrub,
+                            // Scrubbing collapses the strip, so the readout regains the full row.
+                            onInteract = { menuOpen = false },
+                            viewStart = viewStart,
+                            viewWidth = viewWidth,
+                            onViewChange = { start, width ->
+                                viewStart = start
+                                viewWidth = width
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
             }
         }
