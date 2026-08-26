@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher plate, shared with the EasySend icon. -->
+    <color name="ic_launcher_background">#0138A3</color>
+</resources>
