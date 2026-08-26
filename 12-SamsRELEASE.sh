@@ -21,8 +21,10 @@ else
     DEVICES=$(adb devices | awk '/device$/ && !/emulator/{print $1}')
     COUNT=$(printf '%s\n' "$DEVICES" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')
     if [ "$COUNT" -eq 0 ]; then
+        # Nothing to work on is not a failure: 00-MakeAll.sh reads 3 as "no device
+        # connected" and carries on, while anything else non-zero ends its run.
         echo "No physical device connected. Connect one or pass a serial: $0 <serial>"
-        exit 1
+        exit 3
     fi
     TEL=$(printf '%s\n' "$DEVICES" | head -1)
     if [ "$COUNT" -gt 1 ]; then

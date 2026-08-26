@@ -8,6 +8,12 @@ Newest entries on top.
 
 ## Unreleased
 
+- I: 00-MakeAll.sh does the release build, both installs and the OUT/ link in one run: a failed build stops it, a device that is not connected only leaves its own step out, and the run ends non-zero only when a step actually failed.
+
+- I: 19-LinkOut.sh links the newest arm64 and universal APKs into OUT/ under their own names and sweeps the rest, so a build is picked up from one folder instead of a path inside app/build.
+
+- I: The emulator install now ends with the exit code of the install instead of the pause after it, so a failure is no longer reported as success, and both install steps end with 3 when there is no device to install on.
+
 - I: The changelog carries the N/E/F/I legend at its top and entries are marked with it from here on; 22-RelUpload.sh already copies that line into the GitHub release notes.
 
 - F: The launcher icon is now a white bicycle-and-pin silhouette on the deep blue plate, and the themed (monochrome) icon draws that same silhouette instead of a solid square.
