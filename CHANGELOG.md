@@ -2,25 +2,32 @@
 
 Newest entries on top.
 
+> N=new feature, E=error fix, F=fine-tune, I=infrastructure
+> N moves the version line: the app can do something it could not before.
+> F is the same thing done better; E is behaviour that was wrong, whatever the size of the fix.
+
 ## Unreleased
 
-- The launcher icon is now a white bicycle-and-pin silhouette on the deep blue plate, and the themed (monochrome) icon draws that same silhouette instead of a solid square.
+- I: The changelog carries the N/E/F/I legend at its top and entries are marked with it from here on; 22-RelUpload.sh already copies that line into the GitHub release notes.
 
-- The speed chart's handle at the bottom of the map is now dragged up or down, the chart following the finger and settling to whichever end the drag was thrown at or left nearer; a tap on it still folds and unfolds the chart.
+- F: The launcher icon is now a white bicycle-and-pin silhouette on the deep blue plate, and the themed (monochrome) icon draws that same silhouette instead of a solid square.
 
-- The Start/Pause button goes grey and stops taking taps from the moment a ride is stopped until it has been written to the database, and keeps its usual colors the rest of the time.
+- F: The speed chart's handle at the bottom of the map is now dragged up or down, the chart following the finger and settling to whichever end the drag was thrown at or left nearer; a tap on it still folds and unfolds the chart.
 
-- The start and finish of a track on the map are now marked at every zoom, and a ride that never got far enough to have a start direction is marked with a plain disc instead of being left without a start marker at all.
+- F: The Start/Pause button goes grey and stops taking taps from the moment a ride is stopped until it has been written to the database, and keeps its usual colors the rest of the time.
 
-- An exported GPX now stays readable whatever a ride's name and note contain: characters XML forbids are dropped instead of written into the file, and a point with impossible coordinates is left out rather than exported as `NaN`.
+- E: The start and finish of a track on the map are now marked at every zoom, and a ride that never got far enough to have a start direction is marked with a plain disc instead of being left without a start marker at all.
 
-- The start-direction arrow on the map now reads the direction from the first recorded segment only: a ride paused right after it began no longer points its arrow across the jump to wherever riding resumed.
+- E: An exported GPX now stays readable whatever a ride's name and note contain: characters XML forbids are dropped instead of written into the file, and a point with impossible coordinates is left out rather than exported as `NaN`.
 
-- The lint script now pauses at the end instead of reporting a missing `delay` command.
+- E: The start-direction arrow on the map now reads the direction from the first recorded segment only: a ride paused right after it began no longer points its arrow across the jump to wherever riding resumed.
 
-- The debug and release build scripts now run from their own directory, so launching them from anywhere no longer misses the wrapper and starts a fresh build number.
+- I: The lint script now pauses at the end instead of reporting a missing `delay` command.
 
-- Cancelling an offline map download now takes effect while the area is still being prepared, instead of leaving the dialog stuck at 0% and starting the download anyway; deleting all areas no longer leaves a freshly created one behind.
+- I: The debug and release build scripts now run from their own directory, so launching them from anywhere no longer misses the wrapper and starts a fresh build number.
+
+- E: Cancelling an offline map download now takes effect while the area is still being prepared, instead of leaving the dialog stuck at 0% and starting the download anyway; deleting all areas no longer leaves a freshly created one behind.
+
 
 ## v0.6.20260804+175
 
