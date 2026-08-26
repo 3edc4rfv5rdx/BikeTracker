@@ -8,6 +8,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- I: The release build moves the version line by itself: an `N:` entry waiting in Unreleased, on the line the last tag went out on, raises the minor once — the decision was made when the entry was written as N: rather than E:.
+
 - I: 00-MakeAll.sh does the release build, both installs and the OUT/ link in one run: a failed build stops it, a device that is not connected only leaves its own step out, and the run ends non-zero only when a step actually failed.
 
 - I: 19-LinkOut.sh links the newest arm64 and universal APKs into OUT/ under their own names and sweeps the rest, so a build is picked up from one folder instead of a path inside app/build.
