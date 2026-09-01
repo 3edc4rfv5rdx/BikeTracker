@@ -22,7 +22,7 @@ TARGET_FOREGROUND = "app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
 
 SIZE = 432          # xxxhdpi launcher icon, 108dp * 4
 SUPER = 4           # supersampling factor for the disc's antialiased edge
-BACKGROUND = (0x01, 0x38, 0xA3)  # ic_launcher_background, shared with EasySend
+BACKGROUND = (0x01, 0x38, 0x95)  # ic_launcher_background, shared across the apps
 # Luminance window mapped onto alpha: below LO is field, above HI is artwork.
 ALPHA_LO, ALPHA_HI = 48, 190
 # Share of the icon taken by the artwork's enclosing circle. The launcher masks

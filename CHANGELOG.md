@@ -8,6 +8,8 @@ Newest entries on top.
 
 ## Unreleased
 
+- F: The launcher icon sits on #013895, the blue the other apps use, instead of a shade of its own.
+
 - I: 06-Test.sh clears the previous run's results before it starts, so a build that fails to compile is no longer summarised as a clean pass over code that never ran, and a --tests run no longer reports the classes the last full run left behind.
 
 - I: The release build moves the version line by itself: an `N:` entry waiting in Unreleased, on the line the last tag went out on, raises the minor once — the decision was made when the entry was written as N: rather than E:.
