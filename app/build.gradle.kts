@@ -48,6 +48,15 @@ android {
     sourceSets {
         // Exported Room schema JSONs double as androidTest assets for MigrationTestHelper.
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
+
+        // The shared in-app updater, compiled from ../updater instead of pulled in
+        // as a module: one copy of those sources serves every project here, with no
+        // AAR to rebuild. The kotlin set and not the java one: the Kotlin source
+        // set no longer inherits java, so .kt files put there are never compiled.
+        getByName("main") {
+            kotlin.directories.add("$rootDir/../updater/android/src")
+            res.directories.add("$rootDir/../updater/android/res")
+        }
     }
 
     signingConfigs {

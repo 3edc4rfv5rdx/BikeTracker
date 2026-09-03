@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- In-app updater: installs the APK it downloads from the home server. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Platform backup is fully disabled: precise location history must never reach Google
          cloud backup or device transfer. The user-made ZIP (Documents/BikeTracker) is the only
@@ -21,6 +23,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:localeConfig="@xml/locales_config"
+        android:networkSecurityConfig="@xml/updater_network_security_config"
         android:theme="@style/Theme.BikeTracker">
 
         <!-- Lets shell tools (heapprofd/perfetto) profile release builds; no effect otherwise. -->
@@ -41,6 +44,18 @@
             android:name=".tracking.TrackingService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Hands the downloaded APK to the system installer. Its own subclass of
+             FileProvider, so an app that already declares one keeps it. -->
+        <provider
+            android:name="dev.updater.UpdaterFileProvider"
+            android:authorities="${applicationId}.updater.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/updater_file_paths" />
+        </provider>
 
     </application>
 </manifest>

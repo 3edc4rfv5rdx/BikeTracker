@@ -61,6 +61,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import dev.updater.Updater
+import dev.updater.UpdaterConfig
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -113,6 +115,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppSettings.load(this)
+        // Looks for a newer build on the home server and asks before it downloads
+        // anything. Silent when there is nothing newer or the server is not there.
+        Updater.checkOnStart(
+            this,
+            // checkIntervalHours = 0 while the updater is being tried out: every
+            // launch checks. Back to the default 6 once it is proven.
+            UpdaterConfig(
+                baseUrl = "http://192.168.54.250:8081",
+                appKey = "biketracker",
+                checkIntervalHours = 0,
+            ),
+        )
         // Rescue any ride a process death left as an unfinished draft; the cutoff keeps a ride
         // started right after launch out of reach.
         recoveryJob = lifecycleScope.launch {

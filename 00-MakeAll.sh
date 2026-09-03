@@ -47,8 +47,9 @@ run() { # run <script> <fatal|optional>
 }
 
 run 10-MakeRelease.sh fatal
-run 11-EmulRELEASE.sh optional
-run 12-SamsRELEASE.sh optional
+#run 11-EmulRELEASE.sh optional
+#run 12-SamsRELEASE.sh optional
+run 18-ToUpdate.sh optional
 # Its own step, so the same link also works on a build that already exists.
 run 19-LinkOut.sh optional
 

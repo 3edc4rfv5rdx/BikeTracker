@@ -8,6 +8,10 @@ Newest entries on top.
 
 ## Unreleased
 
+- I: 18-ToUpdate.sh publishes the newest arm64 release APK to the update server with a manifest read out of the APK itself; the same file works unchanged in every project.
+
+- N: The app checks the home server for a newer build at start-up and offers to download and install it, asking before anything is downloaded.
+
 - F: The launcher icon sits on #013895, the blue the other apps use, instead of a shade of its own.
 
 - I: 06-Test.sh clears the previous run's results before it starts, so a build that fails to compile is no longer summarised as a clean pass over code that never ran, and a --tests run no longer reports the classes the last full run left behind.
