@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- F: The start-up update check is back to once every six hours, now that it has proved itself
 - I: The update server keeps the last three archived builds instead of every build ever published
 - E: The version line looks only at release tags, so a tag like "duplex" can no longer answer which line the last release went out on
 - I: Lint reruns instead of reprinting an up-to-date report, and says when the report was written

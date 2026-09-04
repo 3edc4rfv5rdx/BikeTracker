@@ -119,12 +119,9 @@ class MainActivity : ComponentActivity() {
         // anything. Silent when there is nothing newer or the server is not there.
         Updater.checkOnStart(
             this,
-            // checkIntervalHours = 0 while the updater is being tried out: every
-            // launch checks. Back to the default 6 once it is proven.
             UpdaterConfig(
                 baseUrl = "http://192.168.54.250:8081",
                 appKey = "biketracker",
-                checkIntervalHours = 0,
             ),
         )
         // Rescue any ride a process death left as an unfinished draft; the cutoff keeps a ride
