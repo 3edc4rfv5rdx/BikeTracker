@@ -8,6 +8,7 @@ Newest entries on top.
 
 ## Unreleased
 
+- I: Every artifact carries one name — biketracker-<version>-<build>-<abi>.apk, with -debug on the end of a debug build — and the tag it goes out under is v<version>-<build>.
 - I: 18-ToUpdate.sh publishes the newest arm64 release APK to the update server with a manifest read out of the APK itself; the same file works unchanged in every project.
 
 - N: The app checks the home server for a newer build at start-up and offers to download and install it, asking before anything is downloaded.

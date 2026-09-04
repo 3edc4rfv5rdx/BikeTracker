@@ -24,7 +24,9 @@ EOF
 echo "Version: $NEW_VERSION"
 echo ">>> Build: $NEW_BUILD <<<"
 
-./gradlew assembleDebug
+# renameDebugApks depends on assembleDebug, so this builds and then names what it
+# built: <project>-<version>-<build>-<abi>-debug.apk
+./gradlew assembleDebug renameDebugApks
 
 echo
 echo "Debug APKs: app/build/outputs/apk/debug/"

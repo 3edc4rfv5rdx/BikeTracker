@@ -3,8 +3,8 @@
 # Put the APKs of the newest release build into OUT/ as links under their own
 # names, and sweep everything else out of that folder:
 #
-#   OUT/biketracker-<version>+<build>-release-arm64-v8a.apk
-#   OUT/biketracker-<version>+<build>-release-universal.apk
+#   OUT/biketracker-<version>-<build>-arm64-v8a.apk
+#   OUT/biketracker-<version>-<build>-universal.apk
 #
 # One place to copy a build from, instead of a path deep inside app/build/. The
 # x86_64 split is left where it is: it only ever goes to the emulator, which is

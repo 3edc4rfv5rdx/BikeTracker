@@ -2,7 +2,8 @@
 set -e
 
 # Samsung is arm64-v8a — pick that split, fall back to universal, then anything.
-# Debug APKs keep the default names (app-arm64-v8a-debug.apk), so match as substrings.
+# Debug APKs carry the same name as a release with -debug on the end, so match as
+# substrings and take the newest.
 apk=$(ls -t app/build/outputs/apk/debug/*arm64-v8a*.apk 2>/dev/null | head -1)
 [ -z "$apk" ] && apk=$(ls -t app/build/outputs/apk/debug/*universal*.apk 2>/dev/null | head -1)
 [ -z "$apk" ] && apk=$(ls -t app/build/outputs/apk/debug/*.apk 2>/dev/null | head -1)
