@@ -4,7 +4,9 @@ set -uo pipefail
 cd "$(dirname "$0")"
 # Don't abort on lint errors — the report below is exactly what we want to see then. Lint aborts
 # the Gradle task on any error-severity issue, and that is the run whose report matters most.
-./gradlew lintDebug "$@" || status=$?
+# --rerun-tasks: an UP-TO-DATE lint task leaves the previous report in place, and the summary
+# below would then print stale findings as if nothing had changed.
+./gradlew lintDebug --rerun-tasks "$@" || status=$?
 
 xml=app/build/reports/lint-results-debug.xml
 echo
@@ -27,7 +29,10 @@ for i in issues:
     print(f"[{i.get('severity')}] {i.get('id')} — {i.get('message')}")
     if where:
         print(f"    {where}")
-print(f"\n{len(issues)} issue(s). HTML: {sys.argv[1].replace('.xml', '.html')}")
+import os, time
+stamp = time.strftime('%H:%M:%S', time.localtime(os.path.getmtime(sys.argv[1])))
+print(f"\n{len(issues)} issue(s) — report written at {stamp}. "
+      f"HTML: {sys.argv[1].replace('.xml', '.html')}")
 PY
 
 sleep 3

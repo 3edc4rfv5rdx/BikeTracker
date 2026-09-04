@@ -25,6 +25,7 @@ if not files:
     print('No results: the tests did not run. Compilation failed, or the filter matched nothing.')
     raise SystemExit(1)
 tot = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
+broken = []
 for path in files:
     r = ET.parse(path).getroot()
     n = {k: int(r.get(k, 0)) for k in tot}
@@ -33,8 +34,19 @@ for path in files:
     mark = 'OK  ' if n['failures'] == n['errors'] == 0 else 'FAIL'
     print(f"{mark} {r.get('name')}: tests={n['tests']} failures={n['failures']} "
           f"errors={n['errors']} skipped={n['skipped']}")
+    for case in r.findall('testcase'):
+        for bad in list(case.findall('failure')) + list(case.findall('error')):
+            broken.append((case.get('classname'), case.get('name'),
+                           (bad.get('message') or '').strip().splitlines()))
+if broken:
+    print("\nFailures:")
+    for cls, name, msg in broken:
+        print(f"\n  {cls.split('.')[-1]}.{name}")
+        for line in msg[:6]:
+            print(f"      {line}")
 print(f"\nTotal: tests={tot['tests']} failures={tot['failures']} "
       f"errors={tot['errors']} skipped={tot['skipped']}")
+print("HTML: app/build/reports/tests/testDebugUnitTest/index.html")
 PY
 # A summary that could not be produced is a failure of its own: Gradle can end
 # green having run nothing at all, and that must not read as tests passing.

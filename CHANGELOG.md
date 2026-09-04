@@ -3,6 +3,11 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- I: Lint reruns instead of reprinting an up-to-date report, and says when the report was written
+- I: A failed test prints its class, its name and the first lines of its message, and the summary links the HTML report
+- I: The tag step refuses an untracked file too, so nothing can go into the APK without going into the tag
+- I: The release uploads the exact APKs built for its tag, never the newest file of that ABI lying around
+- I: A debug install with no phone connected exits 3 like every other step that had nothing to work on
 - E: A test run that produced no results is no longer reported as a pass: Gradle can end green having run nothing at all
 - E: 21-PushTag.sh names the branch it pushes, so a branch without an upstream yet no longer stops the release, and it asks the remote for the exact tag instead of matching it as a substring
 - E: Every step that touches the project's files or its git runs from the project directory, so one started from elsewhere can no longer work on the wrong tree
