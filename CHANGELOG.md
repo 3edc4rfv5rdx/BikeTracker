@@ -3,6 +3,7 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- R: The update check names only this app's key; the server address now lives in the shared updater
 - F: The start-up update check is back to once every six hours, now that it has proved itself
 - I: The update server keeps the last three archived builds instead of every build ever published
 - E: The version line looks only at release tags, so a tag like "duplex" can no longer answer which line the last release went out on
