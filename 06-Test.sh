@@ -23,7 +23,7 @@ import glob, sys, xml.etree.ElementTree as ET
 files = sorted(glob.glob(f'{sys.argv[1]}/*.xml'))
 if not files:
     print('No results: the tests did not run. Compilation failed, or the filter matched nothing.')
-    raise SystemExit(0)
+    raise SystemExit(1)
 tot = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
 for path in files:
     r = ET.parse(path).getroot()
@@ -36,6 +36,9 @@ for path in files:
 print(f"\nTotal: tests={tot['tests']} failures={tot['failures']} "
       f"errors={tot['errors']} skipped={tot['skipped']}")
 PY
+# A summary that could not be produced is a failure of its own: Gradle can end
+# green having run nothing at all, and that must not read as tests passing.
+summary=$?
 
 # Said after the summary, where the eye already is: a green Total under a failed build is the one
 # reading this script must never leave behind.
@@ -46,6 +49,6 @@ fi
 
 sleep 3
 
-exit "${status:-0}"
+exit "${status:-$summary}"
 
 

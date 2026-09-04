@@ -3,6 +3,11 @@
 > N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- E: A test run that produced no results is no longer reported as a pass: Gradle can end green having run nothing at all
+- E: 21-PushTag.sh names the branch it pushes, so a branch without an upstream yet no longer stops the release, and it asks the remote for the exact tag instead of matching it as a substring
+- E: Every step that touches the project's files or its git runs from the project directory, so one started from elsewhere can no longer work on the wrong tree
+- E: The release notes carry the letter legend again, not the "newest on top" line that now sits above it in the changelog
+- E: 99-CopyToAPKX.sh runs from the project directory, so its sweep of stale .apkx links can no longer delete them in whatever directory it was called from
 - I: One CHANGELOG legend across every project here — N/E/F/R/I, newest on top, the type letter always followed by a colon
 - I: The waiting-feature check reads both "- N:" and "- N ", so a changelog entry moves the version line whichever way it was written
 

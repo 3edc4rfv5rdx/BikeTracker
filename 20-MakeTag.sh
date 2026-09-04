@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+cd "$(dirname "$0")"
 BUILD_FILE="build_number.txt"
 
 echo "=== Checking that the working tree is clean ==="
@@ -34,8 +35,9 @@ echo "Version: $version"
 echo "Build:   $build"
 echo "Tag:     $TAG"
 
-# Check if tag already exists
-if git tag --list "$TAG" | grep -q "$TAG"; then
+# Anchored: the listing is already filtered to this tag, but an unanchored
+# match would also accept a longer name if it ever got there.
+if git tag --list "$TAG" | grep -q "^${TAG}$"; then
     echo "Tag $TAG already exists. Nothing to do."
     exit 0
 fi

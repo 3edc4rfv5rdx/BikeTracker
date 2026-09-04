@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+cd "$(dirname "$0")"
 
 # Samsung is arm64-v8a — pick that split, fall back to universal, then anything.
 # Debug APKs carry the same name as a release with -debug on the end, so match as
