@@ -48,6 +48,10 @@ APK_DIR=""
 # The split to publish. Phones take arm64.
 ABI="arm64-v8a"
 
+# How many previous builds to keep in archive/. Nothing else ever empties
+# that folder, and at some 20 MB a build a week of testing fills it.
+KEEP_ARCHIVE=3
+
 # ------------------------------------------------------------
 [ -n "$APP_KEY" ] || APP_KEY=$(basename "$PWD" | tr '[:upper:]' '[:lower:]')
 
@@ -97,6 +101,19 @@ for old in "$DST_DIR"/*.apk; do
     [ -L "$old" ] && continue
     [ "$(basename "$old")" = "$dst" ] && continue
     mv -f "$old" "$DST_DIR/archive/"
+done
+
+# And the archive keeps only the last few. The build just moved in is the
+# newest of them, so a KEEP_ARCHIVE of 3 leaves this one and two before it.
+# A file that will not delete — one published earlier under another user — is
+# reported and stepped over: this runs after the publish, and a folder that
+# could not be tidied is not a failed publish.
+ls -t "$DST_DIR/archive/"*.apk 2>/dev/null | tail -n +$((KEEP_ARCHIVE + 1)) | while read -r stale; do
+    if rm -f "$stale" 2>/dev/null; then
+        echo "Removed from archive: $(basename "$stale")"
+    else
+        echo "Could not remove $(basename "$stale") — not yours to delete."
+    fi
 done
 
 cp -f "$apk" "$DST_DIR/$dst"
