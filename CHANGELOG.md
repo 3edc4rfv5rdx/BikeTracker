@@ -1,12 +1,10 @@
-# Changelog
-
-Newest entries on top.
-
-> N=new feature, E=error fix, F=fine-tune, I=infrastructure
-> N moves the version line: the app can do something it could not before.
-> F is the same thing done better; E is behaviour that was wrong, whatever the size of the fix.
+# CHANGELOG
+> Newest entries on top.
+> N=new feature, E=error fix, F=fine-tune, R=refactor, I=infrastructure
 
 ## Unreleased
+- I: One CHANGELOG legend across every project here — N/E/F/R/I, newest on top, the type letter always followed by a colon
+- I: The waiting-feature check reads both "- N:" and "- N ", so a changelog entry moves the version line whichever way it was written
 
 - I: Every artifact carries one name — biketracker-<version>-<build>-<abi>.apk, with -debug on the end of a debug build — and the tag it goes out under is v<version>-<build>.
 - I: 18-ToUpdate.sh publishes the newest arm64 release APK to the update server with a manifest read out of the APK itself; the same file works unchanged in every project.
