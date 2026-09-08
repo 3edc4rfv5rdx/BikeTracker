@@ -7,25 +7,29 @@ BUILD_FILE="build_number.txt"
 if [[ ! -f "$BUILD_FILE" ]]; then
     echo "base_version=0.1" > "$BUILD_FILE"
     echo "build=0" >> "$BUILD_FILE"
-    echo "version=0.1.00000000" >> "$BUILD_FILE"
+    echo "version=0.1.0" >> "$BUILD_FILE"
 fi
 
 source "$BUILD_FILE"
 NEW_BUILD=$((build + 1))
-TODAY=$(date +%Y%m%d)
-NEW_VERSION="${base_version}.${TODAY}"
+# The day of the build, for the About screen; the version itself ends in the
+# build number.
+BUILD_DATE=$(date +%F)
+NEW_VERSION="${base_version}.${NEW_BUILD}"
 
 cat > "$BUILD_FILE" <<EOF
 base_version=${base_version}
 build=${NEW_BUILD}
 version=${NEW_VERSION}
+build_date=${BUILD_DATE}
 EOF
 
 echo "Version: $NEW_VERSION"
+echo "Date:    $BUILD_DATE"
 echo ">>> Build: $NEW_BUILD <<<"
 
 # renameDebugApks depends on assembleDebug, so this builds and then names what it
-# built: <project>-<version>-<build>-<abi>-debug.apk
+# built: <project>-<version>-<abi>-debug.apk
 ./gradlew assembleDebug renameDebugApks
 
 echo

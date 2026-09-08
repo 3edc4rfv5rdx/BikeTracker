@@ -150,7 +150,7 @@
 
     <string name="about_title">Про застосунок</string>
     <string name="about_version">Версія</string>
-    <string name="about_build">Збірка</string>
+    <string name="about_build_date">Дата збірки</string>
 
     <string name="action_back">Назад</string>
     <string name="action_save">Зберегти</string>

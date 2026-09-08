@@ -407,7 +407,9 @@ private fun BikeTrackerApp(onExit: () -> Unit) {
                 Column {
                     Text(stringResource(id = R.string.app_name))
                     Text("${stringResource(id = R.string.about_version)} ${pkg.versionName}")
-                    Text("${stringResource(id = R.string.about_build)} ${pkg.longVersionCode}")
+                    // The build number is the version's last component, so what is
+                    // worth a line of its own is the day it was built.
+                    Text("${stringResource(id = R.string.about_build_date)} ${BuildConfig.BUILD_DATE}")
                 }
             },
             confirmButton = {

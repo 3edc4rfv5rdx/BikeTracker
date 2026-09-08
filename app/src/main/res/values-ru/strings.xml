@@ -150,7 +150,7 @@
 
     <string name="about_title">О приложении</string>
     <string name="about_version">Версия</string>
-    <string name="about_build">Сборка</string>
+    <string name="about_build_date">Дата сборки</string>
 
     <string name="action_back">Назад</string>
     <string name="action_save">Сохранить</string>

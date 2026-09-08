@@ -162,7 +162,7 @@
 
     <string name="about_title">About</string>
     <string name="about_version">Version</string>
-    <string name="about_build">Build</string>
+    <string name="about_build_date">Build date</string>
 
     <string name="action_ok" translatable="false">OK</string>
     <string name="action_back">Back</string>
